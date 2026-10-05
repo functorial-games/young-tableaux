@@ -1,0 +1,14 @@
+# Grease: invoke with an absolute checkout path on the build host.
+if (len(ARGV) !== 1) {
+  echo 'usage: test-host.ysh PROJECT (absolute path)'
+  exit 2
+}
+var project = $1
+if (not project.startsWith('/')) {
+  echo 'FAIL: project path must be absolute'
+  exit 2
+}
+mkdir -p "$project/build"
+cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" "$project/app/core/math.c" "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -o "$project/build/host-tests"
+"$project/build/host-tests"
+printf '\033[32mPASS host tests\033[0m\n'

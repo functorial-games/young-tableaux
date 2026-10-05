@@ -108,6 +108,23 @@ record SymmetricFunction where
   basis : SymmetricFunctionBasis
   terms : List SymmetricFunctionTerm
 
+public export
+record Specialization where
+  constructor MkSpecialization
+  values : List (String, Integer)
+
+public export
+record PolynomialTerm where
+  constructor MkPolynomialTerm
+  coefficient : Integer
+  powers : List Nat
+
+public export
+record Polynomial where
+  constructor MkPolynomial
+  variables : List String
+  terms : List PolynomialTerm
+
 -- Conventions are explicit inputs, not buried implementation assumptions.
 
 public export
@@ -157,6 +174,7 @@ record Conventions where
 public export
 data Operation
   = DisplayPartition
+  | ListCells
   | DisplayTableau
   | ConjugatePartition
   | ComputeHookLengths
@@ -184,6 +202,9 @@ data Operation
   | LittlewoodRichardsonCoefficient
   | EnumerateLRTableaux
   | MultiplySchurFunctions
+  | ChangeBasis
+  | Specialize
+  | Plethysm
   | BranchUp
   | BranchDown
   | EnumerateYoungGraphPaths
@@ -200,6 +221,7 @@ data Operation
 public export
 InputFor : Operation -> Type
 InputFor DisplayPartition = Partition
+InputFor ListCells = Partition
 InputFor DisplayTableau = Tableau
 InputFor ConjugatePartition = Partition
 InputFor ComputeHookLengths = Partition
@@ -227,6 +249,9 @@ InputFor InverseRSK = (Tableau, Tableau)
 InputFor LittlewoodRichardsonCoefficient = (Partition, Partition, Partition)
 InputFor EnumerateLRTableaux = (Partition, Partition, Partition)
 InputFor MultiplySchurFunctions = (Partition, Partition)
+InputFor ChangeBasis = (SymmetricFunction, SymmetricFunctionBasis)
+InputFor Specialize = (SymmetricFunction, Specialization)
+InputFor Plethysm = (SymmetricFunction, SymmetricFunction)
 InputFor BranchUp = Partition
 InputFor BranchDown = Partition
 InputFor EnumerateYoungGraphPaths = (Partition, Partition)
@@ -248,6 +273,7 @@ data DiagramResult
 public export
 OutputFor : Operation -> Type
 OutputFor DisplayPartition = DiagramResult
+OutputFor ListCells = List Cell
 OutputFor DisplayTableau = DiagramResult
 OutputFor ConjugatePartition = Partition
 OutputFor ComputeHookLengths = List (Cell, Nat)
@@ -275,6 +301,9 @@ OutputFor InverseRSK = Permutation
 OutputFor LittlewoodRichardsonCoefficient = Nat
 OutputFor EnumerateLRTableaux = List Tableau
 OutputFor MultiplySchurFunctions = SymmetricFunction
+OutputFor ChangeBasis = SymmetricFunction
+OutputFor Specialize = Polynomial
+OutputFor Plethysm = SymmetricFunction
 OutputFor BranchUp = List Partition
 OutputFor BranchDown = List Partition
 OutputFor EnumerateYoungGraphPaths = List (List Partition)

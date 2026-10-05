@@ -1,8 +1,8 @@
 # young-tableaux
 
-Research seed for an eventual interactive treatment of Young diagrams/tableaux, symmetric-group representation theory, RSK, symmetric functions, and related combinatorics.
+Young diagrams/tableaux exploration console plus a reference collection for symmetric-group representation theory, RSK, symmetric functions, and related combinatorics.
 
-This repository is intentionally reference-first for now. The interaction design is **not** fixed yet.
+The native Android v0.1 app opens a long scrollable inventory of inputs, operations, and outputs. Partition operations, standard-tableau validation, and permutation RSK execute; unfinished operations expose their typed signatures. See [native APK notes](notes/native-apk-v0.1.md) for build commands, conventions, bounds, provenance, and acceptance status. The [ARMv7 APK](artifacts/young-tableaux-armeabi-v7a.apk) targets the MIRO A1; physical acceptance is pending.
 
 ## Reference map
 

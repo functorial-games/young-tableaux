@@ -11,6 +11,8 @@ This repository is intentionally reference-first for now. The interaction design
 - [notes/](notes/) — public lecture notes and course material
 - [software/](software/) — computational references for checking examples and experiments
 - [topics/](topics/) — subject map and candidate mathematical inputs/operations
+- [types/YoungTableaux/Types.idr](types/YoungTableaux/Types.idr) — broad Idris type sketch for mathematical inputs, operations, controls, and events
+- [notes/first-apk-control-surface.md](notes/first-apk-control-surface.md) — first-APK exploration UI and native-window renderer plan
 - [cross-links.md](cross-links.md) — links to related repositories and subjects
 
 The bibliography favors publisher, author, university, journal, DOI/arXiv, and official software-documentation links. A link here is not an assertion that the linked work may be redistributed; do not commit copyrighted book scans merely because a copy is visible online.

@@ -2,17 +2,19 @@
 #define YOUNG_CONTROLS_H
 #include <stdbool.h>
 #include <stdint.h>
-#define UI_MAX 320
+#define UI_MAX 384
 #define UI_TEXT 16384
 #define WEGERT_HOOK_MAX 127
-typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT } ControlKind;
+typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT, ROW_BLOCKS, DISABLED_BUTTON } ControlKind;
 typedef struct { int x,y,w,h; } Rect;
 /* Output projection: generic ragged rows of tiles, optional integer labels. */
 typedef struct { int count,rows[64],values[64][64]; bool numbers; } TileProjection;
+typedef struct { int count, columns; } TileRowProjection;
 /* Principal-specialization projection. Hook multiplicities determine the
  * denominator factors (1-z^h); n_lambda determines the numerator z^n. */
 typedef struct {
     bool valid;
+    double center_real, center_imag, half_height;
     int n_lambda;
     int max_hook;
     uint16_t hook_counts[WEGERT_HOOK_MAX+1];
@@ -29,6 +31,7 @@ typedef enum { TOUCH_DOWN, TOUCH_MOVE, TOUCH_UP, TOUCH_CANCEL } Touch;
 void controls_init(Controls *ui);
 void controls_begin(Controls *ui, int width, int height, bool keyboard);
 void controls_add(Controls *ui,int id,ControlKind kind,const char *text,int height,const void *projection);
+void controls_add_at(Controls *ui,int id,ControlKind kind,const char *text,Rect rect,const void *projection);
 void controls_end(Controls *ui);
 void controls_scroll(Controls *ui,int offset);
 int controls_hit(const Controls *ui,int x,int y);

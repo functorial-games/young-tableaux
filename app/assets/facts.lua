@@ -40,10 +40,10 @@ function young_facts(lambda, hooks, standard_count)
   else numerator = "z^" .. n_lambda end
 
   local denominator = #factors == 0 and "1" or table.concat(factors, " ")
-  local formula = denominator == "1" and numerator or (numerator .. " / " .. denominator)
+  local formula = denominator == "1" and numerator or (numerator .. " / (" .. denominator .. ")")
 
   return table.concat({
-    "SCRIPTED FACTS (LUA)",
+    "SCHUR SPECIALIZATION",
     "lambda = " .. shape_text(lambda) .. "   |lambda| = " .. size,
     "n(lambda) = " .. n_lambda,
     "f^lambda / Specht dimension = " .. standard_count,

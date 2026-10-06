@@ -30,6 +30,14 @@ void controls_add(Controls *u,int id,ControlKind kind,const char *text,int h,con
     c->rect=(Rect){4*u->scale,u->content,u->width-8*u->scale,h};
     u->content+=h+4*u->scale;
 }
+void controls_add_at(Controls *u,int id,ControlKind kind,const char *text,Rect rect,const void *projection)
+{
+    int content=u->content;
+    controls_add(u,id,kind,text,rect.h,projection);
+    u->controls[u->count-1].rect=rect;
+    int bottom=rect.y+rect.h+4*u->scale;
+    u->content=content>bottom?content:bottom;
+}
 void controls_scroll(Controls *u,int offset)
 {
     int maximum=u->content-u->height; if(maximum<0) maximum=0;

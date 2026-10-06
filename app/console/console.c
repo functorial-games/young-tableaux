@@ -1,4 +1,5 @@
 #include "console.h"
+#include "nearby.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -36,7 +37,11 @@ static void refresh_partition(Console *c)
 {
     Partition p; MathStatus s=partition_parse(c->fields[SET_LAMBDA],&p);
     c->partition_ok=s==YT_OK; c->output[0][0]=0; c->output[2][0]=0;
+    double real=c->wegert.center_real, imag=c->wegert.center_imag;
+    double half_height=c->wegert.half_height;
     memset(&c->wegert,0,sizeof(c->wegert));
+    c->wegert.center_real=real; c->wegert.center_imag=imag;
+    c->wegert.half_height=half_height>0.0?half_height:1.5;
     if(s!=YT_OK) { append(c->output[0],"%s\n",math_status(s)); append(c->output[2],"lambda: %s\n",math_status(s)); return; }
     Partition conjugate=partition_conjugate(&p);
     tiles(&c->partition,&p,NULL); tiles(&c->conjugate,&conjugate,NULL);
@@ -92,7 +97,7 @@ void console_init(Console *c)
     for(int i=1;i<FIELD_COUNT;++i) snprintf(c->fields[i],sizeof(c->fields[i]),"%s",defaults[i]);
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
     snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nPermutation list is one-line notation.\nReading and group action controls are inventory only.\nNo semistandard/skew/shifted validation in v0.1.");
-    snprintf(c->scripted_facts,UI_TEXT,"SCRIPTED FACTS (LUA)\nLoading...");
+    snprintf(c->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nLoading...");
     refresh_partition(c); refresh_tableau(c); refresh_rsk(c);
 }
 void console_run(Console *c,Operation op)
@@ -127,12 +132,12 @@ static void diagram(Controls *u,const char *label,const TileProjection *p)
 void console_layout(Console *c,Controls *u,int w,int h)
 {
     controls_begin(u,w,h,u->focus!=0);
-    controls_add(u,0,LABEL,"YOUNG TABLEAUX 0.2\nSimple shape first; derived facts next; deeper operations below.\nSwipe to scroll. Tap a field to edit.",0,NULL);
+    controls_add(u,0,LABEL,"YOUNG TABLEAUX 0.2.1",0,NULL);
 
     controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
     controls_add(u,0,LABEL,"SHAPE",0,NULL);
     field(c,u,SET_LAMBDA);
-    if(c->partition_ok) diagram(u,"lambda blocks",&c->partition);
+    if(c->partition_ok) nearby_shape(c,u);
 
     controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
     controls_add(u,0,LABEL,"DERIVED FACTS",0,NULL);
@@ -144,6 +149,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
         controls_add(u,0,OUTPUT,c->scripted_facts,0,NULL);
         controls_add(u,0,LABEL,"WEGERT PLOT: s_lambda(1,z,z^2,...)",0,NULL);
         controls_add(u,0,WEGERT,"",160*u->scale,&c->wegert);
+        nearby_plot_controls(c,u);
     }
 
     controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
@@ -186,6 +192,7 @@ void console_event(Console *c,Controls *u,ControlEvent e)
 {
     if(e.kind==EVENT_NONE) return;
     if(e.kind==EVENT_FOCUS) return;
+    if(nearby_event(c,u,e)) return;
     if(e.id>=OP_BASE) { console_run(c,(Operation)(e.id-OP_BASE)); return; }
     switch(e.id) {
     case CHOOSE_ORIENTATION: c->french=!c->french; break;

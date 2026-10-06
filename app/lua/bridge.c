@@ -6,10 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <android/log.h>
 
 static void bridge_error(LuaBridge *bridge, const char *message)
 {
     snprintf(bridge->error,sizeof(bridge->error),"%s",message?message:"unknown Lua error");
+    __android_log_print(ANDROID_LOG_ERROR,"YoungTableaux","%s",bridge->error);
 }
 
 void lua_bridge_init(LuaBridge *bridge, AAssetManager *assets)
@@ -74,14 +76,14 @@ void lua_bridge_refresh(LuaBridge *bridge, Console *console)
     snprintf(bridge->last_lambda,sizeof(bridge->last_lambda),"%s",console->fields[SET_LAMBDA]);
 
     if(!bridge->ready) {
-        snprintf(console->scripted_facts,UI_TEXT,"SCRIPTED FACTS (LUA)\nUnavailable: %s",bridge->error[0]?bridge->error:"not initialized");
+        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nFormula unavailable.");
         return;
     }
 
     Partition partition;
     MathStatus parsed=partition_parse(console->fields[SET_LAMBDA],&partition);
     if(parsed!=YT_OK) {
-        snprintf(console->scripted_facts,UI_TEXT,"SCRIPTED FACTS (LUA)\nEnter a valid lambda first: %s",math_status(parsed));
+        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nEnter a valid lambda first: %s",math_status(parsed));
         return;
     }
 
@@ -95,7 +97,7 @@ void lua_bridge_refresh(LuaBridge *bridge, Console *console)
     lua_getglobal(state,"young_facts");
     if(!lua_isfunction(state,-1)) {
         lua_pop(state,1);
-        snprintf(console->scripted_facts,UI_TEXT,"SCRIPTED FACTS (LUA)\nyoung_facts() missing");
+        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nFormula unavailable.");
         return;
     }
     push_partition(state,&partition);
@@ -103,12 +105,13 @@ void lua_bridge_refresh(LuaBridge *bridge, Console *console)
     lua_pushstring(state,dimension);
     if(lua_pcall(state,3,1,0)!=LUA_OK) {
         const char *message=lua_tostring(state,-1);
-        snprintf(console->scripted_facts,UI_TEXT,"SCRIPTED FACTS (LUA)\n%s",message?message:"evaluation error");
+        bridge_error(bridge,message);
+        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nFormula unavailable.");
         lua_pop(state,1);
         return;
     }
     const char *facts=lua_tostring(state,-1);
-    snprintf(console->scripted_facts,UI_TEXT,"%s",facts?facts:"SCRIPTED FACTS (LUA)\nNo output");
+    snprintf(console->scripted_facts,UI_TEXT,"%s",facts?facts:"SCHUR SPECIALIZATION\nNo output");
     lua_pop(state,1);
 }
 

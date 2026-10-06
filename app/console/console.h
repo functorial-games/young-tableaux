@@ -19,6 +19,7 @@ typedef struct {
     char output[12][UI_TEXT];
     char scripted_facts[UI_TEXT];
     TileProjection partition,conjugate,tableau,p,q,hooks;
+    TileRowProjection editable_rows[YT_DIM];
     WegertProjection wegert;
     bool partition_ok,tableau_ok,rsk_ok,french,decreasing;
     int insertion,content_convention,tableau_kind;

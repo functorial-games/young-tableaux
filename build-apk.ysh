@@ -30,7 +30,7 @@ mkdir -p "$output/objects" "$output/staging/lib/armeabi-v7a"
 var compiler = "$clang_bin/armv7a-linux-androideabi26-clang"
 var flags = ['-std=c17', '-O2', '-fPIC', '-marm', '-march=armv7-a', '-ffunction-sections', '-fdata-sections', '-fstack-protector-strong', '-D_FORTIFY_SOURCE=2', '-Wall', '-Wextra', '-Werror', '-Wpedantic', '-Wshadow']
 var includes = ["-I$project/app/core", "-I$project/app/ui", "-I$project/app/console", "-I$project/app/render", "-I$project/app/lua", "-I$project/third_party/lua", '-isystem', glue]
-var sources = ['core/math', 'ui/controls', 'console/console', 'render/raster', 'render/paint', 'lua/bridge', 'android/native_main']
+var sources = ['core/math', 'ui/controls', 'console/console', 'console/nearby', 'render/raster', 'render/paint', 'lua/bridge', 'android/native_main']
 var objects = []
 for source in (sources) {
   var name = source.replace('/', '_')
@@ -45,7 +45,7 @@ call objects->append(lua_object)
 call objects->append("$output/objects/glue.o")
 "$compiler" -marm -march=armv7-a -shared -Wl,--no-undefined -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,-z,max-page-size=16384 -Wl,-u,ANativeActivity_onCreate @objects -landroid -llog -lm -o "$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
 "$clang_bin/llvm-strip" --strip-unneeded "$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
-"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" -A "$project/app/assets" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 2 --version-name 0.2.0 -o "$output/unsigned.apk"
+"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" -A "$project/app/assets" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 3 --version-name 0.2.1 -o "$output/unsigned.apk"
 cd "$output/staging"
 touch -t 198001010000 lib/armeabi-v7a/libyoungtableaux.so
 zip -X -0 -q "$output/unsigned.apk" lib/armeabi-v7a/libyoungtableaux.so

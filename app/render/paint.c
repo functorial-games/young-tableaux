@@ -50,6 +50,35 @@ static uint32_t wegert_color(float phase,float log_modulus)
     uint32_t r=(uint32_t)lrintf(red*255.0f),g=(uint32_t)lrintf(green*255.0f),bl=(uint32_t)lrintf(blue*255.0f);
     return 0xff000000U|(bl<<16)|(g<<8)|r;
 }
+bool wegert_phase_log(const WegertProjection *projection,double real,double imag,
+                      double *phase,double *log_modulus)
+{
+    if(!projection || !projection->valid || !isfinite(real) || !isfinite(imag)) return false;
+    double radius=hypot(real,imag), angle=atan2(imag,real);
+    if(!isfinite(radius) || (radius==0.0 && projection->n_lambda)) return false;
+    double log_radius=log(fmax(radius,1.0e-300));
+    *phase=projection->n_lambda*angle;
+    *log_modulus=projection->n_lambda*log_radius;
+    bool outside=radius>1.0;
+    double step_real=outside?(real/radius)/radius:real;
+    double step_imag=outside?-(imag/radius)/radius:imag;
+    double power_real=1.0,power_imag=0.0;
+    for(int hook=1;hook<=projection->max_hook;++hook) {
+        double next_real=power_real*step_real-power_imag*step_imag;
+        power_imag=power_real*step_imag+power_imag*step_real;
+        power_real=next_real;
+        int count=projection->hook_counts[hook];
+        if(!count) continue;
+        double delta_real=1.0-power_real,delta_imag=-power_imag;
+        double delta=hypot(delta_real,delta_imag);
+        if(delta==0.0) return false;
+        double factor_phase=atan2(delta_imag,delta_real),factor_log=log(delta);
+        /* 1-z^h = -z^h (1-z^(-h)) outside the unit circle. */
+        if(outside) { factor_phase+=3.14159265358979323846+hook*angle; factor_log+=hook*log_radius; }
+        *phase-=count*factor_phase; *log_modulus-=count*factor_log;
+    }
+    return isfinite(*phase) && isfinite(*log_modulus);
+}
 static void paint_wegert(Canvas *b,Rect r,const WegertProjection *projection)
 {
     if(!projection || !projection->valid || r.w<2 || r.h<2) return;
@@ -60,31 +89,20 @@ static void paint_wegert(Canvas *b,Rect r,const WegertProjection *projection)
     if(local_top>=local_bottom) return;
     const int sample=2;
     int start=(local_top/sample)*sample;
-    float half_height=1.5f,aspect=(float)r.w/(float)r.h;
+    double half_height=projection->half_height,aspect=(double)r.w/r.h;
     for(int py=start;py<local_bottom;py+=sample) {
-        float yi=half_height*(1.0f-2.0f*(float)py/(float)(r.h-1));
+        double imag=projection->center_imag+half_height*(1.0-2.0*py/(r.h-1));
         for(int px=0;px<r.w;px+=sample) {
-            float zr=half_height*aspect*(2.0f*(float)px/(float)(r.w-1)-1.0f);
-            float zi=yi;
-            float radius=fmaxf(hypotf(zr,zi),1.0e-12f);
-            float phase=(float)projection->n_lambda*atan2f(zi,zr);
-            float log_modulus=(float)projection->n_lambda*logf(radius);
-            float pr=zr,pi=zi;
-            for(int hook=1;hook<=projection->max_hook;++hook) {
-                uint16_t multiplicity=projection->hook_counts[hook];
-                if(multiplicity) {
-                    float dr=1.0f-pr,di=-pi;
-                    float delta=fmaxf(hypotf(dr,di),1.0e-12f);
-                    phase-=(float)multiplicity*atan2f(di,dr);
-                    log_modulus-=(float)multiplicity*logf(delta);
-                }
-                float next_r=pr*zr-pi*zi;
-                pi=pr*zi+pi*zr;
-                pr=next_r;
-            }
+            double real=projection->center_real+half_height*aspect*(2.0*px/(r.w-1)-1.0);
+            double phase,log_modulus;
+            uint32_t color=BG;
+            if(wegert_phase_log(projection,real,imag,&phase,&log_modulus))
+                color=wegert_color((float)remainder(phase,6.28318530717958647692),
+                                   (float)remainder(log_modulus,2.30258509299404568402));
+            else if(real==0.0 && imag==0.0 && projection->n_lambda) color=FG;
             int width=px+sample<=r.w?sample:r.w-px;
             int height=py+sample<=r.h?sample:r.h-py;
-            raster_rect(b,r.x+px,r.y+py,width,height,wegert_color(phase,log_modulus));
+            raster_rect(b,r.x+px,r.y+py,width,height,color);
         }
     }
 }
@@ -93,17 +111,33 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
     b->clip_top=0; b->clip_bottom=b->height;
     raster_rect(b,0,0,b->width,b->height,BG);
     b->clip_bottom=u->height;
-    int scale=u->scale, columns=(u->width-16*scale)/(6*scale); if(columns<1) columns=1;
+    int scale=u->scale;
     for(int i=0;i<u->count;++i) {
         const Control *c=&u->controls[i]; Rect r=c->rect; r.y-=u->scroll;
         if(r.y+r.h<=0 || r.y>=u->height) continue;
         if(c->kind==SEPARATOR) { raster_rect(b,r.x,r.y,r.w,r.h,BLUE); continue; }
-        if(c->kind==FIELD || c->kind==BUTTON || c->kind==CHOICE) {
+        if(c->kind==FIELD || c->kind==BUTTON || c->kind==CHOICE || c->kind==DISABLED_BUTTON) {
             uint32_t color=c->kind==FIELD?0xff3b332bU:0xff584330U;
-            if(u->pressed==c->id || u->focus==c->id) color=0xff775d3eU;
+            if(c->kind==DISABLED_BUTTON) color=0xff2c2824U;
+            else if(u->pressed==c->id || u->focus==c->id) color=0xff775d3eU;
             raster_rect(b,r.x,r.y,r.w,r.h,color);
         }
-        if(c->kind==DIAGRAM) {
+        if(c->kind==BUTTON || c->kind==DISABLED_BUTTON) {
+            int size=scale, length=(int)strlen(c->text);
+            while(size>1 && length*6*size>r.w-4*scale) --size;
+            raster_text(b,c->text,r.x+(r.w-raster_text_width(c->text,size))/2,
+                        r.y+(r.h-7*size)/2,size,c->kind==DISABLED_BUTTON?0xff80786dU:FG);
+            continue;
+        }
+        if(c->kind==ROW_BLOCKS) {
+            const TileRowProjection *row=c->projection;
+            int count=row->count, cell=r.h, available=r.w-4*scale;
+            if(row->columns*cell>available) cell=available/row->columns;
+            if(cell<1) cell=1;
+            for(int column=0;column<count;++column)
+                raster_rect(b,r.x+2*scale+column*cell,r.y+(r.h-cell)/2,
+                            cell>1?cell-1:1,cell>1?cell-1:1,BLUE);
+        } else if(c->kind==DIAGRAM) {
             const TileProjection *p=c->projection;
             int max=1; for(int row=0;row<p->count;++row) if(p->rows[row]>max) max=p->rows[row];
             int cell=12*scale, available=r.w-8*scale;
@@ -121,7 +155,10 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
             }
         } else if(c->kind==WEGERT) {
             paint_wegert(b,r,(const WegertProjection *)c->projection);
-        } else wrapped(b,c->text,8*scale,r.y+4*scale,scale,columns,c->kind==OUTPUT?BLUE:FG);
+        } else {
+            int columns=(r.w-8*scale)/(6*scale); if(columns<1) columns=1;
+            wrapped(b,c->text,r.x+4*scale,r.y+4*scale,scale,columns,c->kind==OUTPUT?BLUE:FG);
+        }
     }
     if(u->content>u->height) {
         int track=u->height, thumb=track*u->height/u->content; if(thumb<8*scale) thumb=8*scale;
@@ -132,7 +169,7 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
 }
 void paint_keyboard(Canvas *b,const Controls *u,const char *const *labels,int pressed)
 {
-    int scale=u->scale,top=b->height-90*scale;
+    int scale=u->scale,top=b->height-90*u->scale;
     raster_rect(b,0,top,b->width,90*scale,0xff352b24U);
     for(int k=0;k<20;++k) {
         int left=(k%5)*b->width/5,right=(k%5+1)*b->width/5;

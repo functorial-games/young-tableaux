@@ -1,6 +1,7 @@
 /* Hosted projection QA, never physical-phone evidence. Writes PPM frames. */
 #include "console.h"
 #include "paint.h"
+#include "nearby.h"
 #include <stdio.h>
 #include <stdlib.h>
 static void frame(Console *console,Controls *ui,Canvas *canvas,const char *path)
@@ -23,11 +24,16 @@ static void frame(Console *console,Controls *ui,Canvas *canvas,const char *path)
 }
 int main(int argc,char **argv)
 {
-    if(argc!=2) return 2;
+    if(argc!=2 && argc!=3) return 2;
     Console *c=calloc(1,sizeof(*c)); Controls *u=calloc(1,sizeof(*u));
     Canvas canvas={576,1152,576,calloc(576*1152,sizeof(unsigned)),0,1152};
     if(!c || !u || !canvas.bits) return 1;
     console_init(c); controls_init(u); char path[1024];
+    if(argc==3) {
+        FILE *facts=fopen(argv[2],"rb"); if(!facts) return 1;
+        size_t count=fread(c->scripted_facts,1,UI_TEXT-1,facts);
+        c->scripted_facts[count]=0; fclose(facts);
+    }
     snprintf(path,sizeof(path),"%s/launch.ppm",argv[1]); frame(c,u,&canvas,path);
     u->focus=SET_LAMBDA; snprintf(path,sizeof(path),"%s/edit.ppm",argv[1]); frame(c,u,&canvas,path); u->focus=0;
     console_layout(c,u,576,1152);
@@ -36,5 +42,12 @@ int main(int argc,char **argv)
     console_run(c,LittlewoodRichardsonCoefficient); console_layout(c,u,576,1152);
     for(int i=0;i<u->count;++i) if(u->controls[i].id==OP_BASE+LittlewoodRichardsonCoefficient) controls_scroll(u,u->controls[i].rect.y-60);
     snprintf(path,sizeof(path),"%s/lr.ppm",argv[1]); frame(c,u,&canvas,path);
+    console_layout(c,u,576,1152);
+    for(int i=0;i<u->count;++i) if(u->controls[i].kind==WEGERT)
+        controls_scroll(u,u->controls[i].rect.y-80);
+    snprintf(path,sizeof(path),"%s/plot.ppm",argv[1]); frame(c,u,&canvas,path);
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,PLOT_ZOOM_IN});
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,PLOT_RIGHT});
+    snprintf(path,sizeof(path),"%s/plot-zoom-pan.ppm",argv[1]); frame(c,u,&canvas,path);
     raster_destroy(); free(canvas.bits); free(u); free(c); return 0;
 }

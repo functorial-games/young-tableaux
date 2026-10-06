@@ -29,9 +29,11 @@ jobs:
           cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
             -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
             tests/host_tests.c app/core/math.c app/ui/controls.c \
-            app/console/console.c app/render/raster.c app/render/paint.c \
+            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
             -lm -o "$RUNNER_TEMP/young-tests/host-tests"
           "$RUNNER_TEMP/young-tests/host-tests" | tee "$RUNNER_TEMP/young-tests/host-tests.txt"
+          cc -std=c17 -O2 third_party/lua/onelua.c -lm -o "$RUNNER_TEMP/young-tests/lua"
+          "$RUNNER_TEMP/young-tests/lua" tests/facts_test.lua | tee "$RUNNER_TEMP/young-tests/facts-tests.txt"
 
       - name: Install pinned Android packages
         shell: bash
@@ -95,6 +97,7 @@ jobs:
             core/math
             ui/controls
             console/console
+            console/nearby
             render/raster
             render/paint
             lua/bridge
@@ -138,8 +141,8 @@ jobs:
             --manifest "$project/app/AndroidManifest.xml" \
             --min-sdk-version 26 \
             --target-sdk-version 34 \
-            --version-code 2 \
-            --version-name 0.2.0 \
+            --version-code 3 \
+            --version-name 0.2.1 \
             -o "$out/unsigned.apk"
 
           (
@@ -178,6 +181,7 @@ jobs:
           sha256sum "$out/young-tableaux-armeabi-v7a.apk" | tee "$out/apk.sha256"
           git rev-parse HEAD | tee "$out/source.txt"
           cp "$RUNNER_TEMP/young-tests/host-tests.txt" "$out/host-tests.txt"
+          cp "$RUNNER_TEMP/young-tests/facts-tests.txt" "$out/facts-tests.txt"
           git archive HEAD | gzip -n > "$out/source.tar.gz"
           tar -czf "$out/lua-source.tar.gz" --exclude=.git third_party/lua
 
@@ -193,6 +197,7 @@ jobs:
             build/package.txt
             build/source.txt
             build/host-tests.txt
+            build/facts-tests.txt
             build/source.tar.gz
             build/lua-source.tar.gz
           if-no-files-found: error

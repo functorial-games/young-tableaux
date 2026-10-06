@@ -156,4 +156,5 @@ static void interaction(void)
     CHECK(console_key_hit(u,0,897,1152)==0); CHECK(console_key_hit(u,575,1136,1152)==19); CHECK(console_key_hit(u,576,897,1152)==-1);
     free(u); free(c);
 }
-int main(void) { partitions(); tableaux(); rsk(); interaction(); printf("PASS %u checks: mathematics, RSK, controls, scrolling, console\n",checks); return 0; }
+#include "nearby_tests.inc"
+int main(void) { partitions(); tableaux(); rsk(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, controls, scrolling, console\n",checks); return 0; }

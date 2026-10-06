@@ -209,7 +209,7 @@ static void interaction(void)
     CHECK(c->jeu_ok && c->jeu.inner.count==0);
     CHECK(c->wegert.hook_counts[1]==3 && c->wegert.hook_counts[3]==2 && c->wegert.hook_counts[5]==1);
     u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
-    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"f^lambda = 2"));
+    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"f^λ = 2"));
     console_key(c,u,14); CHECK(!c->partition_ok); console_key(c,u,0); CHECK(c->partition_ok); console_key(c,u,19); CHECK(!u->focus);
     console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Nat"));
     console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_word_mode);

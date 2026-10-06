@@ -10,14 +10,17 @@
 static size_t wrapped_token_bytes(const char *text)
 {
     size_t prefix=0U;
-    const char *glyph=text;
+    const unsigned char *glyph=(const unsigned char *)text;
     if((text[0]=='_' || text[0]=='^') && text[1] && text[1]!='\n') {
-        prefix=1U; glyph=text+1;
+        prefix=1U; glyph=(const unsigned char *)(text+1);
     }
-    if((unsigned char)glyph[0]==0xceU && (unsigned char)glyph[1]==0xbbU)
-        return prefix+2U;
+    if(glyph[0]<0x80U) return prefix+1U;
+    if((glyph[0]&0xe0U)==0xc0U && glyph[1]) return prefix+2U;
+    if((glyph[0]&0xf0U)==0xe0U && glyph[1] && glyph[2]) return prefix+3U;
+    if((glyph[0]&0xf8U)==0xf0U && glyph[1] && glyph[2] && glyph[3]) return prefix+4U;
     return prefix+1U;
 }
+
 static void wrapped(Canvas *b,const char *text,int x,int y,int scale,int columns,uint32_t color)
 {
     char line[1024];

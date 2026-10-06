@@ -292,6 +292,8 @@ static void interaction(void)
     snprintf(c->fields[SET_CELL],512,"3,1");
     console_run(c,ReverseInsert); CHECK(c->tableau_ok && strstr(c->output[1],"ejected"));
     console_run(c,TransposeTableau); CHECK(c->tableau_ok && strstr(c->output[1],"transpose"));
+    snprintf(c->fields[SET_LAMBDA],512,"3,2,1");
+    console_run(c,DisplayPartition);
     snprintf(c->fields[SET_CELL],512,"2,3");
     console_run(c,AddCell); CHECK(strstr(c->output[2],"add (2,3)"));
     snprintf(c->fields[SET_CELL],512,"2,2");

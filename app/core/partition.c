@@ -98,7 +98,7 @@ static bool cell_in_list(Cell cell,const Cell *cells,int count)
     return false;
 }
 
-static MathStatus partition_value_status(const Partition *partition)
+MathStatus partition_validate(const Partition *partition)
 {
     if(!partition) return YT_MALFORMED;
     if(partition->count<0) return YT_MALFORMED;
@@ -116,7 +116,7 @@ static MathStatus partition_value_status(const Partition *partition)
 MathStatus partition_add_cell(const Partition *partition,Cell cell,Partition *out)
 {
     if(!out) return YT_MALFORMED;
-    MathStatus input_status=partition_value_status(partition);
+    MathStatus input_status=partition_validate(partition);
     if(input_status!=YT_OK) return input_status;
     if(partition_size(partition)>=YT_CELLS) return YT_LIMIT;
     Cell cells[YT_DIM+1];
@@ -135,7 +135,7 @@ MathStatus partition_add_cell(const Partition *partition,Cell cell,Partition *ou
 MathStatus partition_remove_cell(const Partition *partition,Cell cell,Partition *out)
 {
     if(!out) return YT_MALFORMED;
-    MathStatus input_status=partition_value_status(partition);
+    MathStatus input_status=partition_validate(partition);
     if(input_status!=YT_OK) return input_status;
     Cell cells[YT_DIM];
     int count=partition_removable(partition,cells);

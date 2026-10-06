@@ -2,7 +2,7 @@
 
 Young diagrams/tableaux exploration console plus a reference collection for symmetric-group representation theory, RSK, symmetric functions, and related combinatorics.
 
-The native Android app is now an interactive tableaux laboratory. Partition operations and standard-tableau validation execute; permutation and word RSK can be stepped insertion-by-insertion with the bump path highlighted; skew semistandard tableaux support one-cell jeu de taquin steps, complete slides, reset, and rectification. Unfinished operations still expose their typed signatures. See [interactive RSK / jeu de taquin notes](notes/interactive-rsk-jdt.md) and the earlier [native APK notes](notes/native-apk-v0.1.md). The [ARMv7 APK](artifacts/young-tableaux-armeabi-v7a.apk) targets the MIRO A1; physical acceptance is pending.
+The native Android app is an interactive tableaux laboratory. The 0.4.0 operation registry executes the ordinary non-Pauli surface: direct diagram editing, row RSK and its permutation inverse, jeu de taquin, promotion/evacuation, LR tableaux and Schur products, ordinary complex characters, exact symmetric functions, branching and paths, random generation, subsequences, reduced words, and strong Bruhat order. See the [contracts, input grammar, bounds, and verification](docs/consolidated-operations.md). The workflow builds signed ARMv7 MIRO A1 and AArch64 C67 APKs; physical acceptance is separate. The checked-in [older ARMv7 APK](artifacts/young-tableaux-armeabi-v7a.apk) is historical.
 
 ## Reference map
 

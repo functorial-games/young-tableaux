@@ -261,6 +261,9 @@ static void interaction(void)
     CHECK(raster_text_width("÷",2)==raster_text_width("/",2));
     CHECK(raster_text_width("×",2)==raster_text_width("x",2));
     CHECK(raster_text_width("…",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("χ",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("≤",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("→",2)==raster_text_width("x",2));
     CHECK(raster_text_width("²",3)==raster_text_width("^2",3));
     CHECK(raster_text_width("₁",3)==raster_text_width("_1",3));
     uint32_t ellipsis_pixels[8*8]={0}, fallback_pixels[8*8]={0};
@@ -283,7 +286,7 @@ static void interaction(void)
     u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
     CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"Hook-length formula gives 2 standard tableaux."));
     console_key(c,u,14); CHECK(!c->partition_ok); console_key(c,u,0); CHECK(c->partition_ok); console_key(c,u,19); CHECK(!u->focus);
-    console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Nat"));
+    console_run(c,LittlewoodRichardsonCoefficient); CHECK(!strstr(c->output[5],"INTERNAL DISPATCH")); CHECK(!strstr(c->output[5],"NOT IMPLEMENTED"));
     console_run(c,RSKMatrix); CHECK(c->rsk_ok && c->rsk_total==2);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START});
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT});
@@ -300,10 +303,10 @@ static void interaction(void)
     TileProjection before_column=c->tableau;
     c->insertion=COLUMN_INSERTION;
     console_run(c,InsertLetter);
-    CHECK(strstr(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"));
+    CHECK(strstr(c->output[1],"UNSUPPORTED CONVENTION"));
     CHECK(memcmp(&before_column,&c->tableau,sizeof(before_column))==0);
     console_run(c,ReverseInsert);
-    CHECK(strstr(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"));
+    CHECK(strstr(c->output[1],"UNSUPPORTED CONVENTION"));
     c->insertion=ROW_INSERTION;
     console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0;
     bool ids[OP_BASE+OP_COUNT]={false};
@@ -312,10 +315,9 @@ static void interaction(void)
         if(u->controls[i].kind==WEGERT) ++wegert;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==6); CHECK(wegert==1);
+    CHECK(separators==12); CHECK(wegert==1);
     for(int op=0;op<OP_COUNT;++op) {
-        bool visible=op==RSKPermutation || op==RSKWord
-                  || op==JeuDeTaquinSlide || op==Rectify;
+        bool visible=operation_info[op].section>=3;
         CHECK(ids[OP_BASE+op]==visible);
     }
     console_run(c,ConjugatePartition); CHECK(strstr(c->output[0],"conjugate = "));

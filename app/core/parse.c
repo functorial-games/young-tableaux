@@ -9,8 +9,9 @@ const char *math_status(MathStatus s)
     case YT_OK: return "OK";
     case YT_MALFORMED: return "INVALID INPUT";
     case YT_LIMIT: return "LIMIT: 64 rows/columns, 256 cells";
-    case YT_OVERFLOW: return "OVERFLOW: exact uint64 range exceeded";
-    case YT_UNSUPPORTED: return "NOT IMPLEMENTED";
+    case YT_OVERFLOW: return "OVERFLOW: exact integer range exceeded";
+    case YT_UNSUPPORTED: return "UNSUPPORTED CONVENTION";
+    case YT_COMPLEXITY: return "EXACT COMPUTATION LIMIT";
     }
     return "ERROR";
 }
@@ -27,8 +28,10 @@ MathStatus parse_integer_list(const char **p, int *values, int *count, bool row)
     if (**p == ']' && bracket) { ++*p; return YT_OK; }
     if (**p == '\0' && !bracket) return YT_OK;
     for (;;) {
-        bool negative = **p == '-';
-        if (negative || **p == '+') ++*p;
+        bool unicode_minus = strncmp(*p,"−",3)==0;
+        bool negative = **p == '-' || unicode_minus;
+        if(unicode_minus) *p+=3;
+        else if (negative || **p == '+') ++*p;
         if (!isdigit((unsigned char)**p)) return YT_MALFORMED;
         uint64_t value = 0;
         while (isdigit((unsigned char)**p)) {
@@ -46,6 +49,6 @@ MathStatus parse_integer_list(const char **p, int *values, int *count, bool row)
         if (!bracket && (**p == '\0' || (row && **p == ';'))) return YT_OK;
         if (**p == ',') { ++*p; parse_spaces(p); }
         else if (!had_space) return YT_MALFORMED;
-        if (!isdigit((unsigned char)**p) && **p != '-' && **p != '+') return YT_MALFORMED;
+        if (!isdigit((unsigned char)**p) && **p != '-' && **p != '+' && strncmp(*p,"−",3)) return YT_MALFORMED;
     }
 }

@@ -14,14 +14,14 @@ mkdir -p "$project/build"
 var compiler = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
 test -x "$compiler"
 var core = []
-for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin']) {
+for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin', 'algebra', 'combinatorics']) {
   call core->append("$project/app/core/$unit.c")
 }
 "$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/host-tests"
 "$project/build/host-tests"
 sed 's/tableau_check_kind(filling,TABLEAU_STANDARD,false/tableau_check_kind(filling,TABLEAU_SEMISTANDARD,false/' "$project/app/core/tableau.c" > "$project/build/relaxed-standard.c"
 var mutant_core = []
-for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin']) {
+for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin', 'algebra', 'combinatorics']) {
   if (unit === 'tableau') {
     call mutant_core->append("$project/build/relaxed-standard.c")
   } else {
@@ -51,7 +51,7 @@ if "$compiler" -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core"
   exit 1
 fi
 rg -q 'incompatible pointer types' "$project/build/reject-word-result.log"
-"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/console" "$project/tests/operation_correspondence.c" -o "$project/build/operation-correspondence"
+"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/operation_correspondence.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/operation-correspondence"
 "$project/build/operation-correspondence" "$project/types/YoungTableaux/Types.idr"
 sed 's/InputFor RSKPermutation = Permutation/InputFor RSKPermutation = Word/' "$project/types/YoungTableaux/Types.idr" > "$project/build/drifted-types.idr"
 if "$project/build/operation-correspondence" "$project/build/drifted-types.idr" > "$project/build/drift.log" 2>&1; then
@@ -59,4 +59,6 @@ if "$project/build/operation-correspondence" "$project/build/drifted-types.idr" 
   exit 1
 fi
 rg -q 'operation correspondence failed: InputFor RSKPermutation' "$project/build/drift.log"
+"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/consolidation_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/consolidation-tests"
+"$project/build/consolidation-tests"
 printf '\033[32mPASS host tests\033[0m\n'

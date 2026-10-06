@@ -10,7 +10,9 @@ for index, case in ipairs(cases) do
   assert(facts:find(case[4], 1, true), 'wrong formula in case ' .. index)
   assert(not facts:find('LUA', 1, true))
   assert(not facts:find('SCRIPTED', 1, true))
-  assert(facts:find('SCHUR SPECIALIZATION', 1, true))
+  assert(facts:find('Schur specialization', 1, true))
+  assert(facts:find('λ = ', 1, true))
+  assert(facts:find('s_λ(', 1, true))
 end
 
 local wegert = young_wegert({3,2,1}, {5,3,1,3,1,1})
@@ -27,7 +29,8 @@ for _, item in ipairs(layout) do
   assert(not (item.text or ''):lower():find('kitchen sink', 1, true))
   if item.kind == 'shape' then saw_shape = true end
   if item.kind == 'wegert' then assert(saw_shape); saw_wegert = true end
-  if item.kind == 'label' and item.text == 'DERIVED FACTS' then
+  assert(not (item.text or ''):find('WEGERT PLOT', 1, true))
+  if item.kind == 'label' and item.text == 'Derived facts' then
     assert(saw_wegert)
     saw_derived = true
   end
@@ -46,4 +49,10 @@ assert(shape[1] == 2 and shape[2] == 1)
 assert(young_shape_history_depth(shape) == 0)
 assert(young_shape_add({2,2}, 2, 3) == nil)
 
-print('PASS formula, Wegert preparation, scripted layout, and click-add state')
+shape = young_shape_remove({3,2,1}, 2, 2)
+assert(shape[1] == 3 and shape[2] == 1 and shape[3] == 1)
+assert(young_shape_remove({2,2}, 1, 2) == nil)
+shape = young_shape_remove({1}, 1, 1)
+assert(#shape == 0)
+
+print('PASS formula, Wegert preparation, scripted layout, and direct shape editing')

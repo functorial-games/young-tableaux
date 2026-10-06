@@ -555,6 +555,7 @@ data ControlPurpose
   | SetTableauEntries
   | SetTableauKind
   | SetAlphabet
+  | SetEntry
   | SetWeight
   | SetPermutation
   | SetWord

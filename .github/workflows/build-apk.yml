@@ -21,6 +21,18 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Test host mathematics and controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/young-tests"
+          cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
+            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
+            tests/host_tests.c app/core/math.c app/ui/controls.c \
+            app/console/console.c app/render/raster.c app/render/paint.c \
+            -lm -o "$RUNNER_TEMP/young-tests/host-tests"
+          "$RUNNER_TEMP/young-tests/host-tests" | tee "$RUNNER_TEMP/young-tests/host-tests.txt"
+
       - name: Install pinned Android packages
         shell: bash
         run: |
@@ -165,6 +177,9 @@ jobs:
 
           sha256sum "$out/young-tableaux-armeabi-v7a.apk" | tee "$out/apk.sha256"
           git rev-parse HEAD | tee "$out/source.txt"
+          cp "$RUNNER_TEMP/young-tests/host-tests.txt" "$out/host-tests.txt"
+          git archive HEAD | gzip -n > "$out/source.tar.gz"
+          tar -czf "$out/lua-source.tar.gz" --exclude=.git third_party/lua
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -177,5 +192,8 @@ jobs:
             build/abi.txt
             build/package.txt
             build/source.txt
+            build/host-tests.txt
+            build/source.tar.gz
+            build/lua-source.tar.gz
           if-no-files-found: error
           retention-days: 7

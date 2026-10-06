@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <inttypes.h>
 
 static void button(Controls *u,int id,const char *label,Rect rect,bool enabled)
 {
@@ -66,8 +67,6 @@ void nearby_shape(Console *c,Controls *u)
     if(columns*cell>available) cell=available/columns;
     if(cell<1) cell=1;
 
-    controls_add(u,0,LABEL,"Young diagram",0,NULL);
-
     bool can_new_row=p.count<YT_DIM && partition_size(&p)<YT_CELLS && addable[p.count];
     int visual_rows=p.count+(can_new_row?1:0);
     if(!visual_rows) visual_rows=1;
@@ -111,6 +110,17 @@ void nearby_shape(Console *c,Controls *u)
     }
 
     u->content+=gap;
+    char stats[96];
+    uint64_t dimension=0;
+    MathStatus dimension_status=partition_standard_count(&p,&dimension);
+    if(dimension_status==YT_OK)
+        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %" PRIu64,partition_size(&p),dimension);
+    else
+        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %s",partition_size(&p),math_status(dimension_status));
+    int stats_x=margin+width/3, stats_width=width-stats_x+margin;
+    int stats_height=controls_text_height(u,stats);
+    controls_add_at(u,0,LABEL,stats,(Rect){stats_x,u->content,stats_width,stats_height},NULL);
+
     int y=u->content, half=(width-gap)/2;
     bool can_rewind=c->shape_history_count>0;
     button(u,SHAPE_UNDO,"Undo",(Rect){margin,y,half,side},can_rewind);

@@ -195,6 +195,8 @@ static void interaction(void)
     r=u->controls[1].rect; controls_scroll(u,r.y); CHECK(controls_hit(u,r.x+1,1)==7);
     controls_touch(u,TOUCH_DOWN,3,r.x+1,1); e=controls_touch(u,TOUCH_UP,3,r.x+1,1); CHECK(e.kind==EVENT_FOCUS && u->focus==7);
     console_init(c);
+    console_layout(c,u,576,1152);
+    CHECK(u->count>0 && u->controls[0].kind==HERO && !strcmp(u->controls[0].text,"6"));
     CHECK(c->wegert.valid); CHECK(c->wegert.n_lambda==4); CHECK(c->wegert.max_hook==5);
     CHECK(c->jeu_loaded && c->jeu_ok);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_STEP});

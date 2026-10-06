@@ -114,9 +114,9 @@ void nearby_shape(Console *c,Controls *u)
     uint64_t dimension=0;
     MathStatus dimension_status=partition_standard_count(&p,&dimension);
     if(dimension_status==YT_OK)
-        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %" PRIu64,partition_size(&p),dimension);
+        snprintf(stats,sizeof(stats),"|λ| = %d\nstandard tableaux = %" PRIu64,partition_size(&p),dimension);
     else
-        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %s",partition_size(&p),math_status(dimension_status));
+        snprintf(stats,sizeof(stats),"|λ| = %d\nstandard tableaux = %s",partition_size(&p),math_status(dimension_status));
     int stats_x=margin+width/3, stats_width=width-stats_x+margin;
     int stats_height=controls_text_height(u,stats);
     controls_add_at(u,0,LABEL,stats,(Rect){stats_x,u->content,stats_width,stats_height},NULL);

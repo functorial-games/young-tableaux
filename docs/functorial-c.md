@@ -1,8 +1,14 @@
 # Functorial C repair / qualification — 2026-10-06
 
-**STRUCTURAL REPAIR REQUIRED** for the complete broad mathematical surface.
-The bounded implemented core is substantially repaired; this label deliberately
-does not certify the entire type sketch as executable mathematics.
+The ordinary registered operation surface is now executable through typed
+native boundaries. See [the consolidated contracts](consolidated-operations.md)
+for exact semantics, finite bounds, shared owners and checks. The correspondence
+gate checks sketch signatures and invokes every registered C operation. The
+type sketch itself has not been executed through an Idris/Idriç checker.
+
+The remainder below records the earlier 0.3.3 qualification; its missing-operation
+and inventory observations are historical, superseded by the consolidated
+ordinary contracts and narrowed public modes.
 Application ICK compilation is also blocked on Bionic nullability and Android
 availability annotations, reproduced with current source-built ICK at API 26.
 

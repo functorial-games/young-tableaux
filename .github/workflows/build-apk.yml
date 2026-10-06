@@ -36,23 +36,44 @@ jobs:
           mkdir -p "$RUNNER_TEMP/young-tests"
           cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
             -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
-            tests/host_tests.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c app/ui/controls.c \
+            tests/host_tests.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c app/core/algebra.c app/core/combinatorics.c app/ui/controls.c \
             app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
             -lm -o "$RUNNER_TEMP/young-tests/host-tests"
           "$RUNNER_TEMP/young-tests/host-tests" | tee "$RUNNER_TEMP/young-tests/host-tests.txt"
           cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/core \
-            tests/insertion_ownership.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c \
+            tests/insertion_ownership.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c app/core/algebra.c app/core/combinatorics.c \
             -Wl,--wrap=tableau_row_insert_trace -o "$RUNNER_TEMP/young-tests/insertion-ownership"
           "$RUNNER_TEMP/young-tests/insertion-ownership"
           if cc -std=c17 -Werror=incompatible-pointer-types -Iapp/core -c tests/reject_word_as_permutation.c -o "$RUNNER_TEMP/young-tests/reject.o" > "$RUNNER_TEMP/young-tests/reject.log" 2>&1; then exit 1; fi
           grep -q 'incompatible pointer type' "$RUNNER_TEMP/young-tests/reject.log"
           if cc -std=c17 -Werror=incompatible-pointer-types -Iapp/core -c tests/reject_filling_as_slide.c -o "$RUNNER_TEMP/young-tests/reject-slide.o" > "$RUNNER_TEMP/young-tests/reject-slide.log" 2>&1; then exit 1; fi
           grep -q 'incompatible pointer type' "$RUNNER_TEMP/young-tests/reject-slide.log"
-          cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/console tests/operation_correspondence.c -o "$RUNNER_TEMP/young-tests/correspondence"
+          cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/core -Iapp/ui -Iapp/console -Iapp/render tests/operation_correspondence.c app/core/*.c app/ui/controls.c app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c -lm -o "$RUNNER_TEMP/young-tests/correspondence"
           "$RUNNER_TEMP/young-tests/correspondence" types/YoungTableaux/Types.idr
           sed 's/InputFor RSKPermutation = Permutation/InputFor RSKPermutation = Word/' types/YoungTableaux/Types.idr > "$RUNNER_TEMP/young-tests/drift.idr"
           if "$RUNNER_TEMP/young-tests/correspondence" "$RUNNER_TEMP/young-tests/drift.idr" > "$RUNNER_TEMP/young-tests/drift.log" 2>&1; then exit 1; fi
           grep -q 'operation correspondence failed' "$RUNNER_TEMP/young-tests/drift.log"
+
+          cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
+            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
+            tests/consolidation_tests.c app/core/*.c app/ui/controls.c \
+            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
+            -lm -o "$RUNNER_TEMP/young-tests/consolidation"
+          "$RUNNER_TEMP/young-tests/consolidation" | tee "$RUNNER_TEMP/young-tests/consolidation.txt"
+          cc -std=c17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Wall -Wextra -Werror -Wpedantic -Wshadow \
+            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
+            tests/consolidation_tests.c app/core/*.c app/ui/controls.c \
+            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
+            -lm -o "$RUNNER_TEMP/young-tests/consolidation-sanitized"
+          "$RUNNER_TEMP/young-tests/consolidation-sanitized" | tee "$RUNNER_TEMP/young-tests/sanitizers.txt"
+          cc -std=c17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
+            tests/host_tests.c app/core/*.c app/ui/controls.c \
+            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
+            -lm -o "$RUNNER_TEMP/young-tests/host-sanitized"
+          "$RUNNER_TEMP/young-tests/host-sanitized"
+
           cc -std=c17 -O2 third_party/lua/onelua.c -lm -o "$RUNNER_TEMP/young-tests/lua"
           "$RUNNER_TEMP/young-tests/lua" tests/facts_test.lua | tee "$RUNNER_TEMP/young-tests/facts-tests.txt"
 
@@ -121,6 +142,8 @@ jobs:
             core/tableau
             core/rsk
             core/jeu_de_taquin
+            core/algebra
+            core/combinatorics
             ui/controls
             console/console
             console/nearby
@@ -167,8 +190,8 @@ jobs:
             --manifest "$project/app/AndroidManifest.xml" \
             --min-sdk-version 26 \
             --target-sdk-version 34 \
-            --version-code 8 \
-            --version-name 0.3.3 \
+            --version-code 9 \
+            --version-name 0.4.0 \
             -o "$out/unsigned.apk"
 
           (
@@ -208,6 +231,8 @@ jobs:
           git rev-parse HEAD | tee "$out/source.txt"
           cp "$RUNNER_TEMP/young-tests/host-tests.txt" "$out/host-tests.txt"
           cp "$RUNNER_TEMP/young-tests/facts-tests.txt" "$out/facts-tests.txt"
+          cp "$RUNNER_TEMP/young-tests/consolidation.txt" "$out/consolidation.txt"
+          cp "$RUNNER_TEMP/young-tests/sanitizers.txt" "$out/sanitizers.txt"
           git archive HEAD | gzip -n > "$out/source.tar.gz"
           tar -czf "$out/lua-source.tar.gz" --exclude=.git third_party/lua
 
@@ -251,6 +276,8 @@ jobs:
             core/tableau
             core/rsk
             core/jeu_de_taquin
+            core/algebra
+            core/combinatorics
             ui/controls
             console/console
             console/nearby
@@ -297,8 +324,8 @@ jobs:
             --manifest "$project/app/AndroidManifest.xml" \
             --min-sdk-version 26 \
             --target-sdk-version 34 \
-            --version-code 8 \
-            --version-name 0.3.3 \
+            --version-code 9 \
+            --version-name 0.4.0 \
             -o "$out/unsigned.apk"
 
           (
@@ -353,6 +380,8 @@ jobs:
             build/source.txt
             build/host-tests.txt
             build/facts-tests.txt
+            build/consolidation.txt
+            build/sanitizers.txt
             build/source.tar.gz
             build/lua-source.tar.gz
             build/c67/young-tableaux-arm64-v8a.apk

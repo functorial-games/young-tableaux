@@ -4,13 +4,30 @@ import Data.Vect
 
 %default total
 
+-- Native bounded integers are checked before execution.
+public export
+number : Type
+number = Nat
+
+public export
+record Rational where
+  constructor MkRational
+  numerator : Integer
+  denominator : number
+  positiveDenominator : denominator > 0 = True
+
+public export
+record RNGState where
+  constructor MkRNGState
+  state : number
+
 -- Design sketch: intentionally broader than the first APK.
 -- The purpose is to enumerate mathematical inputs, operations, interaction
 -- events, controls, conventions, and outputs without forcing all of them
 -- into the first implementation.
 
 public export
-partitionRowsValid : List Nat -> Bool
+partitionRowsValid : List number -> Bool
 partitionRowsValid [] = True
 partitionRowsValid [row] = row > 0
 partitionRowsValid (row :: next :: rest) = row >= next && partitionRowsValid (next :: rest)
@@ -18,14 +35,14 @@ partitionRowsValid (row :: next :: rest) = row >= next && partitionRowsValid (ne
 public export
 record Partition where
   constructor MkPartition
-  rows : List Nat
+  rows : List number
   validRows : partitionRowsValid rows = True
 
 public export
 record Cell where
   constructor MkCell
-  row : Nat
-  column : Nat
+  row : number
+  column : number
 
 -- Direct corner edits follow edges in the Young graph, not merely mutations of
 -- the final row lengths.  Keeping the additions makes undo/reset and later
@@ -61,11 +78,6 @@ data TableauKind
   | ColumnStandard
   | Standard
   | Semistandard
-  | Skew
-  | Shifted
-  | Ribbon
-  | Oscillating
-  | KTableau
 
 public export
 record Entry where
@@ -139,18 +151,18 @@ record JeuState where
   phase : JeuPhase
 
 public export
-occurrences : Nat -> List Nat -> Nat
+occurrences : number -> List number -> number
 occurrences value [] = 0
 occurrences value (first :: rest) = (if value == first then 1 else 0) + occurrences value rest
 
 public export
-permutationValid : List Nat -> Bool
+permutationValid : List number -> Bool
 permutationValid values = all (\value => value > 0 && value <= length values && occurrences value values == 1) values
 
 public export
 record Permutation where
   constructor MkPermutation
-  values : List Nat
+  values : List number
   validPermutation : permutationValid values = True
 
 public export
@@ -162,7 +174,7 @@ record Word where
 public export
 record Biword where
   constructor MkBiword
-  count : Nat
+  count : number
   letters : Vect count (Integer, Integer)
   -- Native Biword is a list of paired Biletter values. rsk_biword checks
   -- positive letters and lexicographic order for row insertion, including
@@ -171,14 +183,13 @@ record Biword where
 public export
 record NatMatrix where
   constructor MkNatMatrix
-  height : Nat
-  width : Nat
-  entries : Vect height (Vect width Nat)
+  height : number
+  width : number
+  entries : Vect height (Vect width number)
 
 public export
 data Characteristic
   = CharacteristicZero
-  | CharacteristicP Nat
 
 public export
 data GroupElement
@@ -192,13 +203,11 @@ data SymmetricFunctionBasis
   | CompleteHomogeneous
   | PowerSum
   | Schur
-  | HallLittlewood
-  | Macdonald
 
 public export
 record SymmetricFunctionTerm where
   constructor MkSymmetricFunctionTerm
-  coefficient : Integer
+  coefficient : Rational
   index : Partition
 
 public export
@@ -210,13 +219,13 @@ record SymmetricFunction where
 public export
 record Specialization where
   constructor MkSpecialization
-  values : List (String, Integer)
+  values : List Integer
 
 public export
 record PolynomialTerm where
   constructor MkPolynomialTerm
   coefficient : Integer
-  powers : List Nat
+  powers : List number
 
 public export
 record Polynomial where
@@ -244,7 +253,6 @@ data ContentConvention
 public export
 data InsertionConvention
   = RowInsertion
-  | ColumnInsertion
 
 public export
 data ReadingOrder
@@ -337,8 +345,8 @@ InputFor InsertLetter = (Tableau, Entry)
 InputFor ReverseInsert = (Tableau, Cell)
 InputFor JeuDeTaquinSlide = (SkewTableau, Cell)
 InputFor Rectify = SkewTableau
-InputFor Promote = Tableau
-InputFor Evacuate = Tableau
+InputFor Promote = StandardTableau
+InputFor Evacuate = StandardTableau
 InputFor TransposeTableau = Tableau
 InputFor RSKPermutation = Permutation
 InputFor RSKWord = Word
@@ -354,11 +362,11 @@ InputFor Plethysm = (SymmetricFunction, SymmetricFunction)
 InputFor BranchUp = Partition
 InputFor BranchDown = Partition
 InputFor EnumerateYoungGraphPaths = (Partition, Partition)
-InputFor CharacterValue = (Partition, GroupElement)
+InputFor CharacterValue = (Partition, Permutation)
 InputFor RepresentationDimension = Partition
-InputFor GenerateRandomPermutation = Nat
-InputFor GenerateRandomStandardTableau = Partition
-InputFor SamplePlancherelPartition = Nat
+InputFor GenerateRandomPermutation = (number, RNGState)
+InputFor GenerateRandomStandardTableau = (Partition, RNGState)
+InputFor SamplePlancherelPartition = (number, RNGState)
 InputFor ComputeLongestIncreasingSubsequence = Permutation
 InputFor ComputeLongestDecreasingSubsequence = Permutation
 InputFor CoxeterReducedWord = Permutation
@@ -375,7 +383,7 @@ OutputFor DisplayPartition = DiagramResult
 OutputFor ListCells = List Cell
 OutputFor DisplayTableau = DiagramResult
 OutputFor ConjugatePartition = Partition
-OutputFor ComputeHookLengths = List (Cell, Nat)
+OutputFor ComputeHookLengths = List (Cell, number)
 OutputFor ComputeHookProduct = Integer
 OutputFor CountStandardTableaux = Integer
 OutputFor FindCorners = List Cell
@@ -389,31 +397,31 @@ OutputFor InsertLetter = Tableau
 OutputFor ReverseInsert = Tableau
 OutputFor JeuDeTaquinSlide = SkewTableau
 OutputFor Rectify = SkewTableau
-OutputFor Promote = Tableau
-OutputFor Evacuate = Tableau
+OutputFor Promote = StandardTableau
+OutputFor Evacuate = StandardTableau
 OutputFor TransposeTableau = Tableau
 OutputFor RSKPermutation = PermutationRSKResult
 OutputFor RSKWord = WordRSKResult
 OutputFor RSKBiword = BiwordRSKResult
 OutputFor RSKMatrix = BiwordRSKResult
 OutputFor InverseRSK = Permutation
-OutputFor LittlewoodRichardsonCoefficient = Nat
-OutputFor EnumerateLRTableaux = List Tableau
+OutputFor LittlewoodRichardsonCoefficient = number
+OutputFor EnumerateLRTableaux = List SkewTableau
 OutputFor MultiplySchurFunctions = SymmetricFunction
 OutputFor ChangeBasis = SymmetricFunction
-OutputFor Specialize = Polynomial
+OutputFor Specialize = Rational
 OutputFor Plethysm = SymmetricFunction
 OutputFor BranchUp = List Partition
 OutputFor BranchDown = List Partition
 OutputFor EnumerateYoungGraphPaths = List (List Partition)
 OutputFor CharacterValue = Integer
 OutputFor RepresentationDimension = Integer
-OutputFor GenerateRandomPermutation = Permutation
-OutputFor GenerateRandomStandardTableau = Tableau
-OutputFor SamplePlancherelPartition = Partition
-OutputFor ComputeLongestIncreasingSubsequence = List Nat
-OutputFor ComputeLongestDecreasingSubsequence = List Nat
-OutputFor CoxeterReducedWord = List Nat
+OutputFor GenerateRandomPermutation = (Permutation, RNGState)
+OutputFor GenerateRandomStandardTableau = (StandardTableau, RNGState)
+OutputFor SamplePlancherelPartition = (Partition, RNGState)
+OutputFor ComputeLongestIncreasingSubsequence = List number
+OutputFor ComputeLongestDecreasingSubsequence = List number
+OutputFor CoxeterReducedWord = List number
 OutputFor BruhatRelations = Bool
 
 public export
@@ -435,14 +443,14 @@ data PointerButton
   = Primary
   | Secondary
   | Middle
-  | ExtraButton Nat
+  | ExtraButton number
 
 public export
 data TouchEvent
-  = TouchDown Nat ScreenPoint
-  | TouchMove Nat ScreenPoint
-  | TouchUp Nat ScreenPoint
-  | TouchCancel Nat
+  = TouchDown number ScreenPoint
+  | TouchMove number ScreenPoint
+  | TouchUp number ScreenPoint
+  | TouchCancel number
 
 public export
 data MouseEvent
@@ -485,7 +493,7 @@ data Key
   | End
   | PageUp
   | PageDown
-  | FunctionKey Nat
+  | FunctionKey number
 
 public export
 data KeyEvent
@@ -531,10 +539,10 @@ data Selection
   | SelectPartition Partition
   | SelectTableau Tableau
   | SelectEntry Entry
-  | SelectRow Nat
-  | SelectColumn Nat
+  | SelectRow number
+  | SelectColumn number
   | SelectCorner Cell
-  | SelectPathStep Nat
+  | SelectPathStep number
   | SelectNothing
 
 public export
@@ -575,7 +583,7 @@ public export
 data DeviceEvent
   = OrientationChanged Double Double Double
   | Accelerometer Double Double Double
-  | WindowResized Nat Nat
+  | WindowResized number number
   | AppPaused
   | AppResumed
   | LowMemory
@@ -632,7 +640,7 @@ data ControlPurpose
   | SetLambda
   | SetMu
   | SetNu
-  | SetPartitionRow Nat
+  | SetPartitionRow number
   | SetSelectedCell
   | SetTableauEntries
   | SetTableauKind
@@ -659,7 +667,7 @@ data ControlPurpose
 public export
 record ControlId where
   constructor MkControlId
-  value : Nat
+  value : number
 
 public export
 record Control where

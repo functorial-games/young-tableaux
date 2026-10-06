@@ -53,7 +53,7 @@ end
 
 young_layout ← λ()
   return {
-    {kind ← "label", text ← "Young Tableaux 0.3.3"},
+    {kind ← "label", text ← "Young Tableaux 0.4.0"},
     {kind ← "separator"},
     {kind ← "field", arg ← 1, text ← "λ: rows"},
     {kind ← "shape"},

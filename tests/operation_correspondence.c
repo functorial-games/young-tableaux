@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include "console.h"
 static const struct { const char *name,*input,*output; } operations[] = {
 #define OP(symbol,section,label,input,output) {#symbol,input,output},
 #include "operations.def"
 #undef OP
 };
+_Static_assert(sizeof(operations)/sizeof(*operations)==OP_COUNT,"operation inventory drift");
 int main(int argc,char **argv)
 {
     if(argc!=2) return 2;
@@ -32,6 +35,19 @@ int main(int argc,char **argv)
     for(size_t i=0;i<sizeof(operations)/sizeof(*operations);++i) if(seen[i]!=3) {
         fprintf(stderr,"missing sketch signature: %s\n",operations[i].name); valid=false;
     }
-    if(valid) puts("PASS every executable operation has its exact sketch input and output");
+    Console *console=malloc(sizeof(*console));
+    if(!console) return 2;
+    for(int operation=0;operation<OP_COUNT;++operation) {
+        console_init(console);
+        for(int section=0;section<12;++section) console->output[section][0]=0;
+        console_run(console,(Operation)operation);
+        const char *output=console->output[operation_info[operation].section];
+        if(!*output || strstr(output,"INTERNAL DISPATCH") || strstr(output,"NOT IMPLEMENTED")) {
+            fprintf(stderr,"operation dispatch failed: %s\n",operations[operation].name);
+            valid=false;
+        }
+    }
+    free(console);
+    if(valid) puts("PASS every typed inventory signature matches an executable C dispatch path");
     return valid?0:1;
 }

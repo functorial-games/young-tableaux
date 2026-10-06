@@ -1,5 +1,6 @@
 #include "console.h"
 #include "nearby.h"
+#include "parse.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -13,7 +14,7 @@ const OperationInfo operation_info[OP_COUNT]={
 #undef OP
 };
 static const char *sections[]={"Partition / Young diagram","Tableau","Hooks / corners / cells","RSK","Jeu de taquin","Littlewood-Richardson","Symmetric group / representations","Symmetric functions","Young graph / branching","Random / asymptotic","Type-A / Coxeter","Global conventions"};
-static const char *tableau_kinds[]={"Standard","ArbitraryFilling","RowStandard","ColumnStandard","Semistandard","Skew","Shifted","Ribbon","Oscillating","KTableau"};
+static const char *tableau_kinds[]={"Standard","ArbitraryFilling","RowStandard","ColumnStandard","Semistandard"};
 static const char *field_names[FIELD_COUNT]={"","λ: rows","tableau: rows separated by ;","permutation","μ: partition","ν: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after μ","entry"};
 static void append(char *out,const char *format,...)
 {
@@ -95,7 +96,7 @@ static void refresh_tableau(Console *c)
     Partition p; Tableau t; MathStatus a=partition_parse(c->fields[SET_LAMBDA],&p), b=tableau_parse(c->fields[SET_TABLEAU],&t);
     c->output[1][0]=0; c->tableau_ok=false;
     if(c->tableau_kind>=TABLEAU_SKEW) {
-        append(c->output[1],"NOT IMPLEMENTED\nValidation for %s\ninput: Tableau\noutput: Bool\nChoose Standard for v0.1 validation.",tableau_kinds[c->tableau_kind]);
+        append(c->output[1],"UNSUPPORTED TABLEAU KIND: choose an ordinary filling kind.");
         return;
     }
     if(a!=YT_OK || b!=YT_OK) { append(c->output[1],"%s: %s\n",a!=YT_OK?"λ":"tableau",math_status(a!=YT_OK?a:b)); return; }
@@ -149,7 +150,7 @@ static MathStatus check_completed_rsk_result(const Console *c,const RSKTrace *tr
 static void refresh_rsk(Console *c)
 {
     c->output[3][0]=0; c->rsk_ok=false;
-    if(c->insertion) { append(c->output[3],"NOT IMPLEMENTED\nColumnInsertion\nSelect RowInsertion for RSK."); return; }
+    if(c->insertion) { append(c->output[3],"UNSUPPORTED CONVENTION: this contract uses row insertion."); return; }
     RSKTrace trace;
     MathStatus status=trace_rsk_input(c,&trace);
     if(status==YT_OK) status=check_completed_rsk_result(c,&trace);
@@ -232,7 +233,7 @@ static void layout_add(Console *c,ScriptLayoutKind kind,int arg,const char *text
 static void default_layout(Console *c)
 {
     c->script_layout_count=0;
-    layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.3.3");
+    layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.4.0");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
     layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"λ: rows");
     layout_add(c,SCRIPT_SHAPE,0,"");
@@ -253,13 +254,183 @@ void console_init(Console *c)
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
     snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column−row.\nRow RSK bumps the first strictly greater entry.\nJeu de taquin uses weak rows / strict columns; ties between right and below move the lower entry.\nSkew rows contain only visible cells after μ.");
     snprintf(c->scripted_facts,UI_TEXT,"Schur specialization\nSubstitute 1, z, z², … into s_λ to get one function of z.");
+    snprintf(c->fields[SET_RECORDING],512,"1,3;2,4");
+    snprintf(c->fields[SET_SEED],512,"1");
+    snprintf(c->fields[SET_INNER_FUNCTION],512,"0;1;1");
+    snprintf(c->fields[SET_COEFFICIENTS],512,"0;1;2");
+    snprintf(c->fields[SET_BASIS],512,"1");
+    snprintf(c->fields[SET_VARIABLES],512,"1,2");
+    c->rng.state=1;
     default_layout(c); c->rsk_step=YT_DIM;
     refresh_partition(c); refresh_tableau(c); refresh_rsk(c); refresh_jeu(c);
 }
+static void number_list_text(char *out,const int *values,int count)
+{
+    append(out,"[");
+    for(int index=0;index<count;++index) append(out,"%s%d",index?",":"",values[index]);
+    append(out,"]");
+}
+static bool advanced_run(Console *c,Operation operation)
+{
+    char *output=c->output[operation_info[operation].section];
+    MathStatus status=YT_OK;
+    Partition first={0},second={0},third={0};
+    Permutation permutation={0};
+    StandardTableau standard,result;
+    Tableau filling;
+    NumberList list={0};
+    SymmetricFunction function,other,answer;
+    int number=0;
+    uint64_t coefficient=0;
+    int64_t character=0;
+    switch(operation) {
+    case InverseRSK: {
+        PermutationRSKResult input;
+        status=tableau_parse(c->fields[SET_TABLEAU],&filling);
+        if(status==YT_OK) status=tableau_as_standard(&filling,&input.insertion);
+        if(status==YT_OK) status=tableau_parse(c->fields[SET_RECORDING],&filling);
+        if(status==YT_OK) status=tableau_as_standard(&filling,&input.recording);
+        if(status==YT_OK) status=inverse_rsk(&input,&permutation);
+        output[0]=0;
+        if(status==YT_OK) number_list_text(output,permutation.values,permutation.count);
+        break;
+    }
+    case Promote: case Evacuate:
+        status=tableau_parse(c->fields[SET_TABLEAU],&filling);
+        if(status==YT_OK) status=tableau_as_standard(&filling,&standard);
+        if(status==YT_OK) status=operation==Promote?tableau_promote(&standard,&result):tableau_evacuate(&standard,&result);
+        output[0]=0;
+        if(status==YT_OK) tableau_text(output,operation==Promote?"Promotion":"Evacuation",&result.filling);
+        break;
+    case LittlewoodRichardsonCoefficient: case EnumerateLRTableaux: case MultiplySchurFunctions:
+        status=partition_parse(c->fields[SET_LAMBDA],&first);
+        if(status==YT_OK) status=partition_parse(c->fields[SET_MU],&second);
+        output[0]=0;
+        if(operation==MultiplySchurFunctions) {
+            if(status==YT_OK) status=symmetric_schur_product(&first,&second,&answer);
+            if(status==YT_OK) status=symmetric_text(&answer,output,UI_TEXT);
+        } else {
+            if(status==YT_OK) status=partition_parse(c->fields[SET_NU],&third);
+            if(operation==LittlewoodRichardsonCoefficient) {
+                if(status==YT_OK) status=littlewood_richardson_coefficient(&first,&second,&third,&coefficient);
+                if(status==YT_OK) append(output,"c(λ, μ; ν) = %" PRIu64,coefficient);
+            } else {
+                /* The large result lives on the heap on Android too. */
+                SkewTableauList *tableaux=malloc(sizeof(*tableaux));
+                if(!tableaux) status=YT_LIMIT;
+                if(status==YT_OK) status=littlewood_richardson_tableaux(&first,&second,&third,tableaux);
+                if(status==YT_OK) {
+                    append(output,"%d LR tableaux of ν ÷ λ, content μ\n",tableaux->count);
+                    for(int index=0;index<tableaux->count;++index) {
+                        append(output,"Tableau %d\n",index+1);
+                        for(int row=0;row<third.count;++row) {
+                            int start=row<first.count?first.rows[row]:0;
+                            for(int column=start;column<third.rows[row];++column) append(output,"%d ",tableaux->values[index].entries[row][column]);
+                            append(output,"\n");
+                        }
+                    }
+                }
+                free(tableaux);
+            }
+        }
+        break;
+    case CharacterValue:
+        status=partition_parse(c->fields[SET_LAMBDA],&first);
+        if(status==YT_OK) status=permutation_parse(c->fields[SET_PERMUTATION],&permutation);
+        if(status==YT_OK) status=permutation_cycle_type(&permutation,&second);
+        if(status==YT_OK) status=symmetric_character_cycle_type(&first,&second,&character);
+        output[0]=0;
+        if(status==YT_OK) append(output,"Ordinary complex character χλ = %" PRId64,character);
+        break;
+    case ChangeBasis: case Specialize: case Plethysm:
+        status=symmetric_parse(c->fields[SET_COEFFICIENTS],&function);
+        output[0]=0;
+        if(operation==ChangeBasis) {
+            if(status==YT_OK) status=integer_field(c->fields[SET_BASIS],&number);
+            if(status==YT_OK) status=symmetric_change_basis(&function,(SymmetricBasis)number,&answer);
+            if(status==YT_OK) status=symmetric_text(&answer,output,UI_TEXT);
+        } else if(operation==Plethysm) {
+            if(status==YT_OK) status=symmetric_parse(c->fields[SET_INNER_FUNCTION],&other);
+            if(status==YT_OK) status=symmetric_plethysm(&function,&other,&answer);
+            if(status==YT_OK) status=symmetric_text(&answer,output,UI_TEXT);
+        } else {
+            const char *cursor=c->fields[SET_VARIABLES]; int alphabet[YT_DIM],count=0; Rational value;
+            if(status==YT_OK) status=parse_integer_list(&cursor,alphabet,&count,false);
+            parse_spaces(&cursor);
+            if(status==YT_OK && *cursor) status=YT_MALFORMED;
+            if(status==YT_OK) status=symmetric_specialize(&function,alphabet,count,&value);
+            if(status==YT_OK) append(output,"Finite alphabet value = %" PRId64 " ÷ %" PRIu64,value.numerator,value.denominator);
+        }
+        break;
+    case BranchUp: case BranchDown: case EnumerateYoungGraphPaths:
+        status=partition_parse(c->fields[SET_LAMBDA],&first);
+        output[0]=0;
+        if(operation==EnumerateYoungGraphPaths) {
+            if(status==YT_OK) status=partition_parse(c->fields[SET_NU],&second);
+            PartitionPathList *paths=malloc(sizeof(*paths));
+            if(!paths) status=YT_LIMIT;
+            if(status==YT_OK) status=young_graph_paths(&first,&second,paths);
+            if(status==YT_OK) {
+                append(output,"%d paths\n",paths->count);
+                for(int path=0;path<paths->count;++path) {
+                    for(int step=0;step<paths->values[path].count;++step) {
+                        number_list_text(output,paths->values[path].values[step].rows,paths->values[path].values[step].count);
+                        append(output,step+1<paths->values[path].count?" → ":"\n");
+                    }
+                }
+            }
+            free(paths);
+        } else {
+            PartitionList partitions;
+            if(status==YT_OK) status=operation==BranchUp?partition_branch_up(&first,&partitions):partition_branch_down(&first,&partitions);
+            if(status==YT_OK) for(int index=0;index<partitions.count;++index) partition_text(output,&partitions.values[index]);
+            if(status==YT_OK && !partitions.count) append(output,"[]");
+        }
+        break;
+    case GenerateRandomPermutation: case GenerateRandomStandardTableau: case SamplePlancherelPartition:
+        output[0]=0;
+        status=integer_field(c->fields[SET_SEED],&number);
+        if(status!=YT_OK || number<0) { status=YT_MALFORMED; break; }
+        if(operation==GenerateRandomStandardTableau) {
+            status=partition_parse(c->fields[SET_LAMBDA],&first);
+            if(status==YT_OK) status=random_standard_tableau(&first,&c->rng,&result);
+            if(status==YT_OK) tableau_text(output,"Uniform standard tableau",&result.filling);
+        } else {
+            status=integer_field(c->fields[SET_N],&number);
+            if(operation==GenerateRandomPermutation) {
+                if(status==YT_OK) status=random_permutation(number,&c->rng,&permutation);
+                if(status==YT_OK) number_list_text(output,permutation.values,permutation.count);
+            } else {
+                if(status==YT_OK) status=sample_plancherel_partition(number,&c->rng,&first);
+                if(status==YT_OK) partition_text(output,&first);
+            }
+        }
+        break;
+    case ComputeLongestIncreasingSubsequence: case ComputeLongestDecreasingSubsequence: case CoxeterReducedWord: case BruhatRelations:
+        status=permutation_parse(c->fields[SET_PERMUTATION],&permutation);
+        output[0]=0;
+        if(operation==BruhatRelations) {
+            Permutation right; bool relation=false;
+            if(status==YT_OK) status=permutation_parse(c->fields[SET_SECOND_PERMUTATION],&right);
+            if(status==YT_OK) status=permutation_bruhat_leq(&permutation,&right,&relation);
+            if(status==YT_OK) append(output,"Strong Bruhat order: first ≤ second = %s",relation?"YES":"NO");
+        } else {
+            if(status==YT_OK) status=operation==ComputeLongestIncreasingSubsequence?permutation_lis(&permutation,&list):operation==ComputeLongestDecreasingSubsequence?permutation_lds(&permutation,&list):permutation_coxeter_reduced_word(&permutation,&list);
+            if(status==YT_OK) number_list_text(output,list.values,list.count);
+        }
+        break;
+    default: return false;
+    }
+    if(status==YT_OK && strlen(output)>=UI_TEXT-1) status=YT_LIMIT;
+    if(status!=YT_OK) snprintf(output,UI_TEXT,"%s: %s",operation_info[operation].label,math_status(status));
+    return true;
+}
+
 void console_run(Console *c,Operation op)
 {
     if(op<0 || op>=OP_COUNT) return;
     int section=operation_info[op].section;
+    if(advanced_run(c,op)) return;
     switch(op) {
     case DisplayPartition: refresh_partition(c); refresh_jeu(c); return;
     case ConjugatePartition: case ListCells: case ComputeHookLengths: case ComputeHookProduct:
@@ -292,7 +463,7 @@ void console_run(Console *c,Operation op)
         return;
     }
     case InsertLetter: {
-        if(c->insertion!=ROW_INSERTION) { c->output[1][0]=0; append(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"); return; }
+        if(c->insertion!=ROW_INSERTION) { c->output[1][0]=0; append(c->output[1],"UNSUPPORTED CONVENTION: row insertion only"); return; }
         Tableau input,result; Cell added={0}; int entry=0;
         MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
         if(status==YT_OK) status=integer_field(c->fields[SET_ENTRY],&entry);
@@ -307,7 +478,7 @@ void console_run(Console *c,Operation op)
         return;
     }
     case ReverseInsert: {
-        if(c->insertion!=ROW_INSERTION) { c->output[1][0]=0; append(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"); return; }
+        if(c->insertion!=ROW_INSERTION) { c->output[1][0]=0; append(c->output[1],"UNSUPPORTED CONVENTION: row insertion only"); return; }
         Tableau input,result; Cell corner={0}; int bumped=0;
         MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
         if(status==YT_OK) status=selected_cell(c->fields[SET_CELL],&corner);
@@ -357,14 +528,13 @@ void console_run(Console *c,Operation op)
         Partition p; uint64_t count; MathStatus status=partition_parse(c->fields[SET_LAMBDA],&p);
         if(status==YT_OK) status=partition_standard_count(&p,&count);
         c->output[section][0]=0;
-        if(strcmp(c->fields[SET_CHARACTERISTIC],"0")) append(c->output[section],"NOT IMPLEMENTED\nCharacteristicP representation dimension\ninput: Partition\noutput: Integer");
-        else if(status==YT_OK) append(c->output[section],"Characteristic zero Specht dimension = %" PRIu64,count);
+        if(status==YT_OK) append(c->output[section],"Ordinary complex Specht dimension = %" PRIu64,count);
         else append(c->output[section],"%s",math_status(status));
         return;
     }
     default: break;
     }
-    snprintf(c->output[section],UI_TEXT,"NOT IMPLEMENTED\n%s\ninput: %s\noutput: %s",operation_info[op].label,operation_info[op].input,operation_info[op].output);
+    snprintf(c->output[section],UI_TEXT,"INTERNAL DISPATCH ERROR");
     if(section==1) c->tableau_ok=false;
     if(section==3) c->rsk_ok=false;
 }
@@ -420,15 +590,7 @@ static void scripted_top(Console *c,Controls *u)
 }
 static bool operation_exposed(Operation op)
 {
-    switch(op) {
-    case RSKPermutation:
-    case RSKWord:
-    case JeuDeTaquinSlide:
-    case Rectify:
-        return true;
-    default:
-        return false;
-    }
+    return operation_info[op].section>=3;
 }
 static bool section_exposed(int section)
 {
@@ -456,7 +618,12 @@ void console_layout(Console *c,Controls *u,int w,int h)
         case 2: controls_add(u,0,LABEL,"Hook facts and diagram are shown near the top. Cell-based add/remove operations use the selected-cell field in the jeu de taquin section below.",0,NULL); break;
         case 3: {
             controls_add(u,0,LABEL,"Row RSK inserts left to right and bumps the first strictly greater entry. P and Q update insertion by insertion; highlighted P cells are the current bump path.",0,NULL);
-            field(c,u,SET_PERMUTATION); field(c,u,SET_WORD);
+            field(c,u,SET_PERMUTATION); field(c,u,SET_WORD); field(c,u,SET_BIWORD); field(c,u,SET_MATRIX);
+            controls_add(u,0,LABEL,"Inverse RSK uses standard P and Q below. Promotion and evacuation also use P.",0,NULL);
+            controls_add(u,0,LABEL,"P: ordinary standard tableau, rows separated by ;",0,NULL);
+            controls_add(u,SET_TABLEAU,FIELD,c->fields[SET_TABLEAU],0,NULL);
+            controls_add(u,0,LABEL,"Q: ordinary standard recording tableau",0,NULL);
+            controls_add(u,SET_RECORDING,FIELD,c->fields[SET_RECORDING],0,NULL);
             const int ids[]={RSK_START,RSK_PREV,RSK_NEXT,RSK_END}; const char *labels[]={"Start","Prev","Next","End"};
             button_strip(u,ids,labels,4); break;
         }
@@ -470,15 +637,23 @@ void console_layout(Console *c,Controls *u,int w,int h)
         case 5:
             controls_add(u,0,LABEL,"Uses λ above; LR uses outer ν ÷ inner λ and content μ. The μ field is immediately above.",0,NULL);
             field(c,u,SET_NU); break;
-        case 6: field(c,u,SET_CHARACTERISTIC); field(c,u,SET_PRIME); field(c,u,SET_HECKE); controls_add(u,0,LABEL,"Uses λ and permutation above. Only characteristic-zero dimension is implemented.",0,NULL); break;
-        case 7: field(c,u,SET_BASIS); field(c,u,SET_COEFFICIENTS); field(c,u,SET_VARIABLES); field(c,u,SET_Q); field(c,u,SET_T); break;
-        case 8: field(c,u,SET_PATH); controls_add(u,0,LABEL,"Start λ, end ν; paths encode box additions.",0,NULL); break;
-        case 9: field(c,u,SET_N); controls_add(u,STEP_MINUS,BUTTON,"n − 1",0,NULL); controls_add(u,STEP_PLUS,BUTTON,"n + 1",0,NULL); field(c,u,SET_LAW); break;
-        case 10: field(c,u,SET_COXETER); field(c,u,SET_SECOND_PERMUTATION); break;
+        case 6: controls_add(u,0,LABEL,"Ordinary complex characters and dimensions. Uses λ and the permutation above.",0,NULL); break;
+        case 7:
+            controls_add(u,0,LABEL,"Exact degree ≤ 8. Basis codes: 0 Schur, 1 power-sum, 2 monomial, 3 complete, 4 elementary.",0,NULL);
+            controls_add(u,0,LABEL,"Function: basis; coefficient; partition; coefficient; partition … Coefficient may be numerator,denominator. Example: 0;1;2,1",0,NULL);
+            controls_add(u,SET_COEFFICIENTS,FIELD,c->fields[SET_COEFFICIENTS],0,NULL);
+            controls_add(u,0,LABEL,"Destination basis code",0,NULL); controls_add(u,SET_BASIS,FIELD,c->fields[SET_BASIS],0,NULL);
+            controls_add(u,0,LABEL,"Specialization: finite integer alphabet, e.g. 1,2",0,NULL); controls_add(u,SET_VARIABLES,FIELD,c->fields[SET_VARIABLES],0,NULL);
+            controls_add(u,0,LABEL,"Inner function for plethysm, same grammar",0,NULL); controls_add(u,SET_INNER_FUNCTION,FIELD,c->fields[SET_INNER_FUNCTION],0,NULL); break;
+        case 8: controls_add(u,0,LABEL,"Start λ, end ν; paths encode box additions. At most 128 paths and 16 edges.",0,NULL); break;
+        case 9:
+            field(c,u,SET_N); controls_add(u,STEP_MINUS,BUTTON,"n − 1",0,NULL); controls_add(u,STEP_PLUS,BUTTON,"n + 1",0,NULL);
+            controls_add(u,0,LABEL,"Uniform permutation / uniform SYT of λ / Plancherel shape of size n. Seed edits restart the reproducible stream.",0,NULL);
+            controls_add(u,SET_SEED,FIELD,c->fields[SET_SEED],0,NULL); break;
+        case 10: field(c,u,SET_SECOND_PERMUTATION); controls_add(u,0,LABEL,"Reduced word acts on positions from left to right. Bruhat is the strong order on equal-size permutations.",0,NULL); break;
         case 11:
             controls_add(u,CHOOSE_ORIENTATION,CHOICE,c->french?"Diagram orientation: French":"Diagram orientation: English",0,NULL);
-            controls_add(u,CHOOSE_CONTENT,CHOICE,c->content_convention?"Content: row−column (inventory)":"Content: column−row (inventory)",0,NULL);
-            field(c,u,SET_READING); field(c,u,SET_ACTION); break;
+            break;
         }
         for(int op=0;op<OP_COUNT;++op)
             if(operation_info[op].section==s && operation_exposed((Operation)op))
@@ -518,9 +693,9 @@ void console_event(Console *c,Controls *u,ControlEvent e)
     case JDT_RECTIFY: console_run(c,Rectify); break;
     case CHOOSE_ORIENTATION: c->french=!c->french; break;
     case CHOOSE_STANDARD: c->decreasing=!c->decreasing; refresh_tableau(c); break;
-    case CHOOSE_INSERTION: c->insertion=!c->insertion; refresh_rsk(c); break;
+    case CHOOSE_INSERTION: c->insertion=ROW_INSERTION; refresh_rsk(c); break;
     case CHOOSE_CONTENT: c->content_convention=!c->content_convention; break;
-    case CHOOSE_TABLEAU_KIND: c->tableau_kind=(c->tableau_kind+1)%10; refresh_tableau(c); break;
+    case CHOOSE_TABLEAU_KIND: c->tableau_kind=(c->tableau_kind+1)%5; refresh_tableau(c); break;
     case STEP_MINUS: case STEP_PLUS: {
         char *end; long n=strtol(c->fields[SET_N],&end,10);
         if(!*end && n>=0 && n<1000000) { if(e.id==STEP_PLUS) ++n; else if(n) --n; snprintf(c->fields[SET_N],512,"%ld",n); }
@@ -555,6 +730,11 @@ void console_key(Console *c,Controls *u,int key)
         c->diagram.addition_count=0; refresh_partition(c); refresh_tableau(c); refresh_jeu(c); c->scripted_facts[0]=0;
     }
     if(u->focus==SET_TABLEAU) refresh_tableau(c);
+    if(u->focus==SET_SEED) {
+        int seed;
+        if(integer_field(c->fields[SET_SEED],&seed)==YT_OK && seed>=0) c->rng.state=(uint64_t)seed;
+        else snprintf(c->output[9],UI_TEXT,"INVALID seed: enter a nonnegative integer.");
+    }
     if(u->focus==SET_PERMUTATION) { c->rsk_input_kind=RSK_PERMUTATION_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); }
     if(u->focus==SET_WORD) { c->rsk_input_kind=RSK_WORD_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); }
     if(u->focus==SET_BIWORD) { c->rsk_input_kind=RSK_BIWORD_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); }

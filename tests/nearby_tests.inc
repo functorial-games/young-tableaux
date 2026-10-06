@@ -141,8 +141,7 @@ static void nearby_tests(void)
             if(control->id) { CHECK(!ids[control->id]); ids[control->id]=true; }
         }
         for(int op=0;op<OP_COUNT;++op) {
-            bool visible=op==RSKPermutation || op==RSKWord
-                      || op==JeuDeTaquinSlide || op==Rectify;
+            bool visible=operation_info[op].section>=3;
             CHECK(ids[OP_BASE+op]==visible);
         }
         bool saw_tableau_section=false,saw_hooks_section=false;

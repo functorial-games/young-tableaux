@@ -9,8 +9,9 @@ const char *math_status(MathStatus s)
     case YT_OK: return "OK";
     case YT_MALFORMED: return "INVALID INPUT";
     case YT_LIMIT: return "LIMIT: 64 rows/columns, 256 cells";
-    case YT_OVERFLOW: return "OVERFLOW: exact uint64 range exceeded";
-    case YT_UNSUPPORTED: return "NOT IMPLEMENTED";
+    case YT_OVERFLOW: return "OVERFLOW: exact integer range exceeded";
+    case YT_UNSUPPORTED: return "UNSUPPORTED CONVENTION";
+    case YT_COMPLEXITY: return "EXACT COMPUTATION LIMIT";
     }
     return "ERROR";
 }

@@ -18,6 +18,22 @@ record Cell where
   row : Nat
   column : Nat
 
+-- A click-to-add edit is a path in the Young graph, not merely a mutation of
+-- the final row lengths.  Keeping the additions makes undo/reset and later
+-- path-based constructions explicit.
+public export
+record DiagramState where
+  constructor MkDiagramState
+  current : Partition
+  additions : List Cell
+
+public export
+data DiagramEvent
+  = ClickAddable Cell
+  | UndoLastAddition
+  | ResetAdditions
+  | ReplacePartition Partition
+
 public export
 record SkewShape where
   constructor MkSkewShape

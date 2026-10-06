@@ -227,7 +227,13 @@ static void interaction(void)
         if(u->controls[i].kind==WEGERT) ++wegert;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==15); CHECK(wegert==1); for(int op=0;op<OP_COUNT;++op) CHECK(ids[OP_BASE+op]);
+    CHECK(separators==15); CHECK(wegert==1);
+    for(int op=0;op<OP_COUNT;++op) {
+        bool visible=op!=ConjugatePartition && op!=ListCells;
+        CHECK(ids[OP_BASE+op]==visible);
+    }
+    console_run(c,ConjugatePartition); CHECK(strstr(c->output[0],"conjugate = "));
+    console_run(c,ListCells); CHECK(strstr(c->output[0],"cells: "));
     u->focus=SET_LAMBDA; console_layout(c,u,576,1152); CHECK(u->height==882);
     CHECK(console_key_hit(u,0,897,1152)==0); CHECK(console_key_hit(u,575,1136,1152)==19); CHECK(console_key_hit(u,576,897,1152)==-1);
     free(u); free(c);

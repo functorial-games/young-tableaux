@@ -336,7 +336,7 @@ static bool find_addable(const Partition *partition,int row,Cell *out)
         return false;
     Cell cells[YT_DIM+1];
     int count=partition_addable(partition,cells);
-    for(int i=0;i<count;++i) if(cells[i].row==row+1) {
+    for(int i=0;i<count;++i) if(cells[i].row==row+1 && cells[i].column<=YT_DIM) {
         *out=cells[i];
         return true;
     }

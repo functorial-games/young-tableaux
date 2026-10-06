@@ -17,12 +17,6 @@ local function shape_text(lambda)
   return "[" .. table.concat(parts, ",") .. "]"
 end
 
-local function factor_text(h, multiplicity)
-  local base = h == 1 and "(1-z)" or ("(1-z^" .. h .. ")")
-  if multiplicity == 1 then return base end
-  return base .. "^" .. multiplicity
-end
-
 local function derived(lambda, hooks)
   local size = 0
   local n_lambda = 0

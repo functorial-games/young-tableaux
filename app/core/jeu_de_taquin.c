@@ -119,12 +119,16 @@ static bool skew_cell(const JeuState *tableau,Cell cell)
 
 bool jeu_can_begin(const JeuState *tableau,Cell cell)
 {
+    if(!tableau) return false;
     return !tableau->active && removable_cell(&tableau->filling.shape.inner,cell)
         && cell_in_partition(&tableau->filling.shape.outer,cell);
 }
 
 MathStatus jeu_begin(JeuState *tableau,Cell cell)
 {
+    if(!tableau) return YT_MALFORMED;
+    SkewValidation validation=skew_tableau_validate(&tableau->filling);
+    if(!validation.semistandard) return YT_MALFORMED;
     if(!jeu_can_begin(tableau,cell)) return YT_MALFORMED;
     Partition smaller;
     MathStatus status=partition_remove_cell(&tableau->filling.shape.inner,cell,&smaller);
@@ -187,6 +191,9 @@ MathStatus jeu_slide(JeuState *tableau,Cell cell)
 
 MathStatus jeu_rectify(JeuState *tableau)
 {
+    if(!tableau) return YT_MALFORMED;
+    if(!tableau->active && !skew_tableau_validate(&tableau->filling).semistandard)
+        return YT_MALFORMED;
     while(tableau->active)
         if(jeu_step(tableau)==JEU_INVALID) return YT_MALFORMED;
     while(tableau->filling.shape.inner.count) {

@@ -343,12 +343,25 @@ static bool find_addable(const Partition *partition,int row,Cell *out)
     return false;
 }
 
+static bool find_removable(const Partition *partition,int row,Cell *out)
+{
+    if(row<0 || row>=partition->count || row>=YT_DIM) return false;
+    Cell cells[YT_DIM];
+    int count=partition_removable(partition,cells);
+    for(int i=0;i<count;++i) if(cells[i].row==row+1) {
+        *out=cells[i];
+        return true;
+    }
+    return false;
+}
+
 bool lua_bridge_shape_event(LuaBridge *bridge,Console *console,Controls *ui,ControlEvent event)
 {
     if(!bridge->ready || event.kind!=EVENT_ACTIVATE) return false;
     int id=event.id;
     bool add=id>=ADDABLE_BASE && id<=ADDABLE_BASE+YT_DIM;
-    if(!add && id!=SHAPE_UNDO && id!=SHAPE_RESET) return false;
+    bool remove=id>=REMOVABLE_BASE && id<REMOVABLE_BASE+YT_DIM;
+    if(!add && !remove && id!=SHAPE_UNDO && id!=SHAPE_RESET) return false;
 
     Partition current;
     if(partition_parse(console->fields[SET_LAMBDA],&current)!=YT_OK) return true;
@@ -358,7 +371,20 @@ bool lua_bridge_shape_event(LuaBridge *bridge,Console *console,Controls *ui,Cont
     const char *function=NULL;
     Cell cell={0};
 
-    if(add) {
+    if(remove) {
+        int row=id-REMOVABLE_BASE;
+        if(!find_removable(&current,row,&cell)) return true;
+        function="young_shape_remove";
+        --expected.rows[row];
+        if(!expected.rows[row]) --expected.count;
+        if(!call_shape(bridge,function,&current,&cell,&scripted)
+           || !same_partition(&scripted,&expected)) {
+            bridge_error(bridge,"Lua click-remove result failed C validation");
+            return true;
+        }
+        console->shape_history_count=0;
+        console->shape_history_base=scripted;
+    } else if(add) {
         int row=id-ADDABLE_BASE;
         if(!find_addable(&current,row,&cell)) return true;
         function="young_shape_add";

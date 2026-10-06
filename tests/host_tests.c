@@ -241,10 +241,19 @@ static void interaction(void)
     bool saw_size=false,saw_dimension=false,saw_hero=false;
     for(int i=0;i<u->count;++i) {
         saw_size=saw_size || strstr(u->controls[i].text,"|λ| = 6");
-        saw_dimension=saw_dimension || strstr(u->controls[i].text,"dim S^λ = 16");
+        saw_dimension=saw_dimension || strstr(u->controls[i].text,"standard tableaux = 16");
         saw_hero=saw_hero || u->controls[i].kind==HERO;
     }
     CHECK(saw_size && saw_dimension && !saw_hero);
+    CHECK(raster_text_width("λ",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("μ",2)==raster_text_width("m",2));
+    CHECK(raster_text_width("ν",2)==raster_text_width("v",2));
+    CHECK(raster_text_width("ℕ",2)==raster_text_width("N",2));
+    CHECK(raster_text_width("−",2)==raster_text_width("-",2));
+    CHECK(raster_text_width("÷",2)==raster_text_width("/",2));
+    CHECK(raster_text_width("×",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("²",3)==raster_text_width("^2",3));
+    CHECK(raster_text_width("₁",3)==raster_text_width("_1",3));
     CHECK(c->wegert.valid); CHECK(c->wegert.n_lambda==4); CHECK(c->wegert.max_hook==5);
     CHECK(c->jeu_loaded && c->jeu_ok);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_STEP});
@@ -257,9 +266,9 @@ static void interaction(void)
     CHECK(c->jeu_ok && c->jeu.inner.count==0);
     CHECK(c->wegert.hook_counts[1]==3 && c->wegert.hook_counts[3]==2 && c->wegert.hook_counts[5]==1);
     u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
-    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"f^λ = 2"));
+    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"Hook-length formula gives 2 standard tableaux."));
     console_key(c,u,14); CHECK(!c->partition_ok); console_key(c,u,0); CHECK(c->partition_ok); console_key(c,u,19); CHECK(!u->focus);
-    console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Nat"));
+    console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Number"));
     console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_word_mode);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START}); CHECK(c->rsk_step==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT}); CHECK(c->rsk_step==1 && c->p.count==1);
@@ -268,17 +277,17 @@ static void interaction(void)
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_STANDARD}); CHECK(c->decreasing);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_TABLEAU_KIND});
     CHECK(!c->tableau_ok && strstr(c->output[1],"NOT IMPLEMENTED"));
-    console_layout(c,u,576,1152); CHECK(u->content>10000); int separators=0,wegert=0;
+    console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0;
     bool ids[OP_BASE+OP_COUNT]={false};
     for(int i=0;i<u->count;++i) {
         if(u->controls[i].kind==SEPARATOR) ++separators;
         if(u->controls[i].kind==WEGERT) ++wegert;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==13); CHECK(wegert==1);
+    CHECK(separators==6); CHECK(wegert==1);
     for(int op=0;op<OP_COUNT;++op) {
-        bool internal_section=operation_info[op].section==1 || operation_info[op].section==2;
-        bool visible=!internal_section && op!=ConjugatePartition && op!=ListCells;
+        bool visible=op==RSKPermutation || op==RSKWord
+                  || op==JeuDeTaquinSlide || op==Rectify;
         CHECK(ids[OP_BASE+op]==visible);
     }
     console_run(c,ConjugatePartition); CHECK(strstr(c->output[0],"conjugate = "));

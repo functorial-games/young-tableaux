@@ -53,6 +53,17 @@ static const struct glyph glyphs[] = {
     {'t', {0x04, 0x04, 0x1f, 0x04, 0x04, 0x04, 0x03}},
     {'u', {0x00, 0x00, 0x11, 0x11, 0x11, 0x13, 0x0d}},
     {'y', {0x00, 0x00, 0x11, 0x11, 0x0f, 0x01, 0x0e}},
+    {'b', {0x10,0x10,0x1e,0x11,0x11,0x11,0x1e}},
+    {'c', {0x00,0x00,0x0f,0x10,0x10,0x10,0x0f}},
+    {'f', {0x06,0x08,0x1e,0x08,0x08,0x08,0x08}},
+    {'j', {0x02,0x00,0x06,0x02,0x02,0x12,0x0c}},
+    {'k', {0x10,0x10,0x12,0x14,0x18,0x14,0x12}},
+    {'l', {0x0c,0x04,0x04,0x04,0x04,0x04,0x0e}},
+    {'q', {0x00,0x00,0x0f,0x11,0x0f,0x01,0x01}},
+    {'v', {0x00,0x00,0x11,0x11,0x11,0x0a,0x04}},
+    {'w', {0x00,0x00,0x11,0x11,0x15,0x15,0x0a}},
+    {'x', {0x00,0x00,0x11,0x0a,0x04,0x0a,0x11}},
+    {'z', {0x00,0x00,0x1f,0x02,0x04,0x08,0x1f}},
     {'N', {0x11, 0x19, 0x19, 0x15, 0x13, 0x13, 0x11}},
     {'O', {0x0e, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0e}},
     {'P', {0x1e, 0x11, 0x11, 0x1e, 0x10, 0x10, 0x10}},
@@ -77,13 +88,13 @@ static const struct glyph glyphs[] = {
     {'|', {4,4,4,4,4,4,4}}, {'^', {4,10,17,0,0,0,0}},
     {'<', {1,2,4,8,4,2,1}}, {'>', {16,8,4,2,4,8,16}},
     {'_', {0,0,0,0,0,0,31}}, {'*', {0,21,14,31,14,21,0}},
+    {'\x7f', {0x04,0x04,0x0a,0x0a,0x11,0x11,0x11}},
     {'?', {0x0e, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04}},
 };
 
 
 static const uint8_t *glyph_rows(char character)
 {
-    if (character >= 'a' && character <= 'z') character = (char)(character - 'a' + 'A');
     size_t count = sizeof(glyphs) / sizeof(glyphs[0]);
     for (size_t index = 0; index < count; ++index) {
         if (glyphs[index].character == character) {
@@ -350,6 +361,55 @@ static void draw_glyph(
     }
 }
 
+enum text_position {
+    TEXT_NORMAL = 0,
+    TEXT_SUBSCRIPT = -1,
+    TEXT_SUPERSCRIPT = 1
+};
+
+struct text_token {
+    char glyph;
+    enum text_position position;
+    size_t bytes;
+};
+
+static struct text_token next_text_token(const char *cursor)
+{
+    struct text_token token = {'?', TEXT_NORMAL, 1U};
+    size_t prefix = 0U;
+    const char *glyph = cursor;
+
+    if ((cursor[0] == '_' || cursor[0] == '^') &&
+        cursor[1] != '\0' && cursor[1] != '\n') {
+        token.position = cursor[0] == '_' ? TEXT_SUBSCRIPT : TEXT_SUPERSCRIPT;
+        prefix = 1U;
+        glyph = cursor + 1;
+    }
+
+    if ((unsigned char)glyph[0] == 0xceU &&
+        (unsigned char)glyph[1] == 0xbbU) {
+        token.glyph = '\x7f';
+        token.bytes = prefix + 2U;
+    } else {
+        token.glyph = glyph[0];
+        token.bytes = prefix + 1U;
+    }
+    return token;
+}
+
+static int32_t positioned_scale(int32_t scale, enum text_position position)
+{
+    if (position == TEXT_NORMAL) return scale;
+    int32_t smaller = (2 * scale + 2) / 3;
+    return smaller < 1 ? 1 : smaller;
+}
+
+static int32_t positioned_advance(int32_t scale, enum text_position position)
+{
+    if (position == TEXT_NORMAL) return 6 * scale;
+    return 4 * positioned_scale(scale,position);
+}
+
 void raster_text(
     Canvas *buffer,
     const char *text,
@@ -359,17 +419,31 @@ void raster_text(
     uint32_t value)
 {
     int32_t x = left;
-    for (const char *cursor = text; *cursor != '\0'; ++cursor) {
-        draw_glyph(buffer, *cursor, x, top, scale, value);
-        x += 6 * scale;
+    for (const char *cursor = text; *cursor != '\0';) {
+        struct text_token token = next_text_token(cursor);
+        int32_t draw_scale = positioned_scale(scale,token.position);
+        int32_t draw_left = x + (token.position == TEXT_NORMAL ? 0 : -scale);
+        int32_t draw_top = top;
+        if (token.position == TEXT_SUBSCRIPT) draw_top += 3 * scale;
+
+        draw_glyph(buffer,token.glyph,draw_left,draw_top,draw_scale,value);
+        x += positioned_advance(scale,token.position);
+        cursor += token.bytes;
     }
 }
 
 int32_t raster_text_width(const char *text, int32_t scale)
 {
-    size_t count = strlen(text);
-    if (count == 0U) {
-        return 0;
+    int32_t x = 0;
+    int32_t rightmost = 0;
+    for (const char *cursor = text; *cursor != '\0';) {
+        struct text_token token = next_text_token(cursor);
+        int32_t draw_scale = positioned_scale(scale,token.position);
+        int32_t draw_left = x + (token.position == TEXT_NORMAL ? 0 : -scale);
+        int32_t right = draw_left + 5 * draw_scale;
+        if (right > rightmost) rightmost = right;
+        x += positioned_advance(scale,token.position);
+        cursor += token.bytes;
     }
-    return ((int32_t)count * 6 - 1) * scale;
+    return rightmost;
 }

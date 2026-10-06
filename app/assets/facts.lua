@@ -82,10 +82,9 @@ end
 
 function young_layout()
   return {
-    {kind="label", text="Young Tableaux 0.3.1"},
+    {kind="label", text="Young Tableaux 0.3.2"},
     {kind="separator"},
-    {kind="label", text="Shape"},
-    {kind="field", arg=1, text="λ: rows"},
+     {kind="field", arg=1, text="λ: rows"},
     {kind="shape"},
     {kind="wegert", arg=160},
     {kind="plot_controls"},

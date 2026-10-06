@@ -41,36 +41,12 @@ local function derived(lambda, hooks)
 end
 
 function young_facts(lambda, hooks, standard_count)
-  local size, n_lambda, counts, max_hook = derived(lambda, hooks)
-
-  local factors = {}
-  for hook = 1, max_hook do
-    local multiplicity = counts[hook]
-    if multiplicity then
-      factors[#factors + 1] = factor_text(hook, multiplicity)
-    end
-  end
-
-  local numerator
-  if n_lambda == 0 then numerator = "1"
-  elseif n_lambda == 1 then numerator = "z"
-  else numerator = "z^" .. n_lambda end
-
-  local denominator = #factors == 0 and "1" or table.concat(factors, " ")
-  local formula = denominator == "1" and numerator or (numerator .. " / (" .. denominator .. ")")
-
   return table.concat({
     "Schur specialization",
-    "λ = " .. shape_text(lambda) .. "   |λ| = " .. size,
-    "n(λ) = " .. n_lambda,
-    "f^λ / Specht dimension = " .. standard_count,
-    "Principal specialization:",
-    "s_λ(1,z,z^2,...) = " .. formula,
-    "The plot shows its meromorphic continuation.",
-    "Each hook h contributes a factor (1-z^h), so its poles lie at roots of unity."
+    "Substitute 1, z, z², … into s_λ to get one function of z.",
+    "The plot shows that function; hook lengths determine its poles at roots of unity."
   }, "\n")
 end
-
 function young_wegert(lambda, hooks)
   local _, n_lambda, counts, max_hook = derived(lambda, hooks)
   return {
@@ -82,17 +58,15 @@ end
 
 function young_layout()
   return {
-    {kind="label", text="Young Tableaux 0.3.2"},
+    {kind="label", text="Young Tableaux 0.3.3"},
     {kind="separator"},
      {kind="field", arg=1, text="λ: rows"},
     {kind="shape"},
     {kind="wegert", arg=160},
     {kind="plot_controls"},
     {kind="separator"},
-    {kind="label", text="Derived facts"},
-    {kind="output", arg=0},
+    {kind="hooks", text="Hook lengths: each number counts its cell, cells right, and cells below."},
     {kind="output", arg=2},
-    {kind="hooks", text="Hook cells"},
     {kind="facts"},
     {kind="separator"},
     {kind="label", text="More operations"}

@@ -196,14 +196,14 @@ void lua_bridge_refresh(LuaBridge *bridge,Console *console)
     snprintf(bridge->last_lambda,sizeof(bridge->last_lambda),"%s",console->fields[SET_LAMBDA]);
 
     if(!bridge->ready) {
-        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nFormula unavailable.");
+        snprintf(console->scripted_facts,UI_TEXT,"Schur specialization\nFormula unavailable.");
         return;
     }
 
     Partition partition;
     MathStatus parsed=partition_parse(console->fields[SET_LAMBDA],&partition);
     if(parsed!=YT_OK) {
-        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nEnter a valid lambda first: %s",math_status(parsed));
+        snprintf(console->scripted_facts,UI_TEXT,"Schur specialization\nEnter a valid λ first: %s",math_status(parsed));
         return;
     }
 
@@ -217,7 +217,7 @@ void lua_bridge_refresh(LuaBridge *bridge,Console *console)
     lua_getglobal(state,"young_facts");
     if(!lua_isfunction(state,-1)) {
         lua_pop(state,1);
-        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nFormula unavailable.");
+        snprintf(console->scripted_facts,UI_TEXT,"Schur specialization\nFormula unavailable.");
         return;
     }
     push_partition(state,&partition);
@@ -225,12 +225,12 @@ void lua_bridge_refresh(LuaBridge *bridge,Console *console)
     lua_pushstring(state,dimension);
     if(lua_pcall(state,3,1,0)!=LUA_OK) {
         bridge_error(bridge,lua_tostring(state,-1));
-        snprintf(console->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nFormula unavailable.");
+        snprintf(console->scripted_facts,UI_TEXT,"Schur specialization\nFormula unavailable.");
         lua_pop(state,1);
         return;
     }
     const char *facts=lua_tostring(state,-1);
-    snprintf(console->scripted_facts,UI_TEXT,"%s",facts?facts:"SCHUR SPECIALIZATION\nNo output");
+    snprintf(console->scripted_facts,UI_TEXT,"%s",facts?facts:"Schur specialization\nNo output");
     lua_pop(state,1);
 
     (void)prepare_wegert(bridge,console,&partition);

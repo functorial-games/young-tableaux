@@ -13,14 +13,17 @@ void controls_begin(Controls *u,int w,int h,bool keyboard)
 static size_t control_token_bytes(const char *text)
 {
     size_t prefix=0U;
-    const char *glyph=text;
+    const unsigned char *glyph=(const unsigned char *)text;
     if((text[0]=='_' || text[0]=='^') && text[1] && text[1]!='\n') {
-        prefix=1U; glyph=text+1;
+        prefix=1U; glyph=(const unsigned char *)(text+1);
     }
-    if((unsigned char)glyph[0]==0xceU && (unsigned char)glyph[1]==0xbbU)
-        return prefix+2U;
+    if(glyph[0]<0x80U) return prefix+1U;
+    if((glyph[0]&0xe0U)==0xc0U && glyph[1]) return prefix+2U;
+    if((glyph[0]&0xf0U)==0xe0U && glyph[1] && glyph[2]) return prefix+3U;
+    if((glyph[0]&0xf8U)==0xf0U && glyph[1] && glyph[2] && glyph[3]) return prefix+4U;
     return prefix+1U;
 }
+
 int controls_text_height(const Controls *u,const char *text)
 {
     int columns=(u->width-16*u->scale)/(6*u->scale); if(columns<1) columns=1;

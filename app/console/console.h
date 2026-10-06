@@ -1,6 +1,6 @@
 #ifndef YOUNG_CONSOLE_H
 #define YOUNG_CONSOLE_H
-#include "math.h"
+#include "young_math.h"
 #include "controls.h"
 typedef enum {
 #define OP(symbol,section,label,input,output) symbol,

@@ -1,4 +1,4 @@
-#include "math.h"
+#include "young_math.h"
 #include <ctype.h>
 #include <limits.h>
 #include <string.h>

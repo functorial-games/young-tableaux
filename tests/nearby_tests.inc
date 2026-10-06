@@ -7,6 +7,11 @@ static Control *nearby_control(Controls *u,int id)
     for(int i=0;i<u->count;++i) if(u->controls[i].id==id) return &u->controls[i];
     CHECK(false); return NULL;
 }
+static Control *maybe_nearby_control(Controls *u,int id)
+{
+    for(int i=0;i<u->count;++i) if(u->controls[i].id==id) return &u->controls[i];
+    return NULL;
+}
 static void choose_shape(Console *c,const char *text)
 {
     snprintf(c->fields[SET_LAMBDA],512,"%s",text);
@@ -20,35 +25,53 @@ static void nearby_tests(void)
     Console *c=calloc(1,sizeof(*c)); Controls *u=calloc(1,sizeof(*u)); CHECK(c && u);
     console_init(c); controls_init(u);
     CHECK(c->wegert.half_height==1.5 && c->wegert.center_real==0.0);
+
     console_layout(c,u,576,1152);
-    CHECK(nearby_control(u,ROW_MINUS_BASE)->rect.y==nearby_control(u,ROW_PLUS_BASE)->rect.y);
-    activate(c,u,ROW_PLUS_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"4,2,1")==0);
+    for(int row=0;row<=3;++row) CHECK(maybe_nearby_control(u,ADDABLE_BASE+row));
+    activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"4,2,1")==0);
+    CHECK(c->shape_history_count==1);
     CHECK(c->wegert.half_height==1.5 && c->scripted_facts[0]==0);
-    activate(c,u,ROW_MINUS_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1")==0);
-    activate(c,u,ADD_ROW); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1,1")==0);
-    activate(c,u,ROW_MINUS_BASE+3); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1")==0);
+    activate(c,u,SHAPE_UNDO); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1")==0);
+    CHECK(c->shape_history_count==0);
+    activate(c,u,ADDABLE_BASE+3); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1,1")==0);
+    activate(c,u,SHAPE_RESET); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1")==0);
+
     choose_shape(c,"2,2"); console_layout(c,u,576,1152);
-    Control *disabled=nearby_control(u,ROW_MINUS_BASE);
-    CHECK(disabled->kind==DISABLED_BUTTON);
-    controls_scroll(u,disabled->rect.y);
-    CHECK(controls_hit(u,disabled->rect.x+1,1)==0);
-    activate(c,u,ROW_MINUS_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"2,2")==0);
-    activate(c,u,ROW_PLUS_BASE+1); CHECK(strcmp(c->fields[SET_LAMBDA],"2,2")==0);
-    activate(c,u,ROW_MINUS_BASE+1); CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0);
-    activate(c,u,ROW_MINUS_BASE+1); CHECK(strcmp(c->fields[SET_LAMBDA],"2")==0);
-    activate(c,u,ROW_MINUS_BASE); activate(c,u,ROW_MINUS_BASE);
-    CHECK(strcmp(c->fields[SET_LAMBDA],"[]")==0 && c->partition.count==0);
-    activate(c,u,ADD_ROW); CHECK(strcmp(c->fields[SET_LAMBDA],"1")==0);
-    choose_shape(c,"bad"); activate(c,u,ADD_ROW); CHECK(strcmp(c->fields[SET_LAMBDA],"bad")==0);
-    choose_shape(c,"64"); activate(c,u,ROW_PLUS_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"64")==0);
-    choose_shape(c,"64,64,64,64"); activate(c,u,ADD_ROW);
-    CHECK(strcmp(c->fields[SET_LAMBDA],"64,64,64,64")==0);
+    CHECK(maybe_nearby_control(u,ADDABLE_BASE));
+    CHECK(!maybe_nearby_control(u,ADDABLE_BASE+1));
+    CHECK(maybe_nearby_control(u,ADDABLE_BASE+2));
+    activate(c,u,ADDABLE_BASE+1); CHECK(strcmp(c->fields[SET_LAMBDA],"2,2")==0);
+    activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2")==0);
+    activate(c,u,SHAPE_UNDO); CHECK(strcmp(c->fields[SET_LAMBDA],"2,2")==0);
+
+    choose_shape(c,"[]"); console_layout(c,u,576,1152);
+    CHECK(maybe_nearby_control(u,ADDABLE_BASE));
+    activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"1")==0);
+    activate(c,u,SHAPE_UNDO); CHECK(strcmp(c->fields[SET_LAMBDA],"[]")==0);
+
+    choose_shape(c,"bad"); activate(c,u,ADDABLE_BASE);
+    CHECK(strcmp(c->fields[SET_LAMBDA],"bad")==0);
+
+    choose_shape(c,"64"); console_layout(c,u,576,1152);
+    CHECK(!maybe_nearby_control(u,ADDABLE_BASE));
+    CHECK(maybe_nearby_control(u,ADDABLE_BASE+1));
+    activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"64")==0);
+
+    choose_shape(c,"64,64,64,64"); console_layout(c,u,576,1152);
+    for(int row=0;row<=4;++row) CHECK(!maybe_nearby_control(u,ADDABLE_BASE+row));
 
     choose_shape(c,"2,1"); console_layout(c,u,576,1152);
     Control *zoom=nearby_control(u,PLOT_ZOOM_IN);
-    int plot_bottom=0;
-    for(int i=0;i<u->count;++i) if(u->controls[i].kind==WEGERT)
-        plot_bottom=u->controls[i].rect.y+u->controls[i].rect.h;
+    int plot_bottom=0, plot_index=-1, derived_index=-1;
+    for(int i=0;i<u->count;++i) {
+        if(u->controls[i].kind==WEGERT) {
+            plot_bottom=u->controls[i].rect.y+u->controls[i].rect.h;
+            plot_index=i;
+        }
+        if(!strcmp(u->controls[i].text,"DERIVED FACTS")) derived_index=i;
+        CHECK(!strstr(u->controls[i].text,"conjugate blocks"));
+    }
+    CHECK(plot_index>=0 && derived_index>plot_index);
     CHECK(zoom->rect.y==plot_bottom+4*u->scale);
     controls_scroll(u,zoom->rect.y);
     int x=zoom->rect.x+zoom->rect.w/2,y=zoom->rect.y-u->scroll+zoom->rect.h/2;
@@ -61,7 +84,7 @@ static void nearby_tests(void)
     console_event(c,u,e); CHECK(c->wegert.half_height==1.0);
     activate(c,u,PLOT_RIGHT); activate(c,u,PLOT_UP);
     CHECK(fabs(c->wegert.center_real-0.3)<1e-12 && fabs(c->wegert.center_imag-0.3)<1e-12);
-    activate(c,u,ROW_PLUS_BASE); CHECK(c->wegert.half_height==1.0 && c->wegert.center_real>0.0);
+    activate(c,u,ADDABLE_BASE); CHECK(c->wegert.half_height==1.0 && c->wegert.center_real>0.0);
     for(int i=0;i<100;++i) activate(c,u,PLOT_ZOOM_IN);
     CHECK(c->wegert.half_height==0.015);
     for(int i=0;i<100;++i) activate(c,u,PLOT_ZOOM_OUT);
@@ -95,7 +118,9 @@ static void nearby_tests(void)
 
     char maximum[512]="4";
     for(int i=1;i<64;++i) strcat(maximum,",4");
-    choose_shape(c,maximum); activate(c,u,ADD_ROW); CHECK(strcmp(c->fields[SET_LAMBDA],maximum)==0);
+    choose_shape(c,maximum); console_layout(c,u,576,1152);
+    for(int row=0;row<64;++row) CHECK(!maybe_nearby_control(u,ADDABLE_BASE+row));
+
     const int widths[]={320,576,720,1152};
     for(unsigned index=0;index<sizeof(widths)/sizeof(widths[0]);++index) {
         console_layout(c,u,widths[index],1152);
@@ -105,17 +130,21 @@ static void nearby_tests(void)
             const Control *control=&u->controls[i];
             CHECK(control->rect.x>=0 && control->rect.x+control->rect.w<=u->width);
             CHECK(!strstr(control->text,"LUA") && !strstr(control->text,"SCRIPTED"));
+            CHECK(!strstr(control->text,"conjugate blocks"));
             if(control->id) { CHECK(!ids[control->id]); ids[control->id]=true; }
         }
         for(int op=0;op<OP_COUNT;++op) CHECK(ids[OP_BASE+op]);
-        for(int row=0;row<64;++row) { CHECK(ids[ROW_MINUS_BASE+row]); CHECK(ids[ROW_PLUS_BASE+row]); }
     }
+
     choose_shape(c,"3,2,1"); c->french=true; console_layout(c,u,576,1152);
-    CHECK(nearby_control(u,ROW_MINUS_BASE+2)->rect.y<nearby_control(u,ROW_MINUS_BASE)->rect.y);
+    CHECK(nearby_control(u,ADDABLE_BASE+2)->rect.y<nearby_control(u,ADDABLE_BASE)->rect.y);
     c->french=false; console_layout(c,u,576,1152);
-    CHECK(nearby_control(u,ROW_MINUS_BASE+2)->rect.y>nearby_control(u,ROW_MINUS_BASE)->rect.y);
-    /* Separate UI rectangles, including each row's controls and the plot toolbar. */
+    CHECK(nearby_control(u,ADDABLE_BASE+2)->rect.y>nearby_control(u,ADDABLE_BASE)->rect.y);
+
+    /* Hit targets may overlay non-interactive block projections, but distinct
+       interactive controls must not cover one another. */
     for(int i=0;i<u->count;++i) for(int j=i+1;j<u->count;++j) {
+        if(!u->controls[i].id || !u->controls[j].id) continue;
         Rect a=u->controls[i].rect,b=u->controls[j].rect;
         CHECK(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y);
     }

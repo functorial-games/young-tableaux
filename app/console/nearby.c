@@ -88,7 +88,7 @@ void nearby_shape(Console *c,Controls *u)
             if(removable[row]) {
                 int x=margin+2*scale+(p.rows[row]-1)*cell;
                 if(x+button_side>u->width-margin) x=u->width-margin-button_side;
-                button(u,REMOVABLE_BASE+row,"-",
+                button(u,REMOVABLE_BASE+row,"−",
                        (Rect){x,y+(side-button_side)/2,button_side,button_side},true);
             }
             if(addable[row] && partition_size(&p)<YT_CELLS) {
@@ -130,7 +130,7 @@ void nearby_shape(Console *c,Controls *u)
 void nearby_plot_controls(Console *c,Controls *u)
 {
     const int zoom_ids[]={PLOT_ZOOM_OUT,PLOT_RESET,PLOT_ZOOM_IN};
-    const char *zoom_labels[]={"Zoom -","Reset","Zoom +"};
+    const char *zoom_labels[]={"Zoom −","Reset","Zoom +"};
     const int pan_ids[]={PLOT_LEFT,PLOT_UP,PLOT_DOWN,PLOT_RIGHT};
     const char *pan_labels[]={"Left","Up","Down","Right"};
     int scale=u->scale, margin=4*scale, gap=4*scale;

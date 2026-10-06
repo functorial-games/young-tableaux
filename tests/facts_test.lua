@@ -24,6 +24,7 @@ local layout = young_layout()
 local saw_shape, saw_wegert, saw_derived = false, false, false
 for _, item in ipairs(layout) do
   assert(not (item.text or ''):lower():find('conjugate blocks', 1, true))
+  assert(not (item.text or ''):lower():find('kitchen sink', 1, true))
   if item.kind == 'shape' then saw_shape = true end
   if item.kind == 'wegert' then assert(saw_shape); saw_wegert = true end
   if item.kind == 'label' and item.text == 'DERIVED FACTS' then

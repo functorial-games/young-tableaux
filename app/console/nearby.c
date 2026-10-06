@@ -49,7 +49,7 @@ void nearby_shape(Console *c,Controls *u)
     int addable_count=partition_addable(&p,cells);
     for(int i=0;i<addable_count;++i) {
         int row=cells[i].row-1;
-        if(row>=0 && row<=YT_DIM) addable[row]=true;
+        if(row>=0 && row<YT_DIM && cells[i].column<=YT_DIM) addable[row]=true;
     }
 
     int scale=u->scale, margin=4*scale, gap=4*scale, side=24*scale;
@@ -146,7 +146,7 @@ static bool find_addable(const Partition *p,int row,Cell *out)
     if(row<0 || row>p->count || row>=YT_DIM || partition_size(p)>=YT_CELLS) return false;
     Cell cells[YT_DIM+1];
     int count=partition_addable(p,cells);
-    for(int i=0;i<count;++i) if(cells[i].row==row+1) {
+    for(int i=0;i<count;++i) if(cells[i].row==row+1 && cells[i].column<=YT_DIM) {
         *out=cells[i];
         return true;
     }

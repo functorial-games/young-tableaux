@@ -187,7 +187,7 @@ static void layout_add(Console *c,ScriptLayoutKind kind,int arg,const char *text
 static void default_layout(Console *c)
 {
     c->script_layout_count=0;
-    layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.3.1");
+    layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.3.2");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
     layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"λ: rows");
     layout_add(c,SCRIPT_SHAPE,0,"");
@@ -380,7 +380,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
         if(s==1 || s==2) continue;
         controls_add(u,0,SEPARATOR,"",2*u->scale,NULL); controls_add(u,0,LABEL,sections[s],0,NULL);
         switch(s) {
-        case 0: controls_add(u,0,LABEL,"Uses lambda from the top of the screen.",0,NULL); break;
+        case 0: controls_add(u,0,LABEL,"Uses λ from the top of the screen.",0,NULL); break;
         case 1: field(c,u,SET_TABLEAU); field(c,u,SET_ALPHABET); field(c,u,SET_WEIGHT);
             {
                 char kind_label[96]; snprintf(kind_label,sizeof(kind_label),"Tableau kind: %s",tableau_kinds[c->tableau_kind]);
@@ -396,16 +396,16 @@ void console_layout(Console *c,Controls *u,int w,int h)
             button_strip(u,ids,labels,4); break;
         }
         case 4: {
-            controls_add(u,0,LABEL,"lambda is the outer shape. mu is the inner shape. Enter only the visible skew cells in each row. STEP moves one entry into the hole.",0,NULL);
+            controls_add(u,0,LABEL,"λ is the outer shape. mu is the inner shape. Enter only the visible skew cells in each row. STEP moves one entry into the hole.",0,NULL);
             field(c,u,SET_MU); field(c,u,SET_SKEW_TABLEAU); field(c,u,SET_CELL);
             if(c->jeu_loaded) diagram(u,"jeu de taquin board",&c->jeu_tiles);
             const int ids[]={JDT_RESET,JDT_STEP,JDT_SLIDE,JDT_RECTIFY}; const char *labels[]={"RESET","STEP","SLIDE","RECTIFY"};
             button_strip(u,ids,labels,4); break;
         }
         case 5:
-            controls_add(u,0,LABEL,"Uses lambda above; LR uses outer nu / inner lambda and content mu. The mu field is immediately above.",0,NULL);
+            controls_add(u,0,LABEL,"Uses λ above; LR uses outer nu / inner λ and content mu. The mu field is immediately above.",0,NULL);
             field(c,u,SET_NU); break;
-        case 6: field(c,u,SET_CHARACTERISTIC); field(c,u,SET_PRIME); field(c,u,SET_HECKE); controls_add(u,0,LABEL,"Uses lambda and permutation above. Only characteristic-zero dimension is implemented.",0,NULL); break;
+        case 6: field(c,u,SET_CHARACTERISTIC); field(c,u,SET_PRIME); field(c,u,SET_HECKE); controls_add(u,0,LABEL,"Uses λ and permutation above. Only characteristic-zero dimension is implemented.",0,NULL); break;
         case 7: field(c,u,SET_BASIS); field(c,u,SET_COEFFICIENTS); field(c,u,SET_VARIABLES); field(c,u,SET_Q); field(c,u,SET_T); break;
         case 8: field(c,u,SET_PATH); controls_add(u,0,LABEL,"Start lambda, end nu; paths encode box additions.",0,NULL); break;
         case 9: field(c,u,SET_N); controls_add(u,STEP_MINUS,BUTTON,"n - 1",0,NULL); controls_add(u,STEP_PLUS,BUTTON,"n + 1",0,NULL); field(c,u,SET_LAW); break;

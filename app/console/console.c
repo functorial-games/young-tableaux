@@ -115,7 +115,7 @@ static void default_layout(Console *c)
     layout_add(c,SCRIPT_HOOKS,0,"hook cells");
     layout_add(c,SCRIPT_FACTS,0,"");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
-    layout_add(c,SCRIPT_LABEL,0,"MORE OPERATIONS / KITCHEN SINK");
+    layout_add(c,SCRIPT_LABEL,0,"MORE OPERATIONS");
 }
 void console_init(Console *c)
 {

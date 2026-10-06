@@ -9,7 +9,8 @@ const char *math_status(MathStatus s)
     case YT_OK: return "OK";
     case YT_MALFORMED: return "INVALID INPUT";
     case YT_LIMIT: return "LIMIT: 64 rows/columns, 256 cells";
-    case YT_OVERFLOW: return "OVERFLOW: exact uint64 range exceeded";
+    case YT_OVERFLOW: return "OVERFLOW: exact integer range exceeded";
+    case YT_COMPLEXITY: return "LIMIT: bounded exhaustive operation exceeded";
     }
     return "ERROR";
 }
@@ -48,20 +49,31 @@ static MathStatus list(const char **p, int *values, int *count, bool row)
         if (!isdigit((unsigned char)**p) && **p != '-' && **p != '+') return YT_MALFORMED;
     }
 }
+MathStatus partition_validate(const Partition *partition)
+{
+    if(!partition || partition->count<0) return YT_MALFORMED;
+    if(partition->count>YT_DIM) return YT_LIMIT;
+    int size=0;
+    for(int row=0;row<partition->count;++row) {
+        int length=partition->rows[row];
+        if(length<=0 || (row && length>partition->rows[row-1])) return YT_MALFORMED;
+        if(length>YT_DIM || size>YT_CELLS-length) return YT_LIMIT;
+        size+=length;
+    }
+    return YT_OK;
+}
+
 MathStatus partition_parse(const char *text, Partition *out)
 {
+    if(!text || !out) return YT_MALFORMED;
     Partition tmp = {0};
     const char *p = text;
     MathStatus s = list(&p, tmp.rows, &tmp.count, false);
     if (s != YT_OK) return s;
     spaces(&p);
     if (*p) return YT_MALFORMED;
-    int size = 0;
-    for (int r = 0; r < tmp.count; ++r) {
-        if (tmp.rows[r] <= 0 || (r && tmp.rows[r] > tmp.rows[r-1])) return YT_MALFORMED;
-        if (tmp.rows[r] > YT_DIM || size > YT_CELLS - tmp.rows[r]) return YT_LIMIT;
-        size += tmp.rows[r];
-    }
+    s=partition_validate(&tmp);
+    if(s!=YT_OK) return s;
     *out = tmp;
     return YT_OK;
 }
@@ -106,6 +118,9 @@ int partition_hook(const Partition *p, int r, int c)
 }
 MathStatus partition_hook_product(const Partition *p, uint64_t *out)
 {
+    if(!out) return YT_MALFORMED;
+    MathStatus status=partition_validate(p);
+    if(status!=YT_OK) return status;
     uint64_t value = 1;
     for (int r = 1; r <= p->count; ++r) for (int c = 1; c <= p->rows[r-1]; ++c) {
         uint64_t h = (uint64_t)partition_hook(p,r,c);
@@ -118,6 +133,9 @@ MathStatus partition_hook_product(const Partition *p, uint64_t *out)
  * hook product when the final quotient still fits. */
 MathStatus partition_standard_count(const Partition *p, uint64_t *out)
 {
+    if(!out) return YT_MALFORMED;
+    MathStatus status=partition_validate(p);
+    if(status!=YT_OK) return status;
     int exponents[YT_CELLS+1] = {0};
     int n = partition_size(p);
     for (int k = 2; k <= n; ++k) {
@@ -140,6 +158,7 @@ MathStatus partition_standard_count(const Partition *p, uint64_t *out)
 }
 MathStatus tableau_parse(const char *text, Tableau *out)
 {
+    if(!text || !out) return YT_MALFORMED;
     Tableau tmp = {0}; const char *p = text; int size = 0;
     spaces(&p);
     if (!*p || strcmp(p,"[]") == 0) { *out = tmp; return YT_OK; }
@@ -164,6 +183,8 @@ MathStatus tableau_parse(const char *text, Tableau *out)
 }
 Validation tableau_validate(const Partition *shape, const Tableau *t, bool decreasing)
 {
+    if(!t || partition_validate(shape)!=YT_OK || partition_validate(&t->shape)!=YT_OK)
+        return (Validation){0};
     Validation v = {true,true,true,true};
     int n = partition_size(shape); bool seen[YT_CELLS+1] = {false};
     if (shape->count != t->shape.count) v.shape = false;
@@ -182,22 +203,9 @@ Validation tableau_validate(const Partition *shape, const Tableau *t, bool decre
     return v;
 }
 
-static bool tableau_shape_valid(const Partition *shape)
-{
-    if(shape->count<0 || shape->count>YT_DIM) return false;
-    int size=0;
-    for(int row=0;row<shape->count;++row) {
-        if(shape->rows[row]<=0 || shape->rows[row]>YT_DIM) return false;
-        if(row && shape->rows[row]>shape->rows[row-1]) return false;
-        if(size>YT_CELLS-shape->rows[row]) return false;
-        size+=shape->rows[row];
-    }
-    return true;
-}
-
 bool tableau_semistandard(const Tableau *tableau)
 {
-    if(!tableau || !tableau_shape_valid(&tableau->shape)) return false;
+    if(!tableau || partition_validate(&tableau->shape)!=YT_OK) return false;
     for(int row=0;row<tableau->shape.count;++row) {
         for(int column=0;column<tableau->shape.rows[row];++column) {
             int entry=tableau->entries[row][column];
@@ -319,7 +327,7 @@ MathStatus tableau_reverse_insert(const Tableau *tableau,Cell corner,
 
 MathStatus tableau_transpose(const Tableau *tableau,Tableau *out)
 {
-    if(!tableau || !out || !tableau_shape_valid(&tableau->shape)) return YT_MALFORMED;
+    if(!tableau || !out || partition_validate(&tableau->shape)!=YT_OK) return YT_MALFORMED;
     Tableau result={0};
     result.shape=partition_conjugate(&tableau->shape);
     for(int row=0;row<tableau->shape.count;++row)
@@ -338,10 +346,14 @@ static bool cell_in_list(Cell cell,const Cell *cells,int count)
 
 MathStatus partition_add_cell(const Partition *partition,Cell cell,Partition *out)
 {
-    if(!partition || !out || partition_size(partition)>=YT_CELLS) return YT_LIMIT;
+    if(!out) return YT_MALFORMED;
+    MathStatus status=partition_validate(partition);
+    if(status!=YT_OK) return status;
+    if(partition_size(partition)>=YT_CELLS) return YT_LIMIT;
     Cell cells[YT_DIM+1];
     int count=partition_addable(partition,cells);
-    if(!cell_in_list(cell,cells,count) || cell.column>YT_DIM) return YT_MALFORMED;
+    if(!cell_in_list(cell,cells,count)) return YT_MALFORMED;
+    if(cell.column>YT_DIM || cell.row>YT_DIM) return YT_LIMIT;
     Partition result=*partition;
     int row=cell.row-1;
     if(row==result.count) {
@@ -354,7 +366,9 @@ MathStatus partition_add_cell(const Partition *partition,Cell cell,Partition *ou
 
 MathStatus partition_remove_cell(const Partition *partition,Cell cell,Partition *out)
 {
-    if(!partition || !out) return YT_MALFORMED;
+    if(!out) return YT_MALFORMED;
+    MathStatus status=partition_validate(partition);
+    if(status!=YT_OK) return status;
     Cell cells[YT_DIM];
     int count=partition_removable(partition,cells);
     if(!cell_in_list(cell,cells,count)) return YT_MALFORMED;
@@ -408,6 +422,7 @@ static void rsk_insert(Tableau *p,Tableau *q,int value,int record,Cell *path,int
 
 static MathStatus rsk_trace(const char *text,bool permutation,int step,RSKTrace *out)
 {
+    if(!text || !out) return YT_MALFORMED;
     RSKTrace trace={0};
     MathStatus status=sequence_parse(text,trace.values,&trace.count,permutation);
     if(status!=YT_OK) return status;
@@ -438,6 +453,7 @@ MathStatus word_rsk_trace(const char *text,int step,RSKTrace *out)
 
 MathStatus permutation_rsk(const char *text,Tableau *pout,Tableau *qout)
 {
+    if(!pout || !qout || pout==qout) return YT_MALFORMED;
     RSKTrace trace;
     MathStatus status=permutation_rsk_trace(text,YT_DIM,&trace);
     if(status!=YT_OK) return status;
@@ -448,6 +464,7 @@ MathStatus permutation_rsk(const char *text,Tableau *pout,Tableau *qout)
 
 MathStatus word_rsk(const char *text,Tableau *pout,Tableau *qout)
 {
+    if(!pout || !qout || pout==qout) return YT_MALFORMED;
     RSKTrace trace;
     MathStatus status=word_rsk_trace(text,YT_DIM,&trace);
     if(status!=YT_OK) return status;
@@ -470,6 +487,7 @@ static bool partition_contains_partition(const Partition *outer,const Partition 
 MathStatus skew_tableau_parse(const char *outer_text,const char *inner_text,
                               const char *entries_text,SkewTableau *out)
 {
+    if(!outer_text || !inner_text || !entries_text || !out) return YT_MALFORMED;
     SkewTableau tableau={0};
     MathStatus status=partition_parse(outer_text,&tableau.outer);
     if(status!=YT_OK) return status;
@@ -509,11 +527,17 @@ MathStatus skew_tableau_parse(const char *outer_text,const char *inner_text,
     return YT_OK;
 }
 
+static bool skew_structure_valid(const SkewTableau *tableau)
+{
+    return tableau && partition_validate(&tableau->outer)==YT_OK
+        && partition_validate(&tableau->inner)==YT_OK
+        && partition_contains_partition(&tableau->outer,&tableau->inner);
+}
+
 SkewValidation skew_tableau_validate(const SkewTableau *tableau)
 {
+    if(!skew_structure_valid(tableau) || tableau->active) return (SkewValidation){0};
     SkewValidation validation={true,true,true,true,true,true};
-    if(!partition_contains_partition(&tableau->outer,&tableau->inner))
-        validation.shape=false;
     int size=partition_size(&tableau->outer)-partition_size(&tableau->inner);
     bool seen[YT_CELLS+1]={false};
     for(int row=0;row<tableau->outer.count;++row) {
@@ -563,9 +587,34 @@ static bool skew_cell(const SkewTableau *tableau,Cell cell)
              && cell.column==tableau->hole.column);
 }
 
+/* A slide's intermediate board contains one hole, not an ordinary tableau.
+ * Validate it explicitly before using any coordinates as C array indices. */
+static bool skew_active_valid(const SkewTableau *tableau)
+{
+    if(!skew_structure_valid(tableau) || !tableau->active
+       || !cell_in_partition(&tableau->outer,tableau->hole)
+       || cell_in_partition(&tableau->inner,tableau->hole)) return false;
+    if(tableau->entries[tableau->hole.row-1][tableau->hole.column-1]!=0) return false;
+    for(int row=0;row<tableau->outer.count;++row) {
+        int start=partition_row(&tableau->inner,row);
+        for(int column=start;column<tableau->outer.rows[row];++column) {
+            Cell current={row+1,column+1};
+            if(!skew_cell(tableau,current)) continue;
+            int entry=tableau->entries[row][column];
+            if(entry<=0) return false;
+            if(skew_cell(tableau,(Cell){row+1,column})
+               && tableau->entries[row][column-1]>entry) return false;
+            if(skew_cell(tableau,(Cell){row,column+1})
+               && tableau->entries[row-1][column]>=entry) return false;
+        }
+    }
+    return true;
+}
+
 bool jeu_can_begin(const SkewTableau *tableau,Cell cell)
 {
-    return !tableau->active && removable_cell(&tableau->inner,cell)
+    return skew_tableau_validate(tableau).semistandard
+        && removable_cell(&tableau->inner,cell)
         && cell_in_partition(&tableau->outer,cell);
 }
 
@@ -577,26 +626,27 @@ MathStatus jeu_begin(SkewTableau *tableau,Cell cell)
     if(row+1==tableau->inner.count && !tableau->inner.rows[row])
         --tableau->inner.count;
     tableau->hole=cell;
+    tableau->entries[row][cell.column-1]=0;
     tableau->active=true;
     return YT_OK;
 }
 
 JeuStepResult jeu_step(SkewTableau *tableau)
 {
-    if(!tableau->active) return JEU_INVALID;
+    if(!skew_active_valid(tableau)) return JEU_INVALID;
     Cell right={tableau->hole.row,tableau->hole.column+1};
     Cell below={tableau->hole.row+1,tableau->hole.column};
     bool has_right=skew_cell(tableau,right);
     bool has_below=skew_cell(tableau,below);
     if(!has_right && !has_below) {
         if(!removable_cell(&tableau->outer,tableau->hole)) return JEU_INVALID;
-        int row=tableau->hole.row-1;
-        int column=tableau->hole.column-1;
-        tableau->entries[row][column]=0;
-        --tableau->outer.rows[row];
-        if(row+1==tableau->outer.count && !tableau->outer.rows[row])
-            --tableau->outer.count;
-        tableau->active=false;
+        SkewTableau result=*tableau;
+        int row=result.hole.row-1;
+        --result.outer.rows[row];
+        if(row+1==result.outer.count && !result.outer.rows[row]) --result.outer.count;
+        result.active=false;
+        if(!skew_tableau_validate(&result).semistandard) return JEU_INVALID;
+        *tableau=result;
         return JEU_FINISHED;
     }
 
@@ -618,23 +668,30 @@ JeuStepResult jeu_step(SkewTableau *tableau)
 
 MathStatus jeu_slide(SkewTableau *tableau,Cell cell)
 {
-    if(tableau->active) return YT_MALFORMED;
-    MathStatus status=jeu_begin(tableau,cell);
+    if(!tableau || tableau->active) return YT_MALFORMED;
+    SkewTableau result=*tableau;
+    MathStatus status=jeu_begin(&result,cell);
     if(status!=YT_OK) return status;
-    while(tableau->active)
-        if(jeu_step(tableau)==JEU_INVALID) return YT_MALFORMED;
+    while(result.active)
+        if(jeu_step(&result)==JEU_INVALID) return YT_MALFORMED;
+    *tableau=result;
     return YT_OK;
 }
 
 MathStatus jeu_rectify(SkewTableau *tableau)
 {
-    while(tableau->active)
-        if(jeu_step(tableau)==JEU_INVALID) return YT_MALFORMED;
-    while(tableau->inner.count) {
-        int row=tableau->inner.count-1;
-        Cell start={row+1,tableau->inner.rows[row]};
-        MathStatus status=jeu_slide(tableau,start);
+    if(!tableau || !(tableau->active ? skew_active_valid(tableau)
+                                      : skew_tableau_validate(tableau).semistandard))
+        return YT_MALFORMED;
+    SkewTableau result=*tableau;
+    while(result.active)
+        if(jeu_step(&result)==JEU_INVALID) return YT_MALFORMED;
+    while(result.inner.count) {
+        int row=result.inner.count-1;
+        Cell start={row+1,result.inner.rows[row]};
+        MathStatus status=jeu_slide(&result,start);
         if(status!=YT_OK) return status;
     }
+    *tableau=result;
     return YT_OK;
 }

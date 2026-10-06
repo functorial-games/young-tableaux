@@ -8,7 +8,11 @@
 typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT, ROW_BLOCKS, DISABLED_BUTTON } ControlKind;
 typedef struct { int x,y,w,h; } Rect;
 /* Output projection: generic ragged rows of tiles, optional integer labels. */
-typedef struct { int count,rows[64],values[64][64]; bool numbers; } TileProjection;
+typedef struct {
+    int count,rows[64],starts[64],values[64][64];
+    uint8_t marks[64][64];
+    bool numbers;
+} TileProjection;
 typedef struct { int count, columns; } TileRowProjection;
 /* Principal-specialization projection. Hook multiplicities determine the
  * denominator factors (1-z^h); n_lambda determines the numerator z^n. */

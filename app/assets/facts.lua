@@ -82,7 +82,7 @@ end
 
 function young_layout()
   return {
-    {kind="label", text="YOUNG TABLEAUX 0.2.2"},
+    {kind="label", text="YOUNG TABLEAUX 0.3.0"},
     {kind="separator"},
     {kind="label", text="SHAPE / WEGERT"},
     {kind="field", arg=1, text="lambda: rows"},

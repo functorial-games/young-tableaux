@@ -134,6 +134,8 @@ static void nearby_tests(void)
             if(control->id) { CHECK(!ids[control->id]); ids[control->id]=true; }
         }
         for(int op=0;op<OP_COUNT;++op) CHECK(ids[OP_BASE+op]);
+        CHECK(ids[RSK_START] && ids[RSK_PREV] && ids[RSK_NEXT] && ids[RSK_END]);
+        CHECK(ids[JDT_RESET] && ids[JDT_STEP] && ids[JDT_SLIDE] && ids[JDT_RECTIFY]);
     }
 
     choose_shape(c,"3,2,1"); c->french=true; console_layout(c,u,576,1152);

@@ -12,7 +12,7 @@ const OperationInfo operation_info[OP_COUNT]={
 };
 static const char *sections[]={"1 PARTITION / YOUNG DIAGRAM","2 TABLEAU","3 HOOKS / CORNERS / CELLS","4 RSK","5 JEU DE TAQUIN","6 LITTLEWOOD-RICHARDSON","7 SYMMETRIC GROUP / REPRESENTATIONS","8 SYMMETRIC FUNCTIONS","9 YOUNG GRAPH / BRANCHING","10 RANDOM / ASYMPTOTIC","11 TYPE-A / COXETER","12 GLOBAL CONVENTIONS"};
 static const char *tableau_kinds[]={"Standard","ArbitraryFilling","RowStandard","ColumnStandard","Semistandard","Skew","Shifted","Ribbon","Oscillating","KTableau"};
-static const char *field_names[FIELD_COUNT]={"","lambda: rows","tableau: rows separated by ;","permutation","mu: partition","nu: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action"};
+static const char *field_names[FIELD_COUNT]={"","lambda: rows","tableau: rows separated by ;","permutation","mu: partition","nu: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after mu"};
 static void append(char *out,const char *format,...)
 {
     size_t used=strlen(out); if(used>=UI_TEXT-1) return;
@@ -26,6 +26,25 @@ static void tiles(TileProjection *out,const Partition *p,const Tableau *t)
 {
     memset(out,0,sizeof(*out)); out->count=p->count; out->numbers=t!=NULL;
     for(int r=0;r<p->count;++r) { out->rows[r]=p->rows[r]; if(t) for(int col=0;col<p->rows[r];++col) out->values[r][col]=t->entries[r][col]; }
+}
+static int shape_row(const Partition *p,int row)
+{ return row>=0 && row<p->count?p->rows[row]:0; }
+static void skew_tiles(TileProjection *out,const SkewTableau *t)
+{
+    memset(out,0,sizeof(*out)); out->count=t->outer.count; out->numbers=true;
+    for(int row=0;row<t->outer.count;++row) {
+        int start=shape_row(&t->inner,row);
+        out->starts[row]=start; out->rows[row]=t->outer.rows[row]-start;
+        for(int local=0;local<out->rows[row];++local) {
+            int column=start+local;
+            out->values[row][local]=t->entries[row][column];
+            if(t->active && row+1==t->hole.row && column+1==t->hole.column)
+                out->marks[row][local]=2;
+            else if(t->active && ((row+1==t->hole.row && column==t->hole.column)
+                    || (row==t->hole.row && column+1==t->hole.column)))
+                out->marks[row][local]=1;
+        }
+    }
 }
 static void tableau_text(char *out,const char *label,const Tableau *t)
 {
@@ -84,11 +103,65 @@ static void refresh_tableau(Console *c)
 static void refresh_rsk(Console *c)
 {
     c->output[3][0]=0; c->rsk_ok=false;
-    if(c->insertion) { append(c->output[3],"NOT IMPLEMENTED\nColumnInsertion\nSelect RowInsertion for permutation RSK."); return; }
-    Tableau p,q; MathStatus s=permutation_rsk(c->fields[SET_PERMUTATION],&p,&q);
-    if(s!=YT_OK) { append(c->output[3],"permutation: %s",math_status(s)); return; }
-    tableau_text(c->output[3],"P: insertion tableau",&p); tableau_text(c->output[3],"Q: recording tableau",&q);
-    tiles(&c->p,&p.shape,&p); tiles(&c->q,&q.shape,&q); c->rsk_ok=true;
+    if(c->insertion) { append(c->output[3],"NOT IMPLEMENTED\nColumnInsertion\nSelect RowInsertion for RSK."); return; }
+    RSKTrace trace;
+    const char *source=c->rsk_word_mode?c->fields[SET_WORD]:c->fields[SET_PERMUTATION];
+    MathStatus status=c->rsk_word_mode?word_rsk_trace(source,c->rsk_step,&trace):permutation_rsk_trace(source,c->rsk_step,&trace);
+    if(status!=YT_OK) { append(c->output[3],"%s: %s",c->rsk_word_mode?"word":"permutation",math_status(status)); return; }
+    c->rsk_step=trace.step; c->rsk_total=trace.count;
+    append(c->output[3],"%s row RSK\nstep %d / %d\n",c->rsk_word_mode?"WORD":"PERMUTATION",trace.step,trace.count);
+    if(trace.step) {
+        append(c->output[3],"insert %d\nbump path: ",trace.inserted);
+        for(int i=0;i<trace.path_count;++i) append(c->output[3],"%s(%d,%d)",i?" -> ":"",trace.path[i].row,trace.path[i].column);
+        append(c->output[3],"\n");
+    } else append(c->output[3],"Press NEXT to insert the first entry.\n");
+    tableau_text(c->output[3],"P: insertion tableau",&trace.p);
+    tableau_text(c->output[3],"Q: recording tableau",&trace.q);
+    tiles(&c->p,&trace.p.shape,&trace.p); tiles(&c->q,&trace.q.shape,&trace.q);
+    for(int i=0;i<trace.path_count;++i) {
+        int row=trace.path[i].row-1,column=trace.path[i].column-1;
+        if(row>=0 && row<c->p.count && column>=0 && column<c->p.rows[row]) c->p.marks[row][column]=1;
+    }
+    c->rsk_ok=true;
+}
+static MathStatus selected_cell(const char *text,Cell *cell)
+{
+    int row,column; char extra;
+    if(sscanf(text," %d , %d %c",&row,&column,&extra)!=2 || row<1 || column<1) return YT_MALFORMED;
+    *cell=(Cell){row,column}; return YT_OK;
+}
+static void project_jeu(Console *c)
+{
+    c->output[4][0]=0; c->jeu_loaded=true; skew_tiles(&c->jeu_tiles,&c->jeu);
+    append(c->output[4],"Forward jeu de taquin\nouter lambda = "); partition_text(c->output[4],&c->jeu.outer);
+    append(c->output[4],"inner mu = "); partition_text(c->output[4],&c->jeu.inner);
+    if(c->jeu.active) {
+        c->jeu_ok=true;
+        append(c->output[4],"active hole = (%d,%d)\nSTEP moves the smaller right/below entry; ties move the lower entry.\n",c->jeu.hole.row,c->jeu.hole.column);
+    } else {
+        SkewValidation v=skew_tableau_validate(&c->jeu);
+        c->jeu_ok=v.semistandard;
+        append(c->output[4],"rows weakly increasing: %s\ncolumns strictly increasing: %s\npositive entries: %s\nsemistandard: %s\nstandard: %s\n",
+               v.rows_weak?"YES":"NO",v.columns_strict?"YES":"NO",v.positive?"YES":"NO",v.semistandard?"YES":"NO",v.standard?"YES":"NO");
+    }
+}
+static void refresh_jeu(Console *c)
+{
+    memset(&c->jeu,0,sizeof(c->jeu)); memset(&c->jeu_tiles,0,sizeof(c->jeu_tiles));
+    c->jeu_loaded=false; c->jeu_ok=false; c->output[4][0]=0;
+    MathStatus status=skew_tableau_parse(c->fields[SET_LAMBDA],c->fields[SET_MU],c->fields[SET_SKEW_TABLEAU],&c->jeu);
+    if(status!=YT_OK) {
+        append(c->output[4],"skew tableau: %s\nUse lambda as outer shape, mu as inner shape, and enter only the visible skew cells in each row.",math_status(status));
+        return;
+    }
+    project_jeu(c);
+}
+static bool finish_jeu_slide(Console *c)
+{
+    while(c->jeu.active) if(jeu_step(&c->jeu)==JEU_INVALID) {
+        c->jeu_ok=false; snprintf(c->output[4],UI_TEXT,"INVALID jeu de taquin state"); return false;
+    }
+    project_jeu(c); return c->jeu_ok;
 }
 static void layout_add(Console *c,ScriptLayoutKind kind,int arg,const char *text)
 {
@@ -100,7 +173,7 @@ static void layout_add(Console *c,ScriptLayoutKind kind,int arg,const char *text
 static void default_layout(Console *c)
 {
     c->script_layout_count=0;
-    layout_add(c,SCRIPT_LABEL,0,"YOUNG TABLEAUX 0.2.2");
+    layout_add(c,SCRIPT_LABEL,0,"YOUNG TABLEAUX 0.3.0");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
     layout_add(c,SCRIPT_LABEL,0,"SHAPE / WEGERT");
     layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"lambda: rows");
@@ -120,31 +193,48 @@ static void default_layout(Console *c)
 void console_init(Console *c)
 {
     memset(c,0,sizeof(*c));
-    const char *defaults[FIELD_COUNT]={"","3,2,1","1,2,4;3,5;6","3,1,4,2","2,1","3,2,1","1,1","1,2,1","1,1,2;1,2,1","1,0;0,1","6","3","2,1","0","2","1","Schur","1","1","x1,x2","1","[]","Plancherel","1,2,1","1,2,3,4","RowReading","LeftAction"};
+    const char *defaults[FIELD_COUNT]={"","3,2,1","1,2,4;3,5;6","3,1,4,2","1","3,2,1","1,1","1,2,1","1,1,2;1,2,1","1,0;0,1","6","3","2,1","0","2","1","Schur","1","1","x1,x2","1","[]","Plancherel","1,2,1","1,2,3,4","RowReading","LeftAction","1,3;2,5;4"};
     for(int i=1;i<FIELD_COUNT;++i) snprintf(c->fields[i],sizeof(c->fields[i]),"%s",defaults[i]);
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
-    snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nPermutation list is one-line notation.\nReading and group action controls are inventory only.\nNo semistandard/skew/shifted validation in v0.1.");
+    snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nRow RSK bumps the first strictly greater entry.\nJeu de taquin uses weak rows / strict columns; ties between right and below move the lower entry.\nSkew rows contain only visible cells after mu.");
     snprintf(c->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nLoading...");
-    default_layout(c);
-    refresh_partition(c); refresh_tableau(c); refresh_rsk(c);
+    default_layout(c); c->rsk_step=YT_DIM;
+    refresh_partition(c); refresh_tableau(c); refresh_rsk(c); refresh_jeu(c);
 }
 void console_run(Console *c,Operation op)
 {
     if(op<0 || op>=OP_COUNT) return;
     int section=operation_info[op].section;
     switch(op) {
-    case DisplayPartition: case ConjugatePartition: case ListCells:
-    case ComputeHookLengths: case ComputeHookProduct: case CountStandardTableaux:
-    case FindCorners: case FindAddableCells: case FindRemovableCells: refresh_partition(c); return;
+    case DisplayPartition: refresh_partition(c); refresh_jeu(c); return;
+    case ConjugatePartition: case ListCells: case ComputeHookLengths: case ComputeHookProduct:
+    case CountStandardTableaux: case FindCorners: case FindAddableCells: case FindRemovableCells: refresh_partition(c); return;
     case DisplayTableau: case ValidateTableau: refresh_tableau(c); return;
-    case RSKPermutation: refresh_rsk(c); return;
+    case RSKPermutation: c->rsk_word_mode=false; c->rsk_step=YT_DIM; refresh_rsk(c); return;
+    case RSKWord: c->rsk_word_mode=true; c->rsk_step=YT_DIM; refresh_rsk(c); return;
+    case JeuDeTaquinSlide: {
+        if(!c->jeu_ok) { refresh_jeu(c); if(!c->jeu_ok) return; }
+        if(!c->jeu.active) {
+            Cell cell;
+            if(selected_cell(c->fields[SET_CELL],&cell)!=YT_OK || jeu_begin(&c->jeu,cell)!=YT_OK) {
+                snprintf(c->output[4],UI_TEXT,"Selected cell must be a removable inner corner of mu."); return;
+            }
+        }
+        finish_jeu_slide(c); return;
+    }
+    case Rectify: {
+        if(!c->jeu_ok) { refresh_jeu(c); if(!c->jeu_ok) return; }
+        MathStatus status=jeu_rectify(&c->jeu);
+        if(status!=YT_OK) { snprintf(c->output[4],UI_TEXT,"Rectification failed: %s",math_status(status)); c->jeu_ok=false; return; }
+        project_jeu(c); return;
+    }
     case RepresentationDimension: {
-        Partition p; uint64_t count; MathStatus s=partition_parse(c->fields[SET_LAMBDA],&p);
-        if(s==YT_OK) s=partition_standard_count(&p,&count);
+        Partition p; uint64_t count; MathStatus status=partition_parse(c->fields[SET_LAMBDA],&p);
+        if(status==YT_OK) status=partition_standard_count(&p,&count);
         c->output[section][0]=0;
         if(strcmp(c->fields[SET_CHARACTERISTIC],"0")) append(c->output[section],"NOT IMPLEMENTED\nCharacteristicP representation dimension\ninput: Partition\noutput: Integer");
-        else if(s==YT_OK) append(c->output[section],"Characteristic zero Specht dimension = %" PRIu64,count);
-        else append(c->output[section],"%s",math_status(s));
+        else if(status==YT_OK) append(c->output[section],"Characteristic zero Specht dimension = %" PRIu64,count);
+        else append(c->output[section],"%s",math_status(status));
         return;
     }
     default: break;
@@ -157,6 +247,15 @@ static void field(Console *c,Controls *u,int id)
 { controls_add(u,0,LABEL,field_names[id],0,NULL); controls_add(u,id,FIELD,c->fields[id],0,NULL); }
 static void diagram(Controls *u,const char *label,const TileProjection *p)
 { controls_add(u,0,LABEL,label,0,NULL); controls_add(u,0,DIAGRAM,"",(p->count?p->count:1)*12*u->scale+8*u->scale,p); }
+static void button_strip(Controls *u,const int *ids,const char *const *labels,int count)
+{
+    int scale=u->scale,margin=4*scale,gap=4*scale,width=u->width-2*margin;
+    int y=u->content,height=24*scale;
+    for(int i=0;i<count;++i) {
+        int left=margin+i*(width+gap)/count,right=margin+(i+1)*(width+gap)/count-gap;
+        controls_add_at(u,ids[i],BUTTON,labels[i],(Rect){left,y,right-left,height},NULL);
+    }
+}
 static void scripted_top(Console *c,Controls *u)
 {
     for(int i=0;i<c->script_layout_count;++i) {
@@ -209,13 +308,24 @@ void console_layout(Console *c,Controls *u,int w,int h)
                 controls_add(u,CHOOSE_TABLEAU_KIND,CHOICE,kind_label,0,NULL);
             }
             controls_add(u,CHOOSE_STANDARD,CHOICE,c->decreasing?"Standard convention: decreasing":"Standard convention: increasing",0,NULL); break;
-        case 2: field(c,u,SET_CELL); controls_add(u,0,LABEL,"Hook facts and diagram are shown near the top.",0,NULL); break;
-        case 3:
-            controls_add(u,0,LABEL,"Ordinary permutation RSK: insert left to right. RowInsertion bumps first strictly greater entry; Q records insertion step in the new cell. P,Q increase along rows and down columns.",0,NULL);
+        case 2: controls_add(u,0,LABEL,"Hook facts and diagram are shown near the top. Cell-based add/remove operations use the selected-cell field in the jeu de taquin section below.",0,NULL); break;
+        case 3: {
+            controls_add(u,0,LABEL,"Row RSK inserts left to right and bumps the first strictly greater entry. P and Q update insertion by insertion; highlighted P cells are the current bump path.",0,NULL);
             field(c,u,SET_PERMUTATION); field(c,u,SET_WORD); field(c,u,SET_BIWORD); field(c,u,SET_MATRIX);
-            controls_add(u,CHOOSE_INSERTION,CHOICE,c->insertion?"ColumnInsertion: not implemented":"RowInsertion: implemented",0,NULL); break;
-        case 4: controls_add(u,0,LABEL,"Uses tableau and selected cell above.",0,NULL); break;
-        case 5: controls_add(u,0,LABEL,"Uses lambda above; LR uses outer nu / inner lambda and content mu.",0,NULL); field(c,u,SET_MU); field(c,u,SET_NU); break;
+            controls_add(u,CHOOSE_INSERTION,CHOICE,c->insertion?"ColumnInsertion: not implemented":"RowInsertion",0,NULL);
+            const int ids[]={RSK_START,RSK_PREV,RSK_NEXT,RSK_END}; const char *labels[]={"START","PREV","NEXT","END"};
+            button_strip(u,ids,labels,4); break;
+        }
+        case 4: {
+            controls_add(u,0,LABEL,"lambda is the outer shape. mu is the inner shape. Enter only the visible skew cells in each row. STEP moves one entry into the hole.",0,NULL);
+            field(c,u,SET_MU); field(c,u,SET_SKEW_TABLEAU); field(c,u,SET_CELL);
+            if(c->jeu_loaded) diagram(u,"jeu de taquin board",&c->jeu_tiles);
+            const int ids[]={JDT_RESET,JDT_STEP,JDT_SLIDE,JDT_RECTIFY}; const char *labels[]={"RESET","STEP","SLIDE","RECTIFY"};
+            button_strip(u,ids,labels,4); break;
+        }
+        case 5:
+            controls_add(u,0,LABEL,"Uses lambda above; LR uses outer nu / inner lambda and content mu. The mu field is immediately above.",0,NULL);
+            field(c,u,SET_NU); break;
         case 6: field(c,u,SET_CHARACTERISTIC); field(c,u,SET_PRIME); field(c,u,SET_HECKE); controls_add(u,0,LABEL,"Uses lambda and permutation above. Only characteristic-zero dimension is implemented.",0,NULL); break;
         case 7: field(c,u,SET_BASIS); field(c,u,SET_COEFFICIENTS); field(c,u,SET_VARIABLES); field(c,u,SET_Q); field(c,u,SET_T); break;
         case 8: field(c,u,SET_PATH); controls_add(u,0,LABEL,"Start lambda, end nu; paths encode box additions.",0,NULL); break;
@@ -240,6 +350,26 @@ void console_event(Console *c,Controls *u,ControlEvent e)
     if(nearby_event(c,u,e)) return;
     if(e.id>=OP_BASE) { console_run(c,(Operation)(e.id-OP_BASE)); return; }
     switch(e.id) {
+    case RSK_START: c->rsk_step=0; refresh_rsk(c); break;
+    case RSK_PREV: if(c->rsk_step>0) --c->rsk_step; refresh_rsk(c); break;
+    case RSK_NEXT: if(c->rsk_step<c->rsk_total) ++c->rsk_step; refresh_rsk(c); break;
+    case RSK_END: c->rsk_step=YT_DIM; refresh_rsk(c); break;
+    case JDT_RESET: refresh_jeu(c); break;
+    case JDT_STEP: {
+        if(!c->jeu_ok) { refresh_jeu(c); if(!c->jeu_ok) break; }
+        if(!c->jeu.active) {
+            Cell cell;
+            if(selected_cell(c->fields[SET_CELL],&cell)!=YT_OK || jeu_begin(&c->jeu,cell)!=YT_OK) {
+                snprintf(c->output[4],UI_TEXT,"Selected cell must be a removable inner corner of mu."); break;
+            }
+        }
+        JeuStepResult result=jeu_step(&c->jeu);
+        if(result==JEU_INVALID) { snprintf(c->output[4],UI_TEXT,"INVALID jeu de taquin state"); c->jeu_ok=false; }
+        else project_jeu(c);
+        break;
+    }
+    case JDT_SLIDE: console_run(c,JeuDeTaquinSlide); break;
+    case JDT_RECTIFY: console_run(c,Rectify); break;
     case CHOOSE_ORIENTATION: c->french=!c->french; break;
     case CHOOSE_STANDARD: c->decreasing=!c->decreasing; refresh_tableau(c); break;
     case CHOOSE_INSERTION: c->insertion=!c->insertion; refresh_rsk(c); break;
@@ -276,9 +406,10 @@ void console_key(Console *c,Controls *u,int key)
         else { snprintf(c->output[11],UI_TEXT,"INPUT LIMIT: 511 characters"); return; }
     }
     if(u->focus==SET_LAMBDA) {
-        c->shape_history_count=0;
-        refresh_partition(c); refresh_tableau(c); c->scripted_facts[0]=0;
+        c->shape_history_count=0; refresh_partition(c); refresh_tableau(c); refresh_jeu(c); c->scripted_facts[0]=0;
     }
     if(u->focus==SET_TABLEAU) refresh_tableau(c);
-    if(u->focus==SET_PERMUTATION) refresh_rsk(c);
+    if(u->focus==SET_PERMUTATION) { c->rsk_word_mode=false; c->rsk_step=YT_DIM; refresh_rsk(c); }
+    if(u->focus==SET_WORD) { c->rsk_word_mode=true; c->rsk_step=YT_DIM; refresh_rsk(c); }
+    if(u->focus==SET_MU || u->focus==SET_SKEW_TABLEAU) refresh_jeu(c);
 }

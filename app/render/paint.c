@@ -139,15 +139,18 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
                             cell>1?cell-1:1,cell>1?cell-1:1,BLUE);
         } else if(c->kind==DIAGRAM) {
             const TileProjection *p=c->projection;
-            int max=1; for(int row=0;row<p->count;++row) if(p->rows[row]>max) max=p->rows[row];
+            int max=1;
+            for(int row=0;row<p->count;++row)
+                if(p->starts[row]+p->rows[row]>max) max=p->starts[row]+p->rows[row];
             int cell=12*scale, available=r.w-8*scale;
             if(cell*max>available) cell=available/max;
             if(cell<1) cell=1;
             for(int row=0;row<p->count;++row) for(int col=0;col<p->rows[row];++col) {
                 int y=r.y+4*scale+(reverse?p->count-1-row:row)*12*scale;
-                int x=r.x+4*scale+col*cell;
-                raster_rect(b,x,y,cell-1,10*scale,BLUE);
-                if(p->numbers) {
+                int x=r.x+4*scale+(p->starts[row]+col)*cell;
+                uint32_t tile=p->marks[row][col]?FG:BLUE;
+                raster_rect(b,x,y,cell-1,10*scale,tile);
+                if(p->numbers && p->values[row][col]) {
                     char number[16]; snprintf(number,sizeof(number),"%d",p->values[row][col]);
                     int small=scale>1?scale-1:1;
                     if(raster_text_width(number,small)<cell) raster_text(b,number,x+1,y+scale,small,BG);

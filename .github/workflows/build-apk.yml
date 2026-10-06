@@ -141,8 +141,8 @@ jobs:
             --manifest "$project/app/AndroidManifest.xml" \
             --min-sdk-version 26 \
             --target-sdk-version 34 \
-            --version-code 4 \
-            --version-name 0.2.2 \
+            --version-code 5 \
+            --version-name 0.3.0 \
             -o "$out/unsigned.apk"
 
           (

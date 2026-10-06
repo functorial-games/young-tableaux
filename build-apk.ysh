@@ -45,7 +45,7 @@ call objects->append(lua_object)
 call objects->append("$output/objects/glue.o")
 "$compiler" -marm -march=armv7-a -shared -Wl,--no-undefined -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,-z,max-page-size=16384 -Wl,-u,ANativeActivity_onCreate @objects -landroid -llog -lm -o "$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
 "$clang_bin/llvm-strip" --strip-unneeded "$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
-"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" -A "$project/app/assets" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 6 --version-name 0.3.1 -o "$output/unsigned.apk"
+"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" -A "$project/app/assets" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 7 --version-name 0.3.2 -o "$output/unsigned.apk"
 cd "$output/staging"
 touch -t 198001010000 lib/armeabi-v7a/libyoungtableaux.so
 zip -X -0 -q "$output/unsigned.apk" lib/armeabi-v7a/libyoungtableaux.so

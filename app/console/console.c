@@ -10,9 +10,9 @@ const OperationInfo operation_info[OP_COUNT]={
 #include "operations.def"
 #undef OP
 };
-static const char *sections[]={"1 PARTITION / YOUNG DIAGRAM","2 TABLEAU","3 HOOKS / CORNERS / CELLS","4 RSK","5 JEU DE TAQUIN","6 LITTLEWOOD-RICHARDSON","7 SYMMETRIC GROUP / REPRESENTATIONS","8 SYMMETRIC FUNCTIONS","9 YOUNG GRAPH / BRANCHING","10 RANDOM / ASYMPTOTIC","11 TYPE-A / COXETER","12 GLOBAL CONVENTIONS"};
+static const char *sections[]={"1 Partition / Young diagram","2 Tableau","3 Hooks / corners / cells","4 RSK","5 Jeu de taquin","6 Littlewood-Richardson","7 Symmetric group / representations","8 Symmetric functions","9 Young graph / branching","10 Random / asymptotic","11 Type-A / Coxeter","12 Global conventions"};
 static const char *tableau_kinds[]={"Standard","ArbitraryFilling","RowStandard","ColumnStandard","Semistandard","Skew","Shifted","Ribbon","Oscillating","KTableau"};
-static const char *field_names[FIELD_COUNT]={"","lambda: rows","tableau: rows separated by ;","permutation","mu: partition","nu: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after mu"};
+static const char *field_names[FIELD_COUNT]={"","λ: rows","tableau: rows separated by ;","permutation","mu: partition","nu: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after mu"};
 static void append(char *out,const char *format,...)
 {
     size_t used=strlen(out); if(used>=UI_TEXT-1) return;
@@ -61,10 +61,10 @@ static void refresh_partition(Console *c)
     memset(&c->wegert,0,sizeof(c->wegert));
     c->wegert.center_real=real; c->wegert.center_imag=imag;
     c->wegert.half_height=half_height>0.0?half_height:1.5;
-    if(s!=YT_OK) { append(c->output[0],"%s\n",math_status(s)); append(c->output[2],"lambda: %s\n",math_status(s)); return; }
+    if(s!=YT_OK) { append(c->output[0],"%s\n",math_status(s)); append(c->output[2],"λ: %s\n",math_status(s)); return; }
     Partition conjugate=partition_conjugate(&p);
     tiles(&c->partition,&p,NULL); tiles(&c->conjugate,&conjugate,NULL);
-    append(c->output[0],"VALID partition\nsize |lambda| = %d\nconjugate = ",partition_size(&p)); partition_text(c->output[0],&conjugate);
+    append(c->output[0],"Valid partition\nsize |λ| = %d\nconjugate = ",partition_size(&p)); partition_text(c->output[0],&conjugate);
     Cell cells[YT_CELLS+1]; int n=partition_cells(&p,cells); cells_text(c->output[0],"cells",cells,n);
     n=partition_removable(&p,cells); cells_text(c->output[2],"corners / removable",cells,n);
     n=partition_addable(&p,cells); cells_text(c->output[2],"addable",cells,n);
@@ -85,7 +85,7 @@ static void refresh_partition(Console *c)
     uint64_t value; s=partition_hook_product(&p,&value);
     if(s==YT_OK) append(c->output[2],"hook product = %" PRIu64 "\n",value); else append(c->output[2],"hook product: %s\n",math_status(s));
     s=partition_standard_count(&p,&value);
-    if(s==YT_OK) append(c->output[2],"f^lambda = %" PRIu64 "\n",value); else append(c->output[2],"f^lambda: %s\n",math_status(s));
+    if(s==YT_OK) append(c->output[2],"f^λ = %" PRIu64 "\n",value); else append(c->output[2],"f^λ: %s\n",math_status(s));
 }
 static void refresh_tableau(Console *c)
 {
@@ -133,7 +133,7 @@ static MathStatus selected_cell(const char *text,Cell *cell)
 static void project_jeu(Console *c)
 {
     c->output[4][0]=0; c->jeu_loaded=true; skew_tiles(&c->jeu_tiles,&c->jeu);
-    append(c->output[4],"Forward jeu de taquin\nouter lambda = "); partition_text(c->output[4],&c->jeu.outer);
+    append(c->output[4],"Forward jeu de taquin\nouter λ = "); partition_text(c->output[4],&c->jeu.outer);
     append(c->output[4],"inner mu = "); partition_text(c->output[4],&c->jeu.inner);
     if(c->jeu.active) {
         c->jeu_ok=true;
@@ -151,7 +151,7 @@ static void refresh_jeu(Console *c)
     c->jeu_loaded=false; c->jeu_ok=false; c->output[4][0]=0;
     MathStatus status=skew_tableau_parse(c->fields[SET_LAMBDA],c->fields[SET_MU],c->fields[SET_SKEW_TABLEAU],&c->jeu);
     if(status!=YT_OK) {
-        append(c->output[4],"skew tableau: %s\nUse lambda as outer shape, mu as inner shape, and enter only the visible skew cells in each row.",math_status(status));
+        append(c->output[4],"skew tableau: %s\nUse λ as outer shape, mu as inner shape, and enter only the visible skew cells in each row.",math_status(status));
         return;
     }
     project_jeu(c);
@@ -173,22 +173,21 @@ static void layout_add(Console *c,ScriptLayoutKind kind,int arg,const char *text
 static void default_layout(Console *c)
 {
     c->script_layout_count=0;
-    layout_add(c,SCRIPT_LABEL,0,"YOUNG TABLEAUX 0.3.0");
+    layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.3.1");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
-    layout_add(c,SCRIPT_LABEL,0,"SHAPE / WEGERT");
-    layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"lambda: rows");
+    layout_add(c,SCRIPT_LABEL,0,"Shape");
+    layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"λ: rows");
     layout_add(c,SCRIPT_SHAPE,0,"");
-    layout_add(c,SCRIPT_LABEL,0,"WEGERT PLOT: s_lambda(1,z,z^2,...)");
     layout_add(c,SCRIPT_WEGERT,160,"");
     layout_add(c,SCRIPT_PLOT_CONTROLS,0,"");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
-    layout_add(c,SCRIPT_LABEL,0,"DERIVED FACTS");
+    layout_add(c,SCRIPT_LABEL,0,"Derived facts");
     layout_add(c,SCRIPT_OUTPUT,0,"");
     layout_add(c,SCRIPT_OUTPUT,2,"");
-    layout_add(c,SCRIPT_HOOKS,0,"hook cells");
+    layout_add(c,SCRIPT_HOOKS,0,"Hook cells");
     layout_add(c,SCRIPT_FACTS,0,"");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
-    layout_add(c,SCRIPT_LABEL,0,"MORE OPERATIONS");
+    layout_add(c,SCRIPT_LABEL,0,"More operations");
 }
 void console_init(Console *c)
 {
@@ -197,7 +196,7 @@ void console_init(Console *c)
     for(int i=1;i<FIELD_COUNT;++i) snprintf(c->fields[i],sizeof(c->fields[i]),"%s",defaults[i]);
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
     snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nRow RSK bumps the first strictly greater entry.\nJeu de taquin uses weak rows / strict columns; ties between right and below move the lower entry.\nSkew rows contain only visible cells after mu.");
-    snprintf(c->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nLoading...");
+    snprintf(c->scripted_facts,UI_TEXT,"Schur specialization\nLoading...");
     default_layout(c); c->rsk_step=YT_DIM;
     refresh_partition(c); refresh_tableau(c); refresh_rsk(c); refresh_jeu(c);
 }

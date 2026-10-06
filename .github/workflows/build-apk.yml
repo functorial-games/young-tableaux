@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - sun-y1-native-exploration
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:

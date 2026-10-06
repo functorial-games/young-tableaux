@@ -97,7 +97,7 @@ function young_layout()
     {kind="hooks", text="hook cells"},
     {kind="facts"},
     {kind="separator"},
-    {kind="label", text="MORE OPERATIONS / KITCHEN SINK"}
+    {kind="label", text="MORE OPERATIONS"}
   }
 end
 

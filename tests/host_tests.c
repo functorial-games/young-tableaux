@@ -124,6 +124,9 @@ static void tableau_operations(void)
     CHECK(partition_add_cell(&p,(Cell){2,2},&changed)==YT_OK);
     CHECK(equal_partition(changed,partition("2,2")));
     CHECK(partition_add_cell(&p,(Cell){2,3},&changed)==YT_MALFORMED);
+    Partition malformed_partition={2,{1,2}};
+    CHECK(partition_add_cell(&malformed_partition,(Cell){2,3},&changed)==YT_MALFORMED);
+    CHECK(partition_remove_cell(&malformed_partition,(Cell){2,2},&changed)==YT_MALFORMED);
     p=partition("2,2");
     CHECK(partition_remove_cell(&p,(Cell){2,2},&changed)==YT_OK);
     CHECK(equal_partition(changed,partition("2,1")));
@@ -218,6 +221,11 @@ static void jeu_de_taquin(void)
     CHECK(jeu_state_parse("2,1","2","1;2",&tableau)==YT_MALFORMED);
     CHECK(jeu_state_parse("2,1","1","1;2",&tableau)==YT_OK);
     CHECK(jeu_begin(&tableau,(Cell){1,2})==YT_MALFORMED);
+
+    CHECK(jeu_state_parse("2,2","[]","4,3;2,1",&tableau)==YT_OK);
+    CHECK(jeu_rectify(&tableau)==YT_MALFORMED);
+    CHECK(jeu_state_parse("2,1","1","0;1",&tableau)==YT_OK);
+    CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_MALFORMED);
 }
 
 static void interaction(void)
@@ -252,8 +260,15 @@ static void interaction(void)
     CHECK(raster_text_width("−",2)==raster_text_width("-",2));
     CHECK(raster_text_width("÷",2)==raster_text_width("/",2));
     CHECK(raster_text_width("×",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("…",2)==raster_text_width("x",2));
     CHECK(raster_text_width("²",3)==raster_text_width("^2",3));
     CHECK(raster_text_width("₁",3)==raster_text_width("_1",3));
+    uint32_t ellipsis_pixels[8*8]={0}, fallback_pixels[8*8]={0};
+    Canvas ellipsis_canvas={.width=8,.height=8,.stride=8,.bits=ellipsis_pixels,.clip_top=0,.clip_bottom=8};
+    Canvas fallback_canvas={.width=8,.height=8,.stride=8,.bits=fallback_pixels,.clip_top=0,.clip_bottom=8};
+    raster_text(&ellipsis_canvas,"…",0,0,1,0xffffffffU);
+    raster_text(&fallback_canvas,"?",0,0,1,0xffffffffU);
+    CHECK(memcmp(ellipsis_pixels,fallback_pixels,sizeof(ellipsis_pixels))!=0);
     CHECK(c->wegert.valid); CHECK(c->wegert.n_lambda==4); CHECK(c->wegert.max_hook==5);
     CHECK(c->jeu_loaded && c->jeu_ok);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_STEP});

@@ -1,0 +1,178 @@
+name: Build Young Tableaux APK
+
+on:
+  push:
+    branches:
+      - sun-y1-native-exploration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install pinned Android packages
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018"
+
+      - name: Fetch stable public Wegert signer
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL \
+            "https://raw.githubusercontent.com/isomorphismes/wegert/dfa3751f0282cdf6a2083c97063b0e8e996d0d92/_/build/app/wegert-debug.keystore" \
+            -o "$RUNNER_TEMP/wegert-debug.keystore"
+          keytool -exportcert \
+            -keystore "$RUNNER_TEMP/wegert-debug.keystore" \
+            -storetype PKCS12 \
+            -storepass wegert-debug \
+            -alias wegert-debug |
+            sha256sum |
+            grep -qi '^de9b1d47c5a65e6d46a204b79dd9ee566b9d3c9832ba81ebc4213d3392e92ff9 '
+
+      - name: Compile and package ARMv7 NativeActivity APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          project="$GITHUB_WORKSPACE"
+          sdk="$ANDROID_HOME"
+          ndk="$ANDROID_HOME/ndk/27.2.12479018"
+          tools="$sdk/build-tools/35.0.0"
+          clang_bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          glue="$ndk/sources/android/native_app_glue"
+          out="$project/build"
+          compiler="$clang_bin/armv7a-linux-androideabi26-clang"
+
+          rm -rf "$out"
+          mkdir -p "$out/objects" "$out/staging/lib/armeabi-v7a"
+
+          flags=(
+            -std=c17 -O2 -fPIC -marm -march=armv7-a
+            -ffunction-sections -fdata-sections
+            -fstack-protector-strong -D_FORTIFY_SOURCE=2
+            -Wall -Wextra -Werror -Wpedantic -Wshadow
+          )
+          includes=(
+            "-I$project/app/core"
+            "-I$project/app/ui"
+            "-I$project/app/console"
+            "-I$project/app/render"
+            "-I$project/app/lua"
+            "-I$project/third_party/lua"
+            -isystem "$glue"
+          )
+
+          sources=(
+            core/math
+            ui/controls
+            console/console
+            render/raster
+            render/paint
+            lua/bridge
+            android/native_main
+          )
+          objects=()
+
+          for source in "${sources[@]}"; do
+            name="${source//\//_}"
+            object="$out/objects/$name.o"
+            "$compiler" "${flags[@]}" "${includes[@]}" \
+              -c "$project/app/$source.c" -o "$object"
+            objects+=("$object")
+          done
+
+          "$compiler" -std=c17 -O2 -fPIC -marm -march=armv7-a \
+            -DMAKE_LIB -w "-I$project/third_party/lua" \
+            -c "$project/third_party/lua/onelua.c" \
+            -o "$out/objects/lua.o"
+          objects+=("$out/objects/lua.o")
+
+          "$compiler" -std=c17 -O2 -fPIC -marm -march=armv7-a \
+            -isystem "$glue" \
+            -c "$glue/android_native_app_glue.c" \
+            -o "$out/objects/glue.o"
+          objects+=("$out/objects/glue.o")
+
+          "$compiler" -marm -march=armv7-a -shared \
+            -Wl,--no-undefined -Wl,--gc-sections \
+            -Wl,-z,relro,-z,now -Wl,-z,max-page-size=16384 \
+            -Wl,-u,ANativeActivity_onCreate \
+            "${objects[@]}" -landroid -llog -lm \
+            -o "$out/staging/lib/armeabi-v7a/libyoungtableaux.so"
+
+          "$clang_bin/llvm-strip" --strip-unneeded \
+            "$out/staging/lib/armeabi-v7a/libyoungtableaux.so"
+
+          "$tools/aapt2" link \
+            -I "$sdk/platforms/android-34/android.jar" \
+            -A "$project/app/assets" \
+            --manifest "$project/app/AndroidManifest.xml" \
+            --min-sdk-version 26 \
+            --target-sdk-version 34 \
+            --version-code 2 \
+            --version-name 0.2.0 \
+            -o "$out/unsigned.apk"
+
+          (
+            cd "$out/staging"
+            touch -t 198001010000 lib/armeabi-v7a/libyoungtableaux.so
+            zip -X -0 -q "$out/unsigned.apk" lib/armeabi-v7a/libyoungtableaux.so
+          )
+
+          "$tools/zipalign" -f -P 16 4 \
+            "$out/unsigned.apk" "$out/aligned.apk"
+
+          "$tools/apksigner" sign \
+            --ks "$RUNNER_TEMP/wegert-debug.keystore" \
+            --ks-type PKCS12 \
+            --ks-key-alias wegert-debug \
+            --ks-pass pass:wegert-debug \
+            --key-pass pass:wegert-debug \
+            --out "$out/young-tableaux-armeabi-v7a.apk" \
+            "$out/aligned.apk"
+
+          "$tools/apksigner" verify --verbose --print-certs \
+            "$out/young-tableaux-armeabi-v7a.apk" | tee "$out/signing.txt"
+
+          grep -qi \
+            'Signer #1 certificate SHA-256 digest: de9b1d47c5a65e6d46a204b79dd9ee566b9d3c9832ba81ebc4213d3392e92ff9' \
+            "$out/signing.txt"
+
+          "$clang_bin/llvm-readelf" -h -A -l \
+            "$out/staging/lib/armeabi-v7a/libyoungtableaux.so" \
+            > "$out/abi.txt"
+
+          "$tools/aapt2" dump badging \
+            "$out/young-tableaux-armeabi-v7a.apk" \
+            > "$out/package.txt"
+
+          sha256sum "$out/young-tableaux-armeabi-v7a.apk" | tee "$out/apk.sha256"
+          git rev-parse HEAD | tee "$out/source.txt"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: young-tableaux-apk
+          path: |
+            build/young-tableaux-armeabi-v7a.apk
+            build/apk.sha256
+            build/signing.txt
+            build/abi.txt
+            build/package.txt
+            build/source.txt
+          if-no-files-found: error
+          retention-days: 7

@@ -202,7 +202,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
     if(partition_parse(c->fields[SET_LAMBDA],&total_partition)==YT_OK)
         snprintf(total,sizeof(total),"%d",partition_size(&total_partition));
     controls_add(u,0,HERO,total,24*u->scale,NULL);
-    controls_add(u,0,LABEL,"DEBUG BUILD",0,NULL);
+    controls_add(u,0,LABEL,"YOUNG TABLEAUX 0.2.2",0,NULL);
     scripted_top(c,u);
 
     for(int s=0;s<12;++s) {

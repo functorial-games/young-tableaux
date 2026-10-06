@@ -1,12 +1,22 @@
 #ifndef YOUNG_CONTROLS_H
 #define YOUNG_CONTROLS_H
 #include <stdbool.h>
+#include <stdint.h>
 #define UI_MAX 320
 #define UI_TEXT 16384
-typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM } ControlKind;
+#define WEGERT_HOOK_MAX 127
+typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT } ControlKind;
 typedef struct { int x,y,w,h; } Rect;
 /* Output projection: generic ragged rows of tiles, optional integer labels. */
 typedef struct { int count,rows[64],values[64][64]; bool numbers; } TileProjection;
+/* Principal-specialization projection. Hook multiplicities determine the
+ * denominator factors (1-z^h); n_lambda determines the numerator z^n. */
+typedef struct {
+    bool valid;
+    int n_lambda;
+    int max_hook;
+    uint16_t hook_counts[WEGERT_HOOK_MAX+1];
+} WegertProjection;
 /* Identity is semantic, never inferred from array index or rectangle. */
 typedef struct { int id; ControlKind kind; Rect rect; char text[UI_TEXT]; const void *projection; } Control;
 typedef struct {

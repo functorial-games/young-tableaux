@@ -3,15 +3,17 @@
 #include <android_native_app_glue.h>
 #include "console.h"
 #include "paint.h"
+#include "bridge.h"
 #include <stdlib.h>
 #include <string.h>
 typedef struct {
-    struct android_app *app; Console console; Controls ui;
+    struct android_app *app; Console console; Controls ui; LuaBridge lua;
     int width,height,key_pointer,key_down; bool focused,dirty;
 } App;
 static void draw(App *state)
 {
     if(!state->app->window) return;
+    lua_bridge_refresh(&state->lua,&state->console);
     ANativeWindow_setBuffersGeometry(state->app->window,0,0,WINDOW_FORMAT_RGBA_8888);
     ANativeWindow_Buffer buffer;
     if(ANativeWindow_lock(state->app->window,&buffer,NULL)!=0) return;
@@ -101,6 +103,7 @@ void android_main(struct android_app *app)
 {
     App *s=calloc(1,sizeof(*s)); if(!s) return;
     s->app=app; console_init(&s->console); controls_init(&s->ui);
+    lua_bridge_init(&s->lua,app->activity->assetManager);
     s->key_pointer=-1; s->key_down=-1; s->dirty=true;
     if(app->savedState && app->savedStateSize==sizeof(Console)) memcpy(&s->console,app->savedState,sizeof(Console));
     app->userData=s; app->onAppCmd=command; app->onInputEvent=input;
@@ -113,5 +116,5 @@ void android_main(struct android_app *app)
         /* If no window exists, block for the next lifecycle event. */
         else s->dirty=false;
     }
-    raster_destroy(); free(s); app->userData=NULL;
+    lua_bridge_destroy(&s->lua); raster_destroy(); free(s); app->userData=NULL;
 }

@@ -17,7 +17,9 @@ enum { SET_LAMBDA=1,SET_TABLEAU,SET_PERMUTATION,SET_MU,SET_NU,SET_CELL,
 typedef struct {
     char fields[FIELD_COUNT][512];
     char output[12][UI_TEXT];
+    char scripted_facts[UI_TEXT];
     TileProjection partition,conjugate,tableau,p,q,hooks;
+    WegertProjection wegert;
     bool partition_ok,tableau_ok,rsk_ok,french,decreasing;
     int insertion,content_convention,tableau_kind;
 } Console;

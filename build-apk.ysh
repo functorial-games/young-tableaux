@@ -19,6 +19,8 @@ var clang_bin = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
 var glue = "$ndk/sources/android/native_app_glue"
 var output = "$project/build"
 test -f "$project/app/AndroidManifest.xml"
+test -f "$project/app/assets/facts.lua"
+test -f "$project/third_party/lua/onelua.c"
 test -f "$sdk/platforms/android-34/android.jar"
 test -x "$clang_bin/armv7a-linux-androideabi26-clang"
 test -f "$signer"
@@ -27,8 +29,8 @@ echo "$certificate" | rg -q 'SHA256: DE:9B:1D:47:C5:A6:5E:6D:46:A2:04:B7:9D:D9:E
 mkdir -p "$output/objects" "$output/staging/lib/armeabi-v7a"
 var compiler = "$clang_bin/armv7a-linux-androideabi26-clang"
 var flags = ['-std=c17', '-O2', '-fPIC', '-marm', '-march=armv7-a', '-ffunction-sections', '-fdata-sections', '-fstack-protector-strong', '-D_FORTIFY_SOURCE=2', '-Wall', '-Wextra', '-Werror', '-Wpedantic', '-Wshadow']
-var includes = ["-I$project/app/core", "-I$project/app/ui", "-I$project/app/console", "-I$project/app/render", '-isystem', glue]
-var sources = ['core/math', 'ui/controls', 'console/console', 'render/raster', 'render/paint', 'android/native_main']
+var includes = ["-I$project/app/core", "-I$project/app/ui", "-I$project/app/console", "-I$project/app/render", "-I$project/app/lua", "-I$project/third_party/lua", '-isystem', glue]
+var sources = ['core/math', 'ui/controls', 'console/console', 'render/raster', 'render/paint', 'lua/bridge', 'android/native_main']
 var objects = []
 for source in (sources) {
   var name = source.replace('/', '_')
@@ -36,11 +38,14 @@ for source in (sources) {
   "$compiler" @flags @includes -c "$project/app/$source.c" -o "$object"
   call objects->append(object)
 }
+var lua_object = "$output/objects/lua.o"
+"$compiler" -std=c17 -O2 -fPIC -marm -march=armv7-a -DMAKE_LIB -w "-I$project/third_party/lua" -c "$project/third_party/lua/onelua.c" -o "$lua_object"
+call objects->append(lua_object)
 "$compiler" -std=c17 -O2 -fPIC -marm -march=armv7-a -isystem "$glue" -c "$glue/android_native_app_glue.c" -o "$output/objects/glue.o"
 call objects->append("$output/objects/glue.o")
 "$compiler" -marm -march=armv7-a -shared -Wl,--no-undefined -Wl,--gc-sections -Wl,-z,relro,-z,now -Wl,-z,max-page-size=16384 -Wl,-u,ANativeActivity_onCreate @objects -landroid -llog -lm -o "$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
 "$clang_bin/llvm-strip" --strip-unneeded "$output/staging/lib/armeabi-v7a/libyoungtableaux.so"
-"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 1 --version-name 0.1.0 -o "$output/unsigned.apk"
+"$tools/aapt2" link -I "$sdk/platforms/android-34/android.jar" -A "$project/app/assets" --manifest "$project/app/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 34 --version-code 2 --version-name 0.2.0 -o "$output/unsigned.apk"
 cd "$output/staging"
 touch -t 198001010000 lib/armeabi-v7a/libyoungtableaux.so
 zip -X -0 -q "$output/unsigned.apk" lib/armeabi-v7a/libyoungtableaux.so

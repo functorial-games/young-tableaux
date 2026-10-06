@@ -1,9 +1,12 @@
 #include "paint.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #define BG 0xff211b17U
 #define FG 0xffeeeae3U
 #define BLUE 0xffc7ac76U
+#define WEGERT_TAU 6.28318530717958647692f
+#define WEGERT_LOG_10 2.30258509299404568402f
 static void wrapped(Canvas *b,const char *text,int x,int y,int scale,int columns,uint32_t color)
 {
     int col=0;
@@ -13,6 +16,76 @@ static void wrapped(Canvas *b,const char *text,int x,int y,int scale,int columns
         char one[]={*p,0};
         if(y+7*scale>b->clip_top && y<b->clip_bottom) raster_text(b,one,x+col*6*scale,y,scale,color);
         ++col;
+    }
+}
+static float clamp01(float value)
+{
+    if(value<0.0f) return 0.0f;
+    if(value>1.0f) return 1.0f;
+    return value;
+}
+static float positive_fract(float value) { return value-floorf(value); }
+static float srgb_component(float linear)
+{
+    float value=fmaxf(linear,0.0f);
+    if(value<=0.0031308f) return 12.92f*value;
+    return 1.055f*powf(value,1.0f/2.4f)-0.055f;
+}
+static uint32_t wegert_color(float phase,float log_modulus)
+{
+    float hue_degrees=360.0f*positive_fract(phase/WEGERT_TAU);
+    float band=positive_fract(log_modulus/WEGERT_LOG_10);
+    float lightness=66.0f+4.0f*band+3.0f*positive_fract(hue_degrees/100.0f);
+    float hue=hue_degrees*(WEGERT_TAU/360.0f);
+    float u_star=45.0f*cosf(hue),v_star=45.0f*sinf(hue);
+    const float white_u=0.19783982482140777f,white_v=0.46833630293240974f;
+    float y=lightness>8.0f?powf((lightness+16.0f)/116.0f,3.0f):lightness/903.2962962962963f;
+    float u_prime=u_star/(13.0f*lightness)+white_u;
+    float v_prime=v_star/(13.0f*lightness)+white_v;
+    float x=(9.0f*y*u_prime)/(4.0f*v_prime);
+    float z=y*(12.0f-3.0f*u_prime-20.0f*v_prime)/(4.0f*v_prime);
+    float red=clamp01(srgb_component(3.2404542f*x-1.5371385f*y-0.4985314f*z));
+    float green=clamp01(srgb_component(-0.9692660f*x+1.8760108f*y+0.0415560f*z));
+    float blue=clamp01(srgb_component(0.0556434f*x-0.2040259f*y+1.0572252f*z));
+    uint32_t r=(uint32_t)lrintf(red*255.0f),g=(uint32_t)lrintf(green*255.0f),bl=(uint32_t)lrintf(blue*255.0f);
+    return 0xff000000U|(bl<<16)|(g<<8)|r;
+}
+static void paint_wegert(Canvas *b,Rect r,const WegertProjection *projection)
+{
+    if(!projection || !projection->valid || r.w<2 || r.h<2) return;
+    int local_top=b->clip_top>r.y?b->clip_top-r.y:0;
+    int local_bottom=b->clip_bottom<r.y+r.h?b->clip_bottom-r.y:r.h;
+    if(local_top<0) local_top=0;
+    if(local_bottom>r.h) local_bottom=r.h;
+    if(local_top>=local_bottom) return;
+    const int sample=2;
+    int start=(local_top/sample)*sample;
+    float half_height=1.5f,aspect=(float)r.w/(float)r.h;
+    for(int py=start;py<local_bottom;py+=sample) {
+        float yi=half_height*(1.0f-2.0f*(float)py/(float)(r.h-1));
+        for(int px=0;px<r.w;px+=sample) {
+            float zr=half_height*aspect*(2.0f*(float)px/(float)(r.w-1)-1.0f);
+            float zi=yi;
+            float radius=fmaxf(hypotf(zr,zi),1.0e-12f);
+            float phase=(float)projection->n_lambda*atan2f(zi,zr);
+            float log_modulus=(float)projection->n_lambda*logf(radius);
+            float pr=zr,pi=zi;
+            for(int hook=1;hook<=projection->max_hook;++hook) {
+                uint16_t multiplicity=projection->hook_counts[hook];
+                if(multiplicity) {
+                    float dr=1.0f-pr,di=-pi;
+                    float delta=fmaxf(hypotf(dr,di),1.0e-12f);
+                    phase-=(float)multiplicity*atan2f(di,dr);
+                    log_modulus-=(float)multiplicity*logf(delta);
+                }
+                float next_r=pr*zr-pi*zi;
+                pi=pr*zi+pi*zr;
+                pr=next_r;
+            }
+            int width=px+sample<=r.w?sample:r.w-px;
+            int height=py+sample<=r.h?sample:r.h-py;
+            raster_rect(b,r.x+px,r.y+py,width,height,wegert_color(phase,log_modulus));
+        }
     }
 }
 void paint_controls(Canvas *b,const Controls *u,bool reverse)
@@ -46,6 +119,8 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
                     if(raster_text_width(number,small)<cell) raster_text(b,number,x+1,y+scale,small,BG);
                 }
             }
+        } else if(c->kind==WEGERT) {
+            paint_wegert(b,r,(const WegertProjection *)c->projection);
         } else wrapped(b,c->text,8*scale,r.y+4*scale,scale,columns,c->kind==OUTPUT?BLUE:FG);
     }
     if(u->content>u->height) {

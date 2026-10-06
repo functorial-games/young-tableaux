@@ -104,8 +104,6 @@ static void rsk(void)
     }
     Tableau p,q; const char *bad[]={"1,1","0,1","1,3","-1","2,1x","1,","1;2"};
     for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);++i) CHECK(permutation_rsk(bad[i],&p,&q)==YT_MALFORMED);
-    /* Exhaustively exercise all 720 permutations of size six; independent
-     * LIS dynamic programming checks Schensted's first-row identity. */
     int values[]={1,2,3,4,5,6}; bool more=true;
     while(more) {
         char text[64]; snprintf(text,sizeof(text),"%d,%d,%d,%d,%d,%d",values[0],values[1],values[2],values[3],values[4],values[5]);
@@ -134,7 +132,10 @@ static void interaction(void)
     controls_scroll(u,999999); CHECK(u->scroll==u->content-u->height); controls_scroll(u,-99); CHECK(u->scroll==0);
     r=u->controls[1].rect; controls_scroll(u,r.y); CHECK(controls_hit(u,r.x+1,1)==7);
     controls_touch(u,TOUCH_DOWN,3,r.x+1,1); e=controls_touch(u,TOUCH_UP,3,r.x+1,1); CHECK(e.kind==EVENT_FOCUS && u->focus==7);
-    console_init(c); u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
+    console_init(c);
+    CHECK(c->wegert.valid); CHECK(c->wegert.n_lambda==4); CHECK(c->wegert.max_hook==5);
+    CHECK(c->wegert.hook_counts[1]==3 && c->wegert.hook_counts[3]==2 && c->wegert.hook_counts[5]==1);
+    u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
     CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"f^lambda = 2"));
     console_key(c,u,14); CHECK(!c->partition_ok); console_key(c,u,0); CHECK(c->partition_ok); console_key(c,u,19); CHECK(!u->focus);
     console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Nat"));
@@ -143,10 +144,14 @@ static void interaction(void)
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_STANDARD}); CHECK(c->decreasing);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_TABLEAU_KIND});
     CHECK(!c->tableau_ok && strstr(c->output[1],"NOT IMPLEMENTED"));
-    console_layout(c,u,576,1152); CHECK(u->content>10000); int separators=0;
+    console_layout(c,u,576,1152); CHECK(u->content>10000); int separators=0,wegert=0;
     bool ids[OP_BASE+OP_COUNT]={false};
-    for(int i=0;i<u->count;++i) { if(u->controls[i].kind==SEPARATOR) ++separators; int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; } }
-    CHECK(separators==12); for(int op=0;op<OP_COUNT;++op) CHECK(ids[OP_BASE+op]);
+    for(int i=0;i<u->count;++i) {
+        if(u->controls[i].kind==SEPARATOR) ++separators;
+        if(u->controls[i].kind==WEGERT) ++wegert;
+        int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
+    }
+    CHECK(separators==15); CHECK(wegert==1); for(int op=0;op<OP_COUNT;++op) CHECK(ids[OP_BASE+op]);
     u->focus=SET_LAMBDA; console_layout(c,u,576,1152); CHECK(u->height==882);
     CHECK(console_key_hit(u,0,897,1152)==0); CHECK(console_key_hit(u,575,1136,1152)==19); CHECK(console_key_hit(u,576,897,1152)==-1);
     free(u); free(c);

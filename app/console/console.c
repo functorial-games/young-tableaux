@@ -36,6 +36,7 @@ static void refresh_partition(Console *c)
 {
     Partition p; MathStatus s=partition_parse(c->fields[SET_LAMBDA],&p);
     c->partition_ok=s==YT_OK; c->output[0][0]=0; c->output[2][0]=0;
+    memset(&c->wegert,0,sizeof(c->wegert));
     if(s!=YT_OK) { append(c->output[0],"%s\n",math_status(s)); append(c->output[2],"lambda: %s\n",math_status(s)); return; }
     Partition conjugate=partition_conjugate(&p);
     tiles(&c->partition,&p,NULL); tiles(&c->conjugate,&conjugate,NULL);
@@ -44,7 +45,18 @@ static void refresh_partition(Console *c)
     n=partition_removable(&p,cells); cells_text(c->output[2],"corners / removable",cells,n);
     n=partition_addable(&p,cells); cells_text(c->output[2],"addable",cells,n);
     Tableau h={0}; h.shape=p;
-    for(int r=0;r<p.count;++r) for(int col=0;col<p.rows[r];++col) h.entries[r][col]=partition_hook(&p,r+1,col+1);
+    c->wegert.valid=true;
+    for(int r=0;r<p.count;++r) {
+        c->wegert.n_lambda+=r*p.rows[r];
+        for(int col=0;col<p.rows[r];++col) {
+            int hook=partition_hook(&p,r+1,col+1);
+            h.entries[r][col]=hook;
+            if(hook>0 && hook<=WEGERT_HOOK_MAX) {
+                ++c->wegert.hook_counts[hook];
+                if(hook>c->wegert.max_hook) c->wegert.max_hook=hook;
+            }
+        }
+    }
     tiles(&c->hooks,&p,&h); tableau_text(c->output[2],"hook lengths (rows)",&h);
     uint64_t value; s=partition_hook_product(&p,&value);
     if(s==YT_OK) append(c->output[2],"hook product = %" PRIu64 "\n",value); else append(c->output[2],"hook product: %s\n",math_status(s));
@@ -80,6 +92,7 @@ void console_init(Console *c)
     for(int i=1;i<FIELD_COUNT;++i) snprintf(c->fields[i],sizeof(c->fields[i]),"%s",defaults[i]);
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
     snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nPermutation list is one-line notation.\nReading and group action controls are inventory only.\nNo semistandard/skew/shifted validation in v0.1.");
+    snprintf(c->scripted_facts,UI_TEXT,"SCRIPTED FACTS (LUA)\nLoading...");
     refresh_partition(c); refresh_tableau(c); refresh_rsk(c);
 }
 void console_run(Console *c,Operation op)
@@ -114,18 +127,38 @@ static void diagram(Controls *u,const char *label,const TileProjection *p)
 void console_layout(Console *c,Controls *u,int w,int h)
 {
     controls_begin(u,w,h,u->focus!=0);
-    controls_add(u,0,LABEL,"YOUNG TABLEAUX 0.1\nExplore inputs, operations, outputs.\nSwipe to scroll. Tap a field to edit.",0,NULL);
+    controls_add(u,0,LABEL,"YOUNG TABLEAUX 0.2\nSimple shape first; derived facts next; deeper operations below.\nSwipe to scroll. Tap a field to edit.",0,NULL);
+
+    controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
+    controls_add(u,0,LABEL,"SHAPE",0,NULL);
+    field(c,u,SET_LAMBDA);
+    if(c->partition_ok) diagram(u,"lambda blocks",&c->partition);
+
+    controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
+    controls_add(u,0,LABEL,"DERIVED FACTS",0,NULL);
+    controls_add(u,0,OUTPUT,c->output[0],0,NULL);
+    if(c->partition_ok) {
+        diagram(u,"conjugate blocks",&c->conjugate);
+        controls_add(u,0,OUTPUT,c->output[2],0,NULL);
+        diagram(u,"hook cells",&c->hooks);
+        controls_add(u,0,OUTPUT,c->scripted_facts,0,NULL);
+        controls_add(u,0,LABEL,"WEGERT PLOT: s_lambda(1,z,z^2,...)",0,NULL);
+        controls_add(u,0,WEGERT,"",160*u->scale,&c->wegert);
+    }
+
+    controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
+    controls_add(u,0,LABEL,"MORE OPERATIONS / KITCHEN SINK",0,NULL);
     for(int s=0;s<12;++s) {
         controls_add(u,0,SEPARATOR,"",2*u->scale,NULL); controls_add(u,0,LABEL,sections[s],0,NULL);
         switch(s) {
-        case 0: field(c,u,SET_LAMBDA); break;
+        case 0: controls_add(u,0,LABEL,"Uses lambda from the top of the screen.",0,NULL); break;
         case 1: field(c,u,SET_TABLEAU); field(c,u,SET_ALPHABET); field(c,u,SET_WEIGHT);
             {
                 char kind_label[96]; snprintf(kind_label,sizeof(kind_label),"Tableau kind: %s",tableau_kinds[c->tableau_kind]);
                 controls_add(u,CHOOSE_TABLEAU_KIND,CHOICE,kind_label,0,NULL);
             }
             controls_add(u,CHOOSE_STANDARD,CHOICE,c->decreasing?"Standard convention: decreasing":"Standard convention: increasing",0,NULL); break;
-        case 2: field(c,u,SET_CELL); break;
+        case 2: field(c,u,SET_CELL); controls_add(u,0,LABEL,"Hook facts and diagram are shown near the top.",0,NULL); break;
         case 3:
             controls_add(u,0,LABEL,"Ordinary permutation RSK: insert left to right. RowInsertion bumps first strictly greater entry; Q records insertion step in the new cell. P,Q increase along rows and down columns.",0,NULL);
             field(c,u,SET_PERMUTATION); field(c,u,SET_WORD); field(c,u,SET_BIWORD); field(c,u,SET_MATRIX);
@@ -143,10 +176,8 @@ void console_layout(Console *c,Controls *u,int w,int h)
             field(c,u,SET_READING); field(c,u,SET_ACTION); break;
         }
         for(int op=0;op<OP_COUNT;++op) if(operation_info[op].section==s) controls_add(u,OP_BASE+op,BUTTON,operation_info[op].label,0,NULL);
-        controls_add(u,0,OUTPUT,c->output[s],0,NULL);
-        if(s==0 && c->partition_ok) { diagram(u,"lambda blocks",&c->partition); diagram(u,"conjugate blocks",&c->conjugate); }
+        if(s!=0 && s!=2) controls_add(u,0,OUTPUT,c->output[s],0,NULL);
         if(s==1 && c->tableau_ok) diagram(u,"filling cells",&c->tableau);
-        if(s==2 && c->partition_ok) diagram(u,"hook cells",&c->hooks);
         if(s==3 && c->rsk_ok) { diagram(u,"P cells",&c->p); diagram(u,"Q cells",&c->q); }
     }
     controls_end(u);
@@ -192,7 +223,7 @@ void console_key(Console *c,Controls *u,int key)
         if(len+length<512) memcpy(text+len,add,length+1);
         else { snprintf(c->output[11],UI_TEXT,"INPUT LIMIT: 511 characters"); return; }
     }
-    if(u->focus==SET_LAMBDA) { refresh_partition(c); refresh_tableau(c); }
+    if(u->focus==SET_LAMBDA) { refresh_partition(c); refresh_tableau(c); c->scripted_facts[0]=0; }
     if(u->focus==SET_TABLEAU) refresh_tableau(c);
     if(u->focus==SET_PERMUTATION) refresh_rsk(c);
 }

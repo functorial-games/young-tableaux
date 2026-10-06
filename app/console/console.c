@@ -126,12 +126,33 @@ static MathStatus trace_rsk_input(const Console *c,RSKTrace *trace)
     return YT_MALFORMED;
 }
 
+static MathStatus check_completed_rsk_result(const Console *c,const RSKTrace *trace)
+{
+    if(!trace->complete) return YT_OK;
+    switch(c->rsk_input_kind) {
+    case RSK_PERMUTATION_INPUT: {
+        PermutationRSKResult result;
+        return rsk_permutation_result(trace,&result);
+    }
+    case RSK_WORD_INPUT: {
+        WordRSKResult result;
+        return rsk_word_result(trace,&result);
+    }
+    case RSK_BIWORD_INPUT: case RSK_MATRIX_INPUT: {
+        BiwordRSKResult result;
+        return rsk_biword_result(trace,&result);
+    }
+    }
+    return YT_MALFORMED;
+}
+
 static void refresh_rsk(Console *c)
 {
     c->output[3][0]=0; c->rsk_ok=false;
     if(c->insertion) { append(c->output[3],"NOT IMPLEMENTED\nColumnInsertion\nSelect RowInsertion for RSK."); return; }
     RSKTrace trace;
     MathStatus status=trace_rsk_input(c,&trace);
+    if(status==YT_OK) status=check_completed_rsk_result(c,&trace);
     if(status!=YT_OK) { append(c->output[3],"RSK input: %s",math_status(status)); return; }
     c->rsk_step=trace.step; c->rsk_total=trace.count;
     const char *names[]={"PERMUTATION","WORD","BIWORD","MATRIX"};

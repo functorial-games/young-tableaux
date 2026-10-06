@@ -13,6 +13,14 @@ typedef struct {
     Tableau p, q;
     bool complete;
 } RSKTrace;
+/* Prefix traces need not have the final standard alphabet. Completed results
+ * have distinct checked boundaries, including equal insertion/recording shape. */
+typedef struct { StandardTableau insertion,recording; } PermutationRSKResult;
+typedef struct { SemistandardTableau insertion; StandardTableau recording; } WordRSKResult;
+typedef struct { SemistandardTableau insertion,recording; } BiwordRSKResult;
+MathStatus rsk_permutation_result(const RSKTrace *trace,PermutationRSKResult *out);
+MathStatus rsk_word_result(const RSKTrace *trace,WordRSKResult *out);
+MathStatus rsk_biword_result(const RSKTrace *trace,BiwordRSKResult *out);
 MathStatus permutation_parse(const char *text, Permutation *out);
 MathStatus word_parse(const char *text, Word *out);
 MathStatus biword_parse(const char *text, Biword *out);

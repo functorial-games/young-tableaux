@@ -2,6 +2,10 @@
 #define YOUNG_TABLEAU_H
 #include "partition.h"
 typedef struct { Partition shape; int entries[YT_DIM][YT_DIM]; } Tableau;
+typedef struct { Tableau filling; } StandardTableau;
+typedef struct { Tableau filling; } SemistandardTableau;
+MathStatus tableau_as_standard(const Tableau *filling,StandardTableau *out);
+MathStatus tableau_as_semistandard(const Tableau *filling,SemistandardTableau *out);
 /* Kinds are checked properties of a filling, not unchecked flags on entries. */
 typedef enum {
     TABLEAU_STANDARD, TABLEAU_ARBITRARY, TABLEAU_ROW_STANDARD, TABLEAU_COLUMN_STANDARD,

@@ -85,6 +85,43 @@ record Tableau where
   shape : SkewShape
   cells : List FilledCell
 
+-- These are the straight final RSK families. Native constructors additionally
+-- check the actual alphabet and row/column inequalities, not only the tag.
+public export
+record StandardTableau where
+  constructor MkStandardTableau
+  filling : Tableau
+  standardKind : kind filling = Standard
+  straightShape : rows (inner (shape filling)) = []
+
+public export
+record SemistandardTableau where
+  constructor MkSemistandardTableau
+  filling : Tableau
+  semistandardKind : kind filling = Semistandard
+  straightShape : rows (inner (shape filling)) = []
+
+public export
+record PermutationRSKResult where
+  constructor MkPermutationRSKResult
+  insertion : StandardTableau
+  recording : StandardTableau
+  sameShape : shape (filling insertion) = shape (filling recording)
+
+public export
+record WordRSKResult where
+  constructor MkWordRSKResult
+  insertion : SemistandardTableau
+  recording : StandardTableau
+  sameShape : shape (filling insertion) = shape (filling recording)
+
+public export
+record BiwordRSKResult where
+  constructor MkBiwordRSKResult
+  insertion : SemistandardTableau
+  recording : SemistandardTableau
+  sameShape : shape (filling insertion) = shape (filling recording)
+
 -- A filling and an in-progress hole belong to different executable types.
 public export
 record SkewTableau where
@@ -307,7 +344,7 @@ InputFor RSKPermutation = Permutation
 InputFor RSKWord = Word
 InputFor RSKBiword = Biword
 InputFor RSKMatrix = NatMatrix
-InputFor InverseRSK = (Tableau, Tableau)
+InputFor InverseRSK = PermutationRSKResult
 InputFor LittlewoodRichardsonCoefficient = (Partition, Partition, Partition)
 InputFor EnumerateLRTableaux = (Partition, Partition, Partition)
 InputFor MultiplySchurFunctions = (Partition, Partition)
@@ -355,10 +392,10 @@ OutputFor Rectify = SkewTableau
 OutputFor Promote = Tableau
 OutputFor Evacuate = Tableau
 OutputFor TransposeTableau = Tableau
-OutputFor RSKPermutation = (Tableau, Tableau)
-OutputFor RSKWord = (Tableau, Tableau)
-OutputFor RSKBiword = (Tableau, Tableau)
-OutputFor RSKMatrix = (Tableau, Tableau)
+OutputFor RSKPermutation = PermutationRSKResult
+OutputFor RSKWord = WordRSKResult
+OutputFor RSKBiword = BiwordRSKResult
+OutputFor RSKMatrix = BiwordRSKResult
 OutputFor InverseRSK = Permutation
 OutputFor LittlewoodRichardsonCoefficient = Nat
 OutputFor EnumerateLRTableaux = List Tableau

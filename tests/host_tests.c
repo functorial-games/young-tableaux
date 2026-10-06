@@ -325,4 +325,41 @@ static void interaction(void)
     free(u); free(c);
 }
 #include "nearby_tests.inc"
-int main(void) { partitions(); tableaux(); tableau_operations(); rsk(); rsk_words_and_trace(); jeu_de_taquin(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, jeu de taquin, controls, scrolling, console\n",checks); return 0; }
+static void rsk_result_families(void)
+{
+    RSKTrace trace;
+    Permutation permutation={3,{3,1,2}};
+    PermutationRSKResult standard_pair={0},saved_pair={0};
+    WordRSKResult word_pair;
+    BiwordRSKResult biword_pair;
+    CHECK(rsk_permutation(&permutation,1,&trace)==YT_OK);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(rsk_permutation(&permutation,3,&trace)==YT_OK);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_OK);
+    CHECK(tableau_validate(&standard_pair.insertion.filling.shape,&standard_pair.insertion.filling,false).standard);
+    CHECK(tableau_validate(&standard_pair.recording.filling.shape,&standard_pair.recording.filling,false).standard);
+    saved_pair=standard_pair;
+    Word word={4,{2,1,2,1}};
+    CHECK(rsk_word(&word,4,&trace)==YT_OK);
+    CHECK(rsk_word_result(&trace,&word_pair)==YT_OK);
+    CHECK(word_pair.insertion.filling.entries[0][1]==1);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(memcmp(&standard_pair,&saved_pair,sizeof(standard_pair))==0);
+    Biword biword;
+    CHECK(biword_parse("1,1,2;1,2,1",&biword)==YT_OK);
+    CHECK(rsk_biword(&biword,3,&trace)==YT_OK);
+    CHECK(rsk_biword_result(&trace,&biword_pair)==YT_OK);
+    CHECK(biword_pair.recording.filling.entries[0][1]==1);
+    CHECK(rsk_word_result(&trace,&word_pair)==YT_MALFORMED);
+    CHECK(rsk_permutation(&permutation,3,&trace)==YT_OK);
+    trace.q=(Tableau){.shape={1,{3}},.entries={{1,2,3}}};
+    StandardTableau other_shape;
+    CHECK(tableau_as_standard(&trace.q,&other_shape)==YT_OK);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(memcmp(&standard_pair,&saved_pair,sizeof(standard_pair))==0);
+    trace.p.shape.count=YT_DIM+1;
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(rsk_word_result(NULL,&word_pair)==YT_MALFORMED);
+    CHECK(rsk_biword_result(&trace,NULL)==YT_MALFORMED);
+}
+int main(void) { partitions(); tableaux(); tableau_operations(); rsk(); rsk_words_and_trace(); rsk_result_families(); jeu_de_taquin(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, jeu de taquin, controls, scrolling, console\n",checks); return 0; }

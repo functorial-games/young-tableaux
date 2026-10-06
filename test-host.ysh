@@ -1,4 +1,5 @@
 # Grease: invoke with an absolute checkout path on the build host.
+set -eu -o pipefail
 if (len(ARGV) !== 2) {
   echo 'usage: test-host.ysh PROJECT NDK (absolute paths)'
   exit 2
@@ -18,6 +19,21 @@ for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin'
 }
 "$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/host-tests"
 "$project/build/host-tests"
+sed 's/tableau_check_kind(filling,TABLEAU_STANDARD,false/tableau_check_kind(filling,TABLEAU_SEMISTANDARD,false/' "$project/app/core/tableau.c" > "$project/build/relaxed-standard.c"
+var mutant_core = []
+for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin']) {
+  if (unit === 'tableau') {
+    call mutant_core->append("$project/build/relaxed-standard.c")
+  } else {
+    call mutant_core->append("$project/app/core/$unit.c")
+  }
+}
+"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @mutant_core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/relaxed-standard-tests"
+if "$project/build/relaxed-standard-tests" > "$project/build/relaxed-standard.log" 2>&1; then
+  echo 'FAIL semistandard result passed standard result boundary'
+  exit 1
+fi
+rg -q 'rsk_permutation_result.*YT_MALFORMED' "$project/build/relaxed-standard.log"
 "$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/core" "$project/tests/insertion_ownership.c" @core -Wl,--wrap=tableau_row_insert_trace -o "$project/build/insertion-ownership"
 "$project/build/insertion-ownership"
 if "$compiler" -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_word_as_permutation.c" -o "$project/build/reject-word.o" > "$project/build/reject-word.log" 2>&1; then
@@ -30,6 +46,11 @@ if "$compiler" -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core"
   exit 1
 fi
 rg -q 'incompatible pointer types' "$project/build/reject-filling.log"
+if "$compiler" -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_word_result_as_permutation.c" -o "$project/build/reject-word-result.o" > "$project/build/reject-word-result.log" 2>&1; then
+  echo 'FAIL word result admitted as permutation result'
+  exit 1
+fi
+rg -q 'incompatible pointer types' "$project/build/reject-word-result.log"
 "$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/console" "$project/tests/operation_correspondence.c" -o "$project/build/operation-correspondence"
 "$project/build/operation-correspondence" "$project/types/YoungTableaux/Types.idr"
 sed 's/InputFor RSKPermutation = Permutation/InputFor RSKPermutation = Word/' "$project/types/YoungTableaux/Types.idr" > "$project/build/drifted-types.idr"

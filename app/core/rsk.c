@@ -200,22 +200,73 @@ MathStatus word_rsk_trace(const char *text,int step,RSKTrace *out)
     return status==YT_OK?rsk_word(&input,step,out):status;
 }
 
+static bool completed_rsk_pair(const RSKTrace *trace)
+{
+    bool valid=false;
+    if(!trace || !trace->complete || trace->count<0 || trace->count>YT_DIM || trace->step!=trace->count ||
+       tableau_check_kind(&trace->p,TABLEAU_ARBITRARY,false,&valid)!=YT_OK ||
+       tableau_check_kind(&trace->q,TABLEAU_ARBITRARY,false,&valid)!=YT_OK ||
+       partition_size(&trace->p.shape)!=trace->count || partition_size(&trace->q.shape)!=trace->count ||
+       trace->p.shape.count!=trace->q.shape.count) return false;
+    for(int row=0;row<trace->p.shape.count;++row)
+        if(trace->p.shape.rows[row]!=trace->q.shape.rows[row]) return false;
+    return true;
+}
+
+MathStatus rsk_permutation_result(const RSKTrace *trace,PermutationRSKResult *out)
+{
+    PermutationRSKResult result;
+    if(!out || !completed_rsk_pair(trace) ||
+       tableau_as_standard(&trace->p,&result.insertion)!=YT_OK ||
+       tableau_as_standard(&trace->q,&result.recording)!=YT_OK) return YT_MALFORMED;
+    *out=result;
+    return YT_OK;
+}
+
+MathStatus rsk_word_result(const RSKTrace *trace,WordRSKResult *out)
+{
+    WordRSKResult result;
+    if(!out || !completed_rsk_pair(trace) ||
+       tableau_as_semistandard(&trace->p,&result.insertion)!=YT_OK ||
+       tableau_as_standard(&trace->q,&result.recording)!=YT_OK) return YT_MALFORMED;
+    *out=result;
+    return YT_OK;
+}
+
+MathStatus rsk_biword_result(const RSKTrace *trace,BiwordRSKResult *out)
+{
+    BiwordRSKResult result;
+    if(!out || !completed_rsk_pair(trace) ||
+       tableau_as_semistandard(&trace->p,&result.insertion)!=YT_OK ||
+       tableau_as_semistandard(&trace->q,&result.recording)!=YT_OK) return YT_MALFORMED;
+    *out=result;
+    return YT_OK;
+}
+
 MathStatus permutation_rsk(const char *text,Tableau *pout,Tableau *qout)
 {
+    if(!pout || !qout) return YT_MALFORMED;
     RSKTrace trace;
     MathStatus status=permutation_rsk_trace(text,YT_DIM,&trace);
     if(status!=YT_OK) return status;
-    *pout=trace.p;
-    *qout=trace.q;
+    PermutationRSKResult result;
+    status=rsk_permutation_result(&trace,&result);
+    if(status!=YT_OK) return status;
+    *pout=result.insertion.filling;
+    *qout=result.recording.filling;
     return YT_OK;
 }
 
 MathStatus word_rsk(const char *text,Tableau *pout,Tableau *qout)
 {
+    if(!pout || !qout) return YT_MALFORMED;
     RSKTrace trace;
     MathStatus status=word_rsk_trace(text,YT_DIM,&trace);
     if(status!=YT_OK) return status;
-    *pout=trace.p;
-    *qout=trace.q;
+    WordRSKResult result;
+    status=rsk_word_result(&trace,&result);
+    if(status!=YT_OK) return status;
+    *pout=result.insertion.filling;
+    *qout=result.recording.filling;
     return YT_OK;
 }

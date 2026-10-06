@@ -15,6 +15,7 @@ availability annotations, reproduced with current source-built ICK at API 26.
 | Biword | Paired `Biletter` values with equal-length and lexicographic validation |
 | Natural matrix | Rectangular nonnegative `NatMatrix`; expansion → biword → shared insertion |
 | RSK | `rsk.h/c`: checked input → `tableau_row_insert_trace` → `record_insertion` → trace/result |
+| Completed RSK families | `PermutationRSKResult` (standard/standard), `WordRSKResult` (semistandard/standard), `BiwordRSKResult` (semistandard/semistandard, also the matrix image); checked constructors require complete traces and equal shapes |
 | Skew filling / slide | `SkewShape`, `SkewTableau`, separate `JeuState`; select smaller neighbor → move into hole → finish at outer corner |
 | Interaction and rendering | Console parses operation-specific values; `TileProjection` remains a derived display object |
 
@@ -38,20 +39,30 @@ against every sketch input/output; pre-existing NumberMatrix/NatMatrix and
 Number/Nat drift is repaired. These are textual correspondence tests: the
 changed Idris sketch was not executed through an Idris/Idriç type checker here.
 
-Executed: 6,712 regression checks including the new convention checks,
+Executed: 6,735 regression checks including convention and completed-result checks,
 insertion-owner interception, matrix/biword equivalence and malformed-input
-tests, output-preserving rejection, two negative C type fixtures, and a mutated
-sketch-signature rejection. Real Lua facts tests pass using the live branch's
+tests, output-preserving rejection, three negative C type fixtures, and a mutated
+sketch-signature rejection. A compiling mutation weakening the standard-result
+constructor to semistandard is rejected by a runtime assertion. Real Lua facts
+tests pass using the live branch's
 symbolic fork pin `dca7e57c16c524c8616144ed294fe598947a029f`. The changed Android
-entry/bridge translation units compile with explicit NDK r27c A32 API 26;
+tableau, RSK, console, entry and bridge units compile with NDK r27c A32 API 26;
 APK packaging and physical acceptance were not executed.
 
+Completed interaction results now pass the corresponding checked result
+constructor before rendering; partial insertion traces deliberately retain
+general fillings because a permutation prefix need not have alphabet 1..k.
+The sketch and operation table use the distinct completed result types, with
+the inverse operation restricted to the permutation result family (its inverse
+algorithm remains unavailable). Runtime tests reject wrong alphabets, partial
+traces, mismatched shapes, malformed bounds and semistandard recording results
+where standard results are required. A third negative C fixture rejects a word
+result at a permutation result boundary.
+
 Remaining structural boundary: `Request`/`OutputFor` still describe a broader
-family than the native checked APIs. RSK's public trace stores generic P/Q
-fillings, rather than distinct final standard/semistandard result families;
-the sketch's generic inverse-RSK pair does not identify the inverse domain.
+family than the native checked APIs.
 Shifted/ribbon/oscillating/K objects are still inventory entries, not faithful
 executable representations. Choosing their shape/state constructors and the
-inverse correspondence families is a mathematical model decision; unsupported
+correspondences for these additional objects is a mathematical model decision; unsupported
 operations remain explicitly unavailable. No generic command bag is certified
 as an implementation of those constructions.

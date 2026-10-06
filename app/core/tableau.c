@@ -111,6 +111,22 @@ typedef struct {
     int value,row,column;
 } TableauRankItem;
 
+MathStatus tableau_as_standard(const Tableau *filling,StandardTableau *out)
+{
+    bool valid=false;
+    if(!out || tableau_check_kind(filling,TABLEAU_STANDARD,false,&valid)!=YT_OK || !valid) return YT_MALFORMED;
+    *out=(StandardTableau){.filling=*filling};
+    return YT_OK;
+}
+
+MathStatus tableau_as_semistandard(const Tableau *filling,SemistandardTableau *out)
+{
+    bool valid=false;
+    if(!out || tableau_check_kind(filling,TABLEAU_SEMISTANDARD,false,&valid)!=YT_OK || !valid) return YT_MALFORMED;
+    *out=(SemistandardTableau){.filling=*filling};
+    return YT_OK;
+}
+
 static bool rank_after(TableauRankItem left,TableauRankItem right)
 {
     if(left.value!=right.value) return left.value>right.value;

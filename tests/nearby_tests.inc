@@ -28,6 +28,7 @@ static void nearby_tests(void)
 
     console_layout(c,u,576,1152);
     for(int row=0;row<=3;++row) CHECK(maybe_nearby_control(u,ADDABLE_BASE+row));
+    for(int row=0;row<3;++row) CHECK(maybe_nearby_control(u,REMOVABLE_BASE+row));
     activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"4,2,1")==0);
     CHECK(c->shape_history_count==1);
     CHECK(c->wegert.half_height==1.5 && c->scripted_facts[0]==0);
@@ -40,12 +41,17 @@ static void nearby_tests(void)
     CHECK(maybe_nearby_control(u,ADDABLE_BASE));
     CHECK(!maybe_nearby_control(u,ADDABLE_BASE+1));
     CHECK(maybe_nearby_control(u,ADDABLE_BASE+2));
+    CHECK(!maybe_nearby_control(u,REMOVABLE_BASE));
+    CHECK(maybe_nearby_control(u,REMOVABLE_BASE+1));
     activate(c,u,ADDABLE_BASE+1); CHECK(strcmp(c->fields[SET_LAMBDA],"2,2")==0);
     activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2")==0);
     activate(c,u,SHAPE_UNDO); CHECK(strcmp(c->fields[SET_LAMBDA],"2,2")==0);
+    activate(c,u,REMOVABLE_BASE+1); CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0);
+    CHECK(c->shape_history_count==0);
 
     choose_shape(c,"[]"); console_layout(c,u,576,1152);
     CHECK(maybe_nearby_control(u,ADDABLE_BASE));
+    CHECK(!maybe_nearby_control(u,REMOVABLE_BASE));
     activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"1")==0);
     activate(c,u,SHAPE_UNDO); CHECK(strcmp(c->fields[SET_LAMBDA],"[]")==0);
 
@@ -68,8 +74,9 @@ static void nearby_tests(void)
             plot_bottom=u->controls[i].rect.y+u->controls[i].rect.h;
             plot_index=i;
         }
-        if(!strcmp(u->controls[i].text,"DERIVED FACTS")) derived_index=i;
+        if(!strcmp(u->controls[i].text,"Derived facts")) derived_index=i;
         CHECK(!strstr(u->controls[i].text,"conjugate blocks"));
+        CHECK(!strstr(u->controls[i].text,"WEGERT PLOT"));
     }
     CHECK(plot_index>=0 && derived_index>plot_index);
     CHECK(zoom->rect.y==plot_bottom+4*u->scale);
@@ -134,9 +141,16 @@ static void nearby_tests(void)
             if(control->id) { CHECK(!ids[control->id]); ids[control->id]=true; }
         }
         for(int op=0;op<OP_COUNT;++op) {
-            bool visible=op!=ConjugatePartition && op!=ListCells;
+            bool internal_section=operation_info[op].section==1 || operation_info[op].section==2;
+            bool visible=!internal_section && op!=ConjugatePartition && op!=ListCells;
             CHECK(ids[OP_BASE+op]==visible);
         }
+        bool saw_tableau_section=false,saw_hooks_section=false;
+        for(int i=0;i<u->count;++i) {
+            saw_tableau_section=saw_tableau_section || !strcmp(u->controls[i].text,"Tableau");
+            saw_hooks_section=saw_hooks_section || !strcmp(u->controls[i].text,"Hooks / corners / cells");
+        }
+        CHECK(!saw_tableau_section && !saw_hooks_section);
         CHECK(ids[RSK_START] && ids[RSK_PREV] && ids[RSK_NEXT] && ids[RSK_END]);
         CHECK(ids[JDT_RESET] && ids[JDT_STEP] && ids[JDT_SLIDE] && ids[JDT_RECTIFY]);
     }

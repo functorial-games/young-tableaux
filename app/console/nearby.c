@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <inttypes.h>
 
 static void button(Controls *u,int id,const char *label,Rect rect,bool enabled)
 {
@@ -46,10 +47,16 @@ void nearby_shape(Console *c,Controls *u)
 
     Cell cells[YT_DIM+1];
     bool addable[YT_DIM+1]={false};
+    bool removable[YT_DIM]={false};
     int addable_count=partition_addable(&p,cells);
     for(int i=0;i<addable_count;++i) {
         int row=cells[i].row-1;
         if(row>=0 && row<YT_DIM && cells[i].column<=YT_DIM) addable[row]=true;
+    }
+    int removable_count=partition_removable(&p,cells);
+    for(int i=0;i<removable_count;++i) {
+        int row=cells[i].row-1;
+        if(row>=0 && row<YT_DIM) removable[row]=true;
     }
 
     int scale=u->scale, margin=4*scale, gap=4*scale, side=24*scale;
@@ -59,8 +66,6 @@ void nearby_shape(Console *c,Controls *u)
     int cell=side;
     if(columns*cell>available) cell=available/columns;
     if(cell<1) cell=1;
-
-    controls_add(u,0,LABEL,"Young diagram",0,NULL);
 
     bool can_new_row=p.count<YT_DIM && partition_size(&p)<YT_CELLS && addable[p.count];
     int visual_rows=p.count+(can_new_row?1:0);
@@ -75,10 +80,18 @@ void nearby_shape(Console *c,Controls *u)
         if(row>=0 && row<p.count) {
             c->editable_rows[row]=(TileRowProjection){p.rows[row],columns};
             controls_add_at(u,0,ROW_BLOCKS,"",(Rect){margin,y,width,side},&c->editable_rows[row]);
+
+            int button_side=cell;
+            if(button_side>side-4*scale) button_side=side-4*scale;
+            if(button_side<1) button_side=1;
+
+            if(removable[row]) {
+                int x=margin+2*scale+(p.rows[row]-1)*cell;
+                if(x+button_side>u->width-margin) x=u->width-margin-button_side;
+                button(u,REMOVABLE_BASE+row,"-",
+                       (Rect){x,y+(side-button_side)/2,button_side,button_side},true);
+            }
             if(addable[row] && partition_size(&p)<YT_CELLS) {
-                int button_side=cell;
-                if(button_side>side-4*scale) button_side=side-4*scale;
-                if(button_side<1) button_side=1;
                 int x=margin+2*scale+p.rows[row]*cell;
                 if(x+button_side>u->width-margin) x=u->width-margin-button_side;
                 button(u,ADDABLE_BASE+row,"+",
@@ -97,18 +110,29 @@ void nearby_shape(Console *c,Controls *u)
     }
 
     u->content+=gap;
+    char stats[96];
+    uint64_t dimension=0;
+    MathStatus dimension_status=partition_standard_count(&p,&dimension);
+    if(dimension_status==YT_OK)
+        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %" PRIu64,partition_size(&p),dimension);
+    else
+        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %s",partition_size(&p),math_status(dimension_status));
+    int stats_x=margin+width/3, stats_width=width-stats_x+margin;
+    int stats_height=controls_text_height(u,stats);
+    controls_add_at(u,0,LABEL,stats,(Rect){stats_x,u->content,stats_width,stats_height},NULL);
+
     int y=u->content, half=(width-gap)/2;
     bool can_rewind=c->shape_history_count>0;
-    button(u,SHAPE_UNDO,"UNDO",(Rect){margin,y,half,side},can_rewind);
-    button(u,SHAPE_RESET,"RESET",(Rect){margin+half+gap,y,width-half-gap,side},can_rewind);
+    button(u,SHAPE_UNDO,"Undo",(Rect){margin,y,half,side},can_rewind);
+    button(u,SHAPE_RESET,"Reset",(Rect){margin+half+gap,y,width-half-gap,side},can_rewind);
 }
 
 void nearby_plot_controls(Console *c,Controls *u)
 {
     const int zoom_ids[]={PLOT_ZOOM_OUT,PLOT_RESET,PLOT_ZOOM_IN};
-    const char *zoom_labels[]={"ZOOM -","RESET","ZOOM +"};
+    const char *zoom_labels[]={"Zoom -","Reset","Zoom +"};
     const int pan_ids[]={PLOT_LEFT,PLOT_UP,PLOT_DOWN,PLOT_RIGHT};
-    const char *pan_labels[]={"LEFT","UP","DOWN","RIGHT"};
+    const char *pan_labels[]={"Left","Up","Down","Right"};
     int scale=u->scale, margin=4*scale, gap=4*scale;
     int width=u->width-2*margin, y=u->content, height=24*scale;
     for(int index=0;index<3;++index) {
@@ -153,10 +177,36 @@ static bool find_addable(const Partition *p,int row,Cell *out)
     return false;
 }
 
+static bool find_removable(const Partition *p,int row,Cell *out)
+{
+    if(row<0 || row>=p->count || row>=YT_DIM) return false;
+    Cell cells[YT_DIM];
+    int count=partition_removable(p,cells);
+    for(int i=0;i<count;++i) if(cells[i].row==row+1) {
+        *out=cells[i];
+        return true;
+    }
+    return false;
+}
+
 bool nearby_event(Console *c,Controls *u,ControlEvent event)
 {
     if(event.kind!=EVENT_ACTIVATE) return false;
     int id=event.id;
+
+    if(id>=REMOVABLE_BASE && id<REMOVABLE_BASE+YT_DIM) {
+        Partition p;
+        if(partition_parse(c->fields[SET_LAMBDA],&p)!=YT_OK) return true;
+        int row=id-REMOVABLE_BASE;
+        Cell cell;
+        if(!find_removable(&p,row,&cell)) return true;
+        --p.rows[row];
+        if(!p.rows[row]) --p.count;
+        c->shape_history_count=0;
+        c->shape_history_base=p;
+        changed_shape(c,u,&p);
+        return true;
+    }
 
     if(id>=ADDABLE_BASE && id<=ADDABLE_BASE+YT_DIM) {
         Partition p;

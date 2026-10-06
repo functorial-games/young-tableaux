@@ -18,7 +18,7 @@ record Cell where
   row : Nat
   column : Nat
 
--- A click-to-add edit is a path in the Young graph, not merely a mutation of
+-- Direct corner edits follow edges in the Young graph, not merely mutations of
 -- the final row lengths.  Keeping the additions makes undo/reset and later
 -- path-based constructions explicit.
 public export
@@ -30,6 +30,7 @@ record DiagramState where
 public export
 data DiagramEvent
   = ClickAddable Cell
+  | ClickRemovable Cell
   | UndoLastAddition
   | ResetAdditions
   | ReplacePartition Partition
@@ -554,6 +555,7 @@ data ControlPurpose
   | SetTableauEntries
   | SetTableauKind
   | SetAlphabet
+  | SetEntry
   | SetWeight
   | SetPermutation
   | SetWord

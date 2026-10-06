@@ -87,6 +87,48 @@ static bool equal_tableau(const Tableau *a,const Tableau *b)
     for(int r=0;r<a->shape.count;++r) for(int c=0;c<a->shape.rows[r];++c) if(a->entries[r][c]!=b->entries[r][c]) return false;
     return true;
 }
+
+static void tableau_operations(void)
+{
+    Tableau input,result,want,restored;
+
+    CHECK(tableau_parse("1,1,3;2,3",&input)==YT_OK);
+    CHECK(tableau_semistandard(&input));
+    CHECK(tableau_standardize(&input,&result)==YT_OK);
+    CHECK(tableau_parse("1,2,5;3,4",&want)==YT_OK);
+    CHECK(equal_tableau(&result,&want));
+    CHECK(tableau_validate(&result.shape,&result,false).standard);
+
+    CHECK(tableau_parse("1,2,4;3,5;6",&input)==YT_OK);
+    Cell added={0};
+    CHECK(tableau_row_insert(&input,2,&result,&added)==YT_OK);
+    CHECK(added.row==4 && added.column==1);
+    CHECK(tableau_parse("1,2,2;3,4;5;6",&want)==YT_OK);
+    CHECK(equal_tableau(&result,&want));
+    CHECK(tableau_semistandard(&result));
+
+    int ejected=0;
+    CHECK(tableau_reverse_insert(&result,added,&restored,&ejected)==YT_OK);
+    CHECK(ejected==2);
+    CHECK(equal_tableau(&restored,&input));
+    CHECK(tableau_reverse_insert(&result,(Cell){1,1},&restored,&ejected)==YT_MALFORMED);
+
+    CHECK(tableau_standardize(&(Tableau){.shape={2,{2,2}},.entries={{2,1},{3,4}}},&result)==YT_MALFORMED);
+
+    CHECK(tableau_parse("1,2,5;3,4",&input)==YT_OK);
+    CHECK(tableau_transpose(&input,&result)==YT_OK);
+    CHECK(tableau_parse("1,3;2,4;5",&want)==YT_OK);
+    CHECK(equal_tableau(&result,&want));
+
+    Partition p=partition("2,1"),changed;
+    CHECK(partition_add_cell(&p,(Cell){2,2},&changed)==YT_OK);
+    CHECK(equal_partition(changed,partition("2,2")));
+    CHECK(partition_add_cell(&p,(Cell){2,3},&changed)==YT_MALFORMED);
+    p=partition("2,2");
+    CHECK(partition_remove_cell(&p,(Cell){2,2},&changed)==YT_OK);
+    CHECK(equal_partition(changed,partition("2,1")));
+    CHECK(partition_remove_cell(&p,(Cell){1,2},&changed)==YT_MALFORMED);
+}
 static void rsk(void)
 {
     struct { const char *input,*p,*q; } known[]={
@@ -196,7 +238,13 @@ static void interaction(void)
     controls_touch(u,TOUCH_DOWN,3,r.x+1,1); e=controls_touch(u,TOUCH_UP,3,r.x+1,1); CHECK(e.kind==EVENT_FOCUS && u->focus==7);
     console_init(c);
     console_layout(c,u,576,1152);
-    CHECK(u->count>0 && u->controls[0].kind==HERO && !strcmp(u->controls[0].text,"6"));
+    bool saw_size=false,saw_dimension=false,saw_hero=false;
+    for(int i=0;i<u->count;++i) {
+        saw_size=saw_size || strstr(u->controls[i].text,"|λ| = 6");
+        saw_dimension=saw_dimension || strstr(u->controls[i].text,"dim S^λ = 16");
+        saw_hero=saw_hero || u->controls[i].kind==HERO;
+    }
+    CHECK(saw_size && saw_dimension && !saw_hero);
     CHECK(c->wegert.valid); CHECK(c->wegert.n_lambda==4); CHECK(c->wegert.max_hook==5);
     CHECK(c->jeu_loaded && c->jeu_ok);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_STEP});
@@ -209,7 +257,7 @@ static void interaction(void)
     CHECK(c->jeu_ok && c->jeu.inner.count==0);
     CHECK(c->wegert.hook_counts[1]==3 && c->wegert.hook_counts[3]==2 && c->wegert.hook_counts[5]==1);
     u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
-    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"f^lambda = 2"));
+    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"f^λ = 2"));
     console_key(c,u,14); CHECK(!c->partition_ok); console_key(c,u,0); CHECK(c->partition_ok); console_key(c,u,19); CHECK(!u->focus);
     console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Nat"));
     console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_word_mode);
@@ -227,16 +275,32 @@ static void interaction(void)
         if(u->controls[i].kind==WEGERT) ++wegert;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==15); CHECK(wegert==1);
+    CHECK(separators==13); CHECK(wegert==1);
     for(int op=0;op<OP_COUNT;++op) {
-        bool visible=op!=ConjugatePartition && op!=ListCells;
+        bool internal_section=operation_info[op].section==1 || operation_info[op].section==2;
+        bool visible=!internal_section && op!=ConjugatePartition && op!=ListCells;
         CHECK(ids[OP_BASE+op]==visible);
     }
     console_run(c,ConjugatePartition); CHECK(strstr(c->output[0],"conjugate = "));
     console_run(c,ListCells); CHECK(strstr(c->output[0],"cells: "));
+
+    snprintf(c->fields[SET_TABLEAU],512,"1,1,3;2,3");
+    console_run(c,StandardizeTableau); CHECK(c->tableau_ok && strstr(c->output[1],"standardized"));
+    snprintf(c->fields[SET_TABLEAU],512,"1,2,4;3,5;6");
+    snprintf(c->fields[SET_ENTRY],512,"2");
+    console_run(c,InsertLetter); CHECK(c->tableau_ok && strstr(c->output[1],"new cell"));
+    snprintf(c->fields[SET_CELL],512,"3,1");
+    console_run(c,ReverseInsert); CHECK(c->tableau_ok && strstr(c->output[1],"ejected"));
+    console_run(c,TransposeTableau); CHECK(c->tableau_ok && strstr(c->output[1],"transpose"));
+    snprintf(c->fields[SET_LAMBDA],512,"3,2,1");
+    console_run(c,DisplayPartition);
+    snprintf(c->fields[SET_CELL],512,"2,3");
+    console_run(c,AddCell); CHECK(strstr(c->output[2],"add (2,3)"));
+    snprintf(c->fields[SET_CELL],512,"2,2");
+    console_run(c,RemoveCell); CHECK(strstr(c->output[2],"remove (2,2)"));
     u->focus=SET_LAMBDA; console_layout(c,u,576,1152); CHECK(u->height==882);
     CHECK(console_key_hit(u,0,897,1152)==0); CHECK(console_key_hit(u,575,1136,1152)==19); CHECK(console_key_hit(u,576,897,1152)==-1);
     free(u); free(c);
 }
 #include "nearby_tests.inc"
-int main(void) { partitions(); tableaux(); rsk(); rsk_words_and_trace(); jeu_de_taquin(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, jeu de taquin, controls, scrolling, console\n",checks); return 0; }
+int main(void) { partitions(); tableaux(); tableau_operations(); rsk(); rsk_words_and_trace(); jeu_de_taquin(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, jeu de taquin, controls, scrolling, console\n",checks); return 0; }

@@ -10,13 +10,28 @@ void controls_begin(Controls *u,int w,int h,bool keyboard)
     u->height=h-(keyboard?90*u->scale:0); if(u->height<1) u->height=1;
     u->content=8*u->scale;
 }
+static size_t control_token_bytes(const char *text)
+{
+    size_t prefix=0U;
+    const char *glyph=text;
+    if((text[0]=='_' || text[0]=='^') && text[1] && text[1]!='\n') {
+        prefix=1U; glyph=text+1;
+    }
+    if((unsigned char)glyph[0]==0xceU && (unsigned char)glyph[1]==0xbbU)
+        return prefix+2U;
+    return prefix+1U;
+}
 int controls_text_height(const Controls *u,const char *text)
 {
     int columns=(u->width-16*u->scale)/(6*u->scale); if(columns<1) columns=1;
     int lines=1,column=0;
-    for(const char *p=text;*p;++p) {
-        if(*p=='\n') { ++lines; column=0; }
-        else { if(column==columns) { ++lines; column=0; } ++column; }
+    for(const char *p=text;*p;) {
+        if(*p=='\n') { ++lines; column=0; ++p; }
+        else {
+            if(column==columns) { ++lines; column=0; }
+            ++column;
+            p+=control_token_bytes(p);
+        }
     }
     return (lines*10+8)*u->scale;
 }

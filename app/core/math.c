@@ -181,6 +181,190 @@ Validation tableau_validate(const Partition *shape, const Tableau *t, bool decre
     v.standard = v.standard && v.shape && v.rows && v.columns;
     return v;
 }
+
+static bool tableau_shape_valid(const Partition *shape)
+{
+    if(shape->count<0 || shape->count>YT_DIM) return false;
+    int size=0;
+    for(int row=0;row<shape->count;++row) {
+        if(shape->rows[row]<=0 || shape->rows[row]>YT_DIM) return false;
+        if(row && shape->rows[row]>shape->rows[row-1]) return false;
+        if(size>YT_CELLS-shape->rows[row]) return false;
+        size+=shape->rows[row];
+    }
+    return true;
+}
+
+bool tableau_semistandard(const Tableau *tableau)
+{
+    if(!tableau || !tableau_shape_valid(&tableau->shape)) return false;
+    for(int row=0;row<tableau->shape.count;++row) {
+        for(int column=0;column<tableau->shape.rows[row];++column) {
+            int entry=tableau->entries[row][column];
+            if(column && tableau->entries[row][column-1]>entry) return false;
+            if(row && column<tableau->shape.rows[row-1]
+               && tableau->entries[row-1][column]>=entry) return false;
+        }
+    }
+    return true;
+}
+
+typedef struct {
+    int value,row,column;
+} TableauRankItem;
+
+static bool rank_after(TableauRankItem left,TableauRankItem right)
+{
+    if(left.value!=right.value) return left.value>right.value;
+    if(left.column!=right.column) return left.column>right.column;
+    return left.row>right.row;
+}
+
+MathStatus tableau_standardize(const Tableau *tableau,Tableau *out)
+{
+    if(!tableau || !out || !tableau_semistandard(tableau)) return YT_MALFORMED;
+    Tableau result=*tableau;
+    TableauRankItem items[YT_CELLS];
+    int count=0;
+    for(int row=0;row<tableau->shape.count;++row)
+        for(int column=0;column<tableau->shape.rows[row];++column)
+            items[count++]=(TableauRankItem){tableau->entries[row][column],row,column};
+
+    for(int index=1;index<count;++index) {
+        TableauRankItem item=items[index];
+        int position=index;
+        while(position>0 && rank_after(items[position-1],item)) {
+            items[position]=items[position-1];
+            --position;
+        }
+        items[position]=item;
+    }
+    for(int index=0;index<count;++index)
+        result.entries[items[index].row][items[index].column]=index+1;
+
+    Validation validation=tableau_validate(&result.shape,&result,false);
+    if(!validation.standard) return YT_MALFORMED;
+    *out=result;
+    return YT_OK;
+}
+
+MathStatus tableau_row_insert(const Tableau *tableau,int value,Tableau *out,Cell *new_cell)
+{
+    if(!tableau || !out || !tableau_semistandard(tableau)) return YT_MALFORMED;
+    if(partition_size(&tableau->shape)>=YT_CELLS) return YT_LIMIT;
+    Tableau result=*tableau;
+    int bumped=value;
+    for(int row=0;row<YT_DIM;++row) {
+        if(row==result.shape.count) {
+            result.shape.rows[row]=1;
+            result.entries[row][0]=bumped;
+            ++result.shape.count;
+            if(new_cell) *new_cell=(Cell){row+1,1};
+            if(!tableau_semistandard(&result)) return YT_MALFORMED;
+            *out=result;
+            return YT_OK;
+        }
+        int length=result.shape.rows[row];
+        int column=0;
+        while(column<length && result.entries[row][column]<=bumped) ++column;
+        if(column==length) {
+            if(length>=YT_DIM) return YT_LIMIT;
+            result.entries[row][column]=bumped;
+            ++result.shape.rows[row];
+            if(new_cell) *new_cell=(Cell){row+1,column+1};
+            if(!tableau_semistandard(&result)) return YT_MALFORMED;
+            *out=result;
+            return YT_OK;
+        }
+        int next=result.entries[row][column];
+        result.entries[row][column]=bumped;
+        bumped=next;
+    }
+    return YT_LIMIT;
+}
+
+static bool tableau_removable_corner(const Tableau *tableau,Cell corner)
+{
+    if(corner.row<1 || corner.row>tableau->shape.count) return false;
+    int row=corner.row-1;
+    if(corner.column!=tableau->shape.rows[row]) return false;
+    return row+1==tableau->shape.count
+        || tableau->shape.rows[row]>tableau->shape.rows[row+1];
+}
+
+MathStatus tableau_reverse_insert(const Tableau *tableau,Cell corner,
+                                  Tableau *out,int *bumped_out)
+{
+    if(!tableau || !out || !tableau_semistandard(tableau)
+       || !tableau_removable_corner(tableau,corner)) return YT_MALFORMED;
+    Tableau result=*tableau;
+    int row=corner.row-1,column=corner.column-1;
+    int bumped=result.entries[row][column];
+    --result.shape.rows[row];
+    if(!result.shape.rows[row]) --result.shape.count;
+
+    for(int upper=row-1;upper>=0;--upper) {
+        int candidate=result.shape.rows[upper]-1;
+        while(candidate>=0 && result.entries[upper][candidate]>=bumped) --candidate;
+        if(candidate<0) return YT_MALFORMED;
+        int next=result.entries[upper][candidate];
+        result.entries[upper][candidate]=bumped;
+        bumped=next;
+    }
+    if(!tableau_semistandard(&result)) return YT_MALFORMED;
+    if(bumped_out) *bumped_out=bumped;
+    *out=result;
+    return YT_OK;
+}
+
+MathStatus tableau_transpose(const Tableau *tableau,Tableau *out)
+{
+    if(!tableau || !out || !tableau_shape_valid(&tableau->shape)) return YT_MALFORMED;
+    Tableau result={0};
+    result.shape=partition_conjugate(&tableau->shape);
+    for(int row=0;row<tableau->shape.count;++row)
+        for(int column=0;column<tableau->shape.rows[row];++column)
+            result.entries[column][row]=tableau->entries[row][column];
+    *out=result;
+    return YT_OK;
+}
+
+static bool cell_in_list(Cell cell,const Cell *cells,int count)
+{
+    for(int index=0;index<count;++index)
+        if(cells[index].row==cell.row && cells[index].column==cell.column) return true;
+    return false;
+}
+
+MathStatus partition_add_cell(const Partition *partition,Cell cell,Partition *out)
+{
+    if(!partition || !out || partition_size(partition)>=YT_CELLS) return YT_LIMIT;
+    Cell cells[YT_DIM+1];
+    int count=partition_addable(partition,cells);
+    if(!cell_in_list(cell,cells,count) || cell.column>YT_DIM) return YT_MALFORMED;
+    Partition result=*partition;
+    int row=cell.row-1;
+    if(row==result.count) {
+        if(result.count>=YT_DIM) return YT_LIMIT;
+        result.rows[result.count++]=1;
+    } else ++result.rows[row];
+    *out=result;
+    return YT_OK;
+}
+
+MathStatus partition_remove_cell(const Partition *partition,Cell cell,Partition *out)
+{
+    if(!partition || !out) return YT_MALFORMED;
+    Cell cells[YT_DIM];
+    int count=partition_removable(partition,cells);
+    if(!cell_in_list(cell,cells,count)) return YT_MALFORMED;
+    Partition result=*partition;
+    int row=cell.row-1;
+    --result.rows[row];
+    if(!result.rows[row]) --result.count;
+    *out=result;
+    return YT_OK;
+}
 static MathStatus sequence_parse(const char *text,int *values,int *count,bool permutation)
 {
     const char *cursor=text;

@@ -90,6 +90,33 @@ static void refresh_rsk(Console *c)
     tableau_text(c->output[3],"P: insertion tableau",&p); tableau_text(c->output[3],"Q: recording tableau",&q);
     tiles(&c->p,&p.shape,&p); tiles(&c->q,&q.shape,&q); c->rsk_ok=true;
 }
+static void layout_add(Console *c,ScriptLayoutKind kind,int arg,const char *text)
+{
+    if(c->script_layout_count>=SCRIPT_LAYOUT_MAX) return;
+    ScriptLayoutItem *item=&c->script_layout[c->script_layout_count++];
+    item->kind=kind; item->arg=arg;
+    snprintf(item->text,sizeof(item->text),"%s",text?text:"");
+}
+static void default_layout(Console *c)
+{
+    c->script_layout_count=0;
+    layout_add(c,SCRIPT_LABEL,0,"YOUNG TABLEAUX 0.2.2");
+    layout_add(c,SCRIPT_SEPARATOR,0,"");
+    layout_add(c,SCRIPT_LABEL,0,"SHAPE / WEGERT");
+    layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"lambda: rows");
+    layout_add(c,SCRIPT_SHAPE,0,"");
+    layout_add(c,SCRIPT_LABEL,0,"WEGERT PLOT: s_lambda(1,z,z^2,...)");
+    layout_add(c,SCRIPT_WEGERT,160,"");
+    layout_add(c,SCRIPT_PLOT_CONTROLS,0,"");
+    layout_add(c,SCRIPT_SEPARATOR,0,"");
+    layout_add(c,SCRIPT_LABEL,0,"DERIVED FACTS");
+    layout_add(c,SCRIPT_OUTPUT,0,"");
+    layout_add(c,SCRIPT_OUTPUT,2,"");
+    layout_add(c,SCRIPT_HOOKS,0,"hook cells");
+    layout_add(c,SCRIPT_FACTS,0,"");
+    layout_add(c,SCRIPT_SEPARATOR,0,"");
+    layout_add(c,SCRIPT_LABEL,0,"MORE OPERATIONS / KITCHEN SINK");
+}
 void console_init(Console *c)
 {
     memset(c,0,sizeof(*c));
@@ -98,6 +125,7 @@ void console_init(Console *c)
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
     snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nPermutation list is one-line notation.\nReading and group action controls are inventory only.\nNo semistandard/skew/shifted validation in v0.1.");
     snprintf(c->scripted_facts,UI_TEXT,"SCHUR SPECIALIZATION\nLoading...");
+    default_layout(c);
     refresh_partition(c); refresh_tableau(c); refresh_rsk(c);
 }
 void console_run(Console *c,Operation op)
@@ -129,31 +157,48 @@ static void field(Console *c,Controls *u,int id)
 { controls_add(u,0,LABEL,field_names[id],0,NULL); controls_add(u,id,FIELD,c->fields[id],0,NULL); }
 static void diagram(Controls *u,const char *label,const TileProjection *p)
 { controls_add(u,0,LABEL,label,0,NULL); controls_add(u,0,DIAGRAM,"",(p->count?p->count:1)*12*u->scale+8*u->scale,p); }
+static void scripted_top(Console *c,Controls *u)
+{
+    for(int i=0;i<c->script_layout_count;++i) {
+        const ScriptLayoutItem *item=&c->script_layout[i];
+        switch(item->kind) {
+        case SCRIPT_LABEL:
+            controls_add(u,0,LABEL,item->text,0,NULL);
+            break;
+        case SCRIPT_SEPARATOR:
+            controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
+            break;
+        case SCRIPT_FIELD:
+            if(item->text[0]) controls_add(u,0,LABEL,item->text,0,NULL);
+            if(item->arg>0 && item->arg<FIELD_COUNT)
+                controls_add(u,item->arg,FIELD,c->fields[item->arg],0,NULL);
+            break;
+        case SCRIPT_SHAPE:
+            if(c->partition_ok) nearby_shape(c,u);
+            break;
+        case SCRIPT_OUTPUT:
+            if(item->arg>=0 && item->arg<12) controls_add(u,0,OUTPUT,c->output[item->arg],0,NULL);
+            break;
+        case SCRIPT_HOOKS:
+            if(c->partition_ok) diagram(u,item->text[0]?item->text:"hook cells",&c->hooks);
+            break;
+        case SCRIPT_FACTS:
+            controls_add(u,0,OUTPUT,c->scripted_facts,0,NULL);
+            break;
+        case SCRIPT_WEGERT:
+            if(c->partition_ok) controls_add(u,0,WEGERT,"",(item->arg>0?item->arg:160)*u->scale,&c->wegert);
+            break;
+        case SCRIPT_PLOT_CONTROLS:
+            if(c->partition_ok) nearby_plot_controls(c,u);
+            break;
+        }
+    }
+}
 void console_layout(Console *c,Controls *u,int w,int h)
 {
     controls_begin(u,w,h,u->focus!=0);
-    controls_add(u,0,LABEL,"YOUNG TABLEAUX 0.2.1",0,NULL);
+    scripted_top(c,u);
 
-    controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
-    controls_add(u,0,LABEL,"SHAPE",0,NULL);
-    field(c,u,SET_LAMBDA);
-    if(c->partition_ok) nearby_shape(c,u);
-
-    controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
-    controls_add(u,0,LABEL,"DERIVED FACTS",0,NULL);
-    controls_add(u,0,OUTPUT,c->output[0],0,NULL);
-    if(c->partition_ok) {
-        diagram(u,"conjugate blocks",&c->conjugate);
-        controls_add(u,0,OUTPUT,c->output[2],0,NULL);
-        diagram(u,"hook cells",&c->hooks);
-        controls_add(u,0,OUTPUT,c->scripted_facts,0,NULL);
-        controls_add(u,0,LABEL,"WEGERT PLOT: s_lambda(1,z,z^2,...)",0,NULL);
-        controls_add(u,0,WEGERT,"",160*u->scale,&c->wegert);
-        nearby_plot_controls(c,u);
-    }
-
-    controls_add(u,0,SEPARATOR,"",2*u->scale,NULL);
-    controls_add(u,0,LABEL,"MORE OPERATIONS / KITCHEN SINK",0,NULL);
     for(int s=0;s<12;++s) {
         controls_add(u,0,SEPARATOR,"",2*u->scale,NULL); controls_add(u,0,LABEL,sections[s],0,NULL);
         switch(s) {
@@ -230,7 +275,10 @@ void console_key(Console *c,Controls *u,int key)
         if(len+length<512) memcpy(text+len,add,length+1);
         else { snprintf(c->output[11],UI_TEXT,"INPUT LIMIT: 511 characters"); return; }
     }
-    if(u->focus==SET_LAMBDA) { refresh_partition(c); refresh_tableau(c); c->scripted_facts[0]=0; }
+    if(u->focus==SET_LAMBDA) {
+        c->shape_history_count=0;
+        refresh_partition(c); refresh_tableau(c); c->scripted_facts[0]=0;
+    }
     if(u->focus==SET_TABLEAU) refresh_tableau(c);
     if(u->focus==SET_PERMUTATION) refresh_rsk(c);
 }

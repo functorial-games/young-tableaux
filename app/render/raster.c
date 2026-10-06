@@ -20,6 +20,9 @@ struct glyph {
 #define GLYPH_DIVIDE '\x05'
 #define GLYPH_TIMES '\x06'
 #define GLYPH_ELLIPSIS '\x07'
+#define GLYPH_LEQ '\x08'
+#define GLYPH_ARROW '\x09'
+#define GLYPH_CHI '\x0b'
 #define GLYPH_LAMBDA '\x7f'
 
 static const struct glyph glyphs[] = {
@@ -105,6 +108,9 @@ static const struct glyph glyphs[] = {
     {GLYPH_TIMES, {0x00,0x11,0x0a,0x04,0x0a,0x11,0x00}},
     {GLYPH_ELLIPSIS, {0x00,0x00,0x00,0x00,0x15,0x00,0x00}},
     {GLYPH_LAMBDA, {0x04,0x04,0x0a,0x0a,0x11,0x11,0x11}},
+    {GLYPH_LEQ, {0x01,0x02,0x04,0x08,0x04,0x02,0x1f}},
+    {GLYPH_ARROW, {0x00,0x04,0x02,0x1f,0x02,0x04,0x00}},
+    {GLYPH_CHI, {0x00,0x11,0x0a,0x04,0x0a,0x11,0x00}},
     {'?', {0x0e, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04}},
 };
 
@@ -409,6 +415,12 @@ static struct text_token next_text_token(const char *cursor)
         token.glyph=GLYPH_MU; token.bytes=prefix+2U;
     } else if (u[0]==0xceU && u[1]==0xbdU) {
         token.glyph=GLYPH_NU; token.bytes=prefix+2U;
+    } else if (u[0]==0xcfU && u[1]==0x87U) {
+        token.glyph=GLYPH_CHI; token.bytes=prefix+2U;
+    } else if (u[0]==0xe2U && u[1]==0x89U && u[2]==0xa4U) {
+        token.glyph=GLYPH_LEQ; token.bytes=prefix+3U;
+    } else if (u[0]==0xe2U && u[1]==0x86U && u[2]==0x92U) {
+        token.glyph=GLYPH_ARROW; token.bytes=prefix+3U;
     } else if (u[0]==0xe2U && u[1]==0x84U && u[2]==0x95U) {
         token.glyph=GLYPH_NATURAL; token.bytes=prefix+3U;
     } else if (u[0]==0xe2U && u[1]==0x88U && u[2]==0x92U) {

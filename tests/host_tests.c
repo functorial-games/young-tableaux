@@ -261,6 +261,9 @@ static void interaction(void)
     CHECK(raster_text_width("÷",2)==raster_text_width("/",2));
     CHECK(raster_text_width("×",2)==raster_text_width("x",2));
     CHECK(raster_text_width("…",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("χ",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("≤",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("→",2)==raster_text_width("x",2));
     CHECK(raster_text_width("²",3)==raster_text_width("^2",3));
     CHECK(raster_text_width("₁",3)==raster_text_width("_1",3));
     uint32_t ellipsis_pixels[8*8]={0}, fallback_pixels[8*8]={0};

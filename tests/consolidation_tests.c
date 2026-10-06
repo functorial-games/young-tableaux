@@ -238,6 +238,7 @@ static void algebra_checks(void)
     CHECK(symmetric_parse("0;1;9",&answer)==YT_COMPLEXITY);
     CHECK(symmetric_parse("0;1;2;",&answer)!=YT_OK);
     CHECK(symmetric_parse("0;1",&answer)!=YT_OK);
+    CHECK(symmetric_parse("0;−1;2",&answer)==YT_OK && answer.terms[0].coefficient.numerator==-1);
     SymmetricFunction large=row;
     large.terms[0].coefficient=(Rational){INT64_MAX,1};
     CHECK(symmetric_specialize(&large,alphabet,2,&value)==YT_OVERFLOW);
@@ -331,11 +332,17 @@ static void dispatch_checks(void)
         strcpy(console->fields[SET_LAMBDA],"2,1"); strcpy(console->fields[SET_MU],"1"); strcpy(console->fields[SET_NU],"3,1");
         strcpy(console->fields[SET_TABLEAU],"1,3;2,4"); strcpy(console->fields[SET_RECORDING],"1,2;3,4");
         strcpy(console->fields[SET_CELL],"2,1");
-        if(operation==JeuDeTaquinSlide || operation==Rectify) console->jeu_ok=false;
+        if(operation==AddCell || operation==ReverseInsert) strcpy(console->fields[SET_CELL],"2,2");
+        if(operation==CharacterValue || operation==DisplayTableau || operation==ValidateTableau) strcpy(console->fields[SET_LAMBDA],"2,2");
+        if(operation==JeuDeTaquinSlide || operation==Rectify) {
+            console->jeu_ok=false; strcpy(console->fields[SET_CELL],"1,1"); strcpy(console->fields[SET_SKEW_TABLEAU],"2;3");
+        }
         console_event(console,controls,(ControlEvent){EVENT_ACTIVATE,OP_BASE+operation});
         int section=operation_info[operation].section;
         CHECK(console->output[section][0]);
         CHECK(!strstr(console->output[section],"NOT IMPLEMENTED") && !strstr(console->output[section],"INTERNAL DISPATCH"));
+        if(strstr(console->output[section],"INVALID") || strstr(console->output[section],"LIMIT") || strstr(console->output[section],"OVERFLOW")) fprintf(stderr,"dispatch example %s: %s\n",operation_info[operation].label,console->output[section]);
+        CHECK(!strstr(console->output[section],"INVALID") && !strstr(console->output[section],"LIMIT") && !strstr(console->output[section],"OVERFLOW"));
         if(section>=3) {
             console_layout(console,controls,576,1152); bool rendered=false;
             for(int index=0;index<controls->count;++index) if(controls->controls[index].kind==OUTPUT && !strcmp(controls->controls[index].text,console->output[section])) rendered=true;
@@ -352,6 +359,17 @@ static void dispatch_checks(void)
         bool rendered=false; for(int control=0;control<controls->count;++control) if(controls->controls[control].kind==OUTPUT && !strcmp(controls->controls[control].text,output)) rendered=true;
         CHECK(rendered);
     }
+    console_init(console); controls->focus=SET_COEFFICIENTS;
+    strcpy(console->fields[SET_COEFFICIENTS],"");
+    console_key(console,controls,12); CHECK(!strcmp(console->fields[SET_COEFFICIENTS],"−"));
+    console_key(console,controls,14); CHECK(!console->fields[SET_COEFFICIENTS][0]);
+    strcpy(console->fields[SET_COEFFICIENTS],"0;1;2");
+    strcpy(console->fields[SET_VARIABLES],"−1,2"); console_run(console,Specialize);
+    if(!strstr(console->output[7],"3 ÷ 1")) fprintf(stderr,"negative alphabet: %s\n",console->output[7]);
+    CHECK(strstr(console->output[7],"3 ÷ 1"));
+    uint64_t before=console->rng.state;
+    strcpy(console->fields[SET_SEED],"−1"); console_run(console,GenerateRandomPermutation);
+    CHECK(strstr(console->output[9],"INVALID") && console->rng.state==before);
     free(controls); free(console);
 }
 int main(void)

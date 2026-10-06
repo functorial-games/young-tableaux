@@ -242,8 +242,7 @@ data DiagramOrientation
 
 public export
 data IndexOrigin
-  = ZeroBased
-  | OneBased
+  = OneBased
 
 public export
 data ContentConvention
@@ -256,15 +255,11 @@ data InsertionConvention
 
 public export
 data ReadingOrder
-  = RowReading
-  | ReverseRowReading
-  | ColumnReading
-  | ReverseColumnReading
+  = ReverseRowReading
 
 public export
 data ActionSide
-  = LeftAction
-  | RightAction
+  = RightAction
 
 public export
 record Conventions where
@@ -273,8 +268,6 @@ record Conventions where
   indexOrigin : IndexOrigin
   contentConvention : ContentConvention
   insertionConvention : InsertionConvention
-  readingOrder : ReadingOrder
-  actionSide : ActionSide
 
 -- Mathematical operations. More can be added without changing the renderer.
 
@@ -651,17 +644,15 @@ data ControlPurpose
   | SetWord
   | SetBiword
   | SetMatrix
-  | SetCharacteristic
-  | SetPrimeCharacteristic
-  | SetHeckeParameter
   | SetSymmetricFunctionBasis
-  | SetQ
-  | SetT
   | SetDiagramOrientation
   | SetContentConvention
   | SetInsertionConvention
-  | SetReadingConvention
-  | SetActionSide
+  | SetRecordingTableau
+  | SetRandomSeed
+  | SetSymmetricFunction
+  | SetInnerSymmetricFunction
+  | SetFiniteAlphabet
   | Run Operation
 
 public export

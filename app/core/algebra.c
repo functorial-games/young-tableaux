@@ -688,9 +688,12 @@ static bool read_coefficient(const char *text,Rational *out)
 {
     const char *cursor=text;
     while(isspace((unsigned char)*cursor)) ++cursor;
+    bool unicode_minus=strncmp(cursor,"−",3)==0;
+    if(unicode_minus) { cursor+=3; if(!isdigit((unsigned char)*cursor)) return false; }
     errno=0; char *end;
     int64_t numerator=strtoll(cursor,&end,10);
     if(end==cursor || errno || numerator==INT64_MIN) return false;
+    if(unicode_minus) numerator=-numerator;
     cursor=end; while(isspace((unsigned char)*cursor)) ++cursor;
     uint64_t denominator=1;
     if(*cursor==',') {

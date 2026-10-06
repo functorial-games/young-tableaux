@@ -182,12 +182,12 @@ static MathStatus selected_cell(const char *text,Cell *cell)
 static MathStatus integer_field(const char *text,int *value)
 {
     if(!text || !value) return YT_MALFORMED;
-    char *end=NULL;
-    long parsed=strtol(text,&end,10);
-    if(end==text || parsed<INT_MIN || parsed>INT_MAX) return YT_MALFORMED;
-    while(*end && isspace((unsigned char)*end)) ++end;
-    if(*end) return YT_MALFORMED;
-    *value=(int)parsed;
+    const char *cursor=text; int values[YT_DIM],count=0;
+    MathStatus status=parse_integer_list(&cursor,values,&count,false);
+    if(status!=YT_OK) return status;
+    parse_spaces(&cursor);
+    if(*cursor || count!=1) return YT_MALFORMED;
+    *value=values[0];
     return YT_OK;
 }
 static void project_jeu(Console *c)
@@ -706,7 +706,7 @@ void console_event(Console *c,Controls *u,ControlEvent e)
     }
     (void)u;
 }
-static const char *key_labels[]={"1","2","3","4","5","6","7","8","9","0",",",";","-","SPACE","DEL","CLEAR","[","]",".","DONE"};
+static const char *key_labels[]={"1","2","3","4","5","6","7","8","9","0",",",";","−","SPACE","DEL","CLEAR","[","]",".","DONE"};
 const char *console_key_label(int key) { return key>=0 && key<20?key_labels[key]:""; }
 int console_key_hit(const Controls *u,int x,int y,int height)
 {
@@ -719,7 +719,9 @@ void console_key(Console *c,Controls *u,int key)
     if(!u->focus || u->focus>=FIELD_COUNT || key<0 || key>=20) return;
     char *text=c->fields[u->focus]; size_t len=strlen(text);
     if(key==19) { u->focus=0; return; }
-    if(key==14) { if(len) text[len-1]=0; }
+    if(key==14) {
+        if(len) { --len; while(len && ((unsigned char)text[len]&0xc0U)==0x80U) --len; text[len]=0; }
+    }
     else if(key==15) text[0]=0;
     else {
         const char *add=key==13?" ":key_labels[key]; size_t length=strlen(add);

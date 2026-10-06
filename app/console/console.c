@@ -341,7 +341,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
             controls_add(u,CHOOSE_CONTENT,CHOICE,c->content_convention?"Content: row-column (inventory)":"Content: column-row (inventory)",0,NULL);
             field(c,u,SET_READING); field(c,u,SET_ACTION); break;
         }
-        for(int op=0;op<OP_COUNT;++op) if(operation_info[op].section==s) controls_add(u,OP_BASE+op,BUTTON,operation_info[op].label,0,NULL);
+        for(int op=0;op<OP_COUNT;++op) if(operation_info[op].section==s && op!=ConjugatePartition && op!=ListCells) controls_add(u,OP_BASE+op,BUTTON,operation_info[op].label,0,NULL);
         if(s!=0 && s!=2) controls_add(u,0,OUTPUT,c->output[s],0,NULL);
         if(s==1 && c->tableau_ok) diagram(u,"filling cells",&c->tableau);
         if(s==3 && c->rsk_ok) { diagram(u,"P cells",&c->p); diagram(u,"Q cells",&c->q); }

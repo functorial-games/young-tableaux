@@ -14,6 +14,13 @@ enum { SET_LAMBDA=1,SET_TABLEAU,SET_PERMUTATION,SET_MU,SET_NU,SET_CELL,
  SET_PATH,SET_LAW,SET_COXETER,SET_SECOND_PERMUTATION,SET_READING,SET_ACTION,
  FIELD_COUNT, CHOOSE_ORIENTATION=100,CHOOSE_STANDARD,CHOOSE_INSERTION,
  CHOOSE_CONTENT,STEP_MINUS,STEP_PLUS,CHOOSE_TABLEAU_KIND,OP_BASE=1000 };
+#define SCRIPT_LAYOUT_MAX 32
+typedef enum {
+    SCRIPT_LABEL, SCRIPT_SEPARATOR, SCRIPT_FIELD, SCRIPT_SHAPE,
+    SCRIPT_OUTPUT, SCRIPT_HOOKS, SCRIPT_FACTS, SCRIPT_WEGERT,
+    SCRIPT_PLOT_CONTROLS
+} ScriptLayoutKind;
+typedef struct { ScriptLayoutKind kind; int arg; char text[128]; } ScriptLayoutItem;
 typedef struct {
     char fields[FIELD_COUNT][512];
     char output[12][UI_TEXT];
@@ -21,6 +28,11 @@ typedef struct {
     TileProjection partition,conjugate,tableau,p,q,hooks;
     TileRowProjection editable_rows[YT_DIM];
     WegertProjection wegert;
+    ScriptLayoutItem script_layout[SCRIPT_LAYOUT_MAX];
+    int script_layout_count;
+    Partition shape_history_base;
+    int shape_added_rows[YT_CELLS];
+    int shape_history_count;
     bool partition_ok,tableau_ok,rsk_ok,french,decreasing;
     int insertion,content_convention,tableau_kind;
 } Console;

@@ -60,13 +60,13 @@ function young_facts(lambda, hooks, standard_count)
   local formula = denominator == "1" and numerator or (numerator .. " / (" .. denominator .. ")")
 
   return table.concat({
-    "SCHUR SPECIALIZATION",
-    "lambda = " .. shape_text(lambda) .. "   |lambda| = " .. size,
-    "n(lambda) = " .. n_lambda,
-    "f^lambda / Specht dimension = " .. standard_count,
-    "principal specialization:",
-    "s_lambda(1,z,z^2,...) = " .. formula,
-    "The plot below shows its meromorphic continuation.",
+    "Schur specialization",
+    "λ = " .. shape_text(lambda) .. "   |λ| = " .. size,
+    "n(λ) = " .. n_lambda,
+    "f^λ / Specht dimension = " .. standard_count,
+    "Principal specialization:",
+    "s_λ(1,z,z^2,...) = " .. formula,
+    "The plot shows its meromorphic continuation.",
     "Each hook h contributes a factor (1-z^h), so its poles lie at roots of unity."
   }, "\n")
 end
@@ -82,22 +82,21 @@ end
 
 function young_layout()
   return {
-    {kind="label", text="YOUNG TABLEAUX 0.3.0"},
+    {kind="label", text="Young Tableaux 0.3.1"},
     {kind="separator"},
-    {kind="label", text="SHAPE / WEGERT"},
-    {kind="field", arg=1, text="lambda: rows"},
+    {kind="label", text="Shape"},
+    {kind="field", arg=1, text="λ: rows"},
     {kind="shape"},
-    {kind="label", text="WEGERT PLOT: s_lambda(1,z,z^2,...)"},
     {kind="wegert", arg=160},
     {kind="plot_controls"},
     {kind="separator"},
-    {kind="label", text="DERIVED FACTS"},
+    {kind="label", text="Derived facts"},
     {kind="output", arg=0},
     {kind="output", arg=2},
-    {kind="hooks", text="hook cells"},
+    {kind="hooks", text="Hook cells"},
     {kind="facts"},
     {kind="separator"},
-    {kind="label", text="MORE OPERATIONS"}
+    {kind="label", text="More operations"}
   }
 end
 
@@ -124,6 +123,20 @@ function young_shape_add(lambda, row, column)
   local out = copy_shape(lambda)
   shape_history[#shape_history + 1] = copy_shape(lambda)
   if row == #lambda + 1 then out[row] = 1 else out[row] = out[row] + 1 end
+  shape_current = copy_shape(out)
+  return out
+end
+
+function young_shape_remove(lambda, row, column)
+  sync_shape(lambda)
+  if row < 1 or row > #lambda then return nil end
+  if column ~= lambda[row] then return nil end
+  if row < #lambda and lambda[row] <= lambda[row + 1] then return nil end
+
+  local out = copy_shape(lambda)
+  out[row] = out[row] - 1
+  if out[row] == 0 then table.remove(out, row) end
+  shape_history = {}
   shape_current = copy_shape(out)
   return out
 end

@@ -68,6 +68,16 @@ Prefer authoritative publisher/author/university links. Do **not** commit book s
 14. **William Fulton — _Young Tableaux_** remains the cleanest single bridge in this shelf from combinatorics to Grassmannians, flags and Schubert calculus.
 15. For a dedicated geometric reading trail, cross-link the Fulton material in https://github.com/walnut-burgundy/fulton rather than duplicating that repository's source records here.
 
+## Self-similarity / recursion
+
+16. **Tom Leinster — general theory of self-similarity series**
+    - Overview: https://arxiv.org/abs/math/0411343
+    - Part I: https://arxiv.org/abs/math/0411344
+    - Part II (recognition): https://arxiv.org/abs/math/0411345
+    - Merged/superseding paper: https://arxiv.org/abs/1010.4474
+    - [Detailed reading notes](leinster-self-similarity.md)
+    - Formalizes recursive gluing as systems of equations in spaces, constructs universal solutions as terminal coalgebras, and gives recognition theorems based on shrinking recursive pieces. Useful background for recursive/subdivision interactions even though the theory itself is topological rather than metric.
+
 ## How to extend this shelf
 
 Good candidates for later additions:

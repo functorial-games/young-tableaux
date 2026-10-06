@@ -1,0 +1,209 @@
+#include "nearby.h"
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+
+static void button(Controls *u,int id,const char *label,Rect rect,bool enabled)
+{
+    controls_add_at(u,id,enabled?BUTTON:DISABLED_BUTTON,label,rect,NULL);
+}
+
+static bool same_partition(const Partition *a,const Partition *b)
+{
+    if(a->count!=b->count) return false;
+    for(int row=0;row<a->count;++row) if(a->rows[row]!=b->rows[row]) return false;
+    return true;
+}
+
+static bool replay_history(const Console *c,Partition *out)
+{
+    Partition p=c->shape_history_base;
+    for(int i=0;i<c->shape_history_count;++i) {
+        int row=c->shape_added_rows[i];
+        if(row<0 || row>p.count || row>=YT_DIM) return false;
+        if(row==p.count) p.rows[p.count++]=1;
+        else ++p.rows[row];
+    }
+    *out=p;
+    return true;
+}
+
+static void sync_history(Console *c,const Partition *current)
+{
+    Partition replayed;
+    if(c->shape_history_count>0
+       && replay_history(c,&replayed)
+       && same_partition(&replayed,current)) return;
+    c->shape_history_base=*current;
+    c->shape_history_count=0;
+}
+
+void nearby_shape(Console *c,Controls *u)
+{
+    Partition p;
+    if(partition_parse(c->fields[SET_LAMBDA],&p)!=YT_OK) return;
+    sync_history(c,&p);
+
+    Cell cells[YT_DIM+1];
+    bool addable[YT_DIM+1]={false};
+    int addable_count=partition_addable(&p,cells);
+    for(int i=0;i<addable_count;++i) {
+        int row=cells[i].row-1;
+        if(row>=0 && row<YT_DIM && cells[i].column<=YT_DIM) addable[row]=true;
+    }
+
+    int scale=u->scale, margin=4*scale, gap=4*scale, side=24*scale;
+    int width=u->width-2*margin;
+    int columns=(p.count?p.rows[0]:0)+1;
+    int available=width-4*scale;
+    int cell=side;
+    if(columns*cell>available) cell=available/columns;
+    if(cell<1) cell=1;
+
+    controls_add(u,0,LABEL,"Young diagram",0,NULL);
+
+    bool can_new_row=p.count<YT_DIM && partition_size(&p)<YT_CELLS && addable[p.count];
+    int visual_rows=p.count+(can_new_row?1:0);
+    if(!visual_rows) visual_rows=1;
+
+    for(int visual=0;visual<visual_rows;++visual) {
+        int row;
+        if(can_new_row) row=c->french?p.count-visual:visual;
+        else row=c->french?p.count-1-visual:visual;
+        int y=u->content;
+
+        if(row>=0 && row<p.count) {
+            c->editable_rows[row]=(TileRowProjection){p.rows[row],columns};
+            controls_add_at(u,0,ROW_BLOCKS,"",(Rect){margin,y,width,side},&c->editable_rows[row]);
+            if(addable[row] && partition_size(&p)<YT_CELLS) {
+                int button_side=cell;
+                if(button_side>side-4*scale) button_side=side-4*scale;
+                if(button_side<1) button_side=1;
+                int x=margin+2*scale+p.rows[row]*cell;
+                if(x+button_side>u->width-margin) x=u->width-margin-button_side;
+                button(u,ADDABLE_BASE+row,"+",
+                       (Rect){x,y+(side-button_side)/2,button_side,button_side},true);
+            }
+        } else if(row==p.count && can_new_row) {
+            int button_side=cell;
+            if(button_side>side-4*scale) button_side=side-4*scale;
+            if(button_side<1) button_side=1;
+            button(u,ADDABLE_BASE+row,"+",
+                   (Rect){margin+2*scale,y+(side-button_side)/2,button_side,button_side},true);
+        } else {
+            controls_add_at(u,0,ROW_BLOCKS,"",(Rect){margin,y,width,side},NULL);
+        }
+        u->content=y+side;
+    }
+
+    u->content+=gap;
+    int y=u->content, half=(width-gap)/2;
+    bool can_rewind=c->shape_history_count>0;
+    button(u,SHAPE_UNDO,"UNDO",(Rect){margin,y,half,side},can_rewind);
+    button(u,SHAPE_RESET,"RESET",(Rect){margin+half+gap,y,width-half-gap,side},can_rewind);
+}
+
+void nearby_plot_controls(Console *c,Controls *u)
+{
+    const int zoom_ids[]={PLOT_ZOOM_OUT,PLOT_RESET,PLOT_ZOOM_IN};
+    const char *zoom_labels[]={"ZOOM -","RESET","ZOOM +"};
+    const int pan_ids[]={PLOT_LEFT,PLOT_UP,PLOT_DOWN,PLOT_RIGHT};
+    const char *pan_labels[]={"LEFT","UP","DOWN","RIGHT"};
+    int scale=u->scale, margin=4*scale, gap=4*scale;
+    int width=u->width-2*margin, y=u->content, height=24*scale;
+    for(int index=0;index<3;++index) {
+        int left=margin+index*(width+gap)/3;
+        int right=margin+(index+1)*(width+gap)/3-gap;
+        bool enabled=index==1 || (index==0?c->wegert.half_height<6.0:c->wegert.half_height>0.015);
+        button(u,zoom_ids[index],zoom_labels[index],(Rect){left,y,right-left,height},enabled);
+    }
+    y=u->content;
+    for(int index=0;index<4;++index) {
+        int left=margin+index*(width+gap)/4;
+        int right=margin+(index+1)*(width+gap)/4-gap;
+        bool enabled=index==0?c->wegert.center_real>-8.0:
+                     index==3?c->wegert.center_real<8.0:
+                     index==1?c->wegert.center_imag<8.0:c->wegert.center_imag>-8.0;
+        button(u,pan_ids[index],pan_labels[index],(Rect){left,y,right-left,height},enabled);
+    }
+}
+
+static void changed_shape(Console *c,Controls *u,const Partition *p)
+{
+    char *text=c->fields[SET_LAMBDA]; size_t used=0;
+    text[0]=0;
+    for(int row=0;row<p->count;++row)
+        used+=(size_t)snprintf(text+used,512-used,"%s%d",row?",":"",p->rows[row]);
+    if(!p->count) snprintf(text,512,"[]");
+    c->scripted_facts[0]=0;
+    console_run(c,DisplayPartition);
+    console_run(c,ValidateTableau);
+    u->focus=0;
+}
+
+static bool find_addable(const Partition *p,int row,Cell *out)
+{
+    if(row<0 || row>p->count || row>=YT_DIM || partition_size(p)>=YT_CELLS) return false;
+    Cell cells[YT_DIM+1];
+    int count=partition_addable(p,cells);
+    for(int i=0;i<count;++i) if(cells[i].row==row+1 && cells[i].column<=YT_DIM) {
+        *out=cells[i];
+        return true;
+    }
+    return false;
+}
+
+bool nearby_event(Console *c,Controls *u,ControlEvent event)
+{
+    if(event.kind!=EVENT_ACTIVATE) return false;
+    int id=event.id;
+
+    if(id>=ADDABLE_BASE && id<=ADDABLE_BASE+YT_DIM) {
+        Partition p;
+        if(partition_parse(c->fields[SET_LAMBDA],&p)!=YT_OK) return true;
+        sync_history(c,&p);
+        int row=id-ADDABLE_BASE;
+        Cell cell;
+        if(!find_addable(&p,row,&cell)) return true;
+        c->shape_history_base=c->shape_history_count?c->shape_history_base:p;
+        if(row==p.count) p.rows[p.count++]=1;
+        else ++p.rows[row];
+        if(c->shape_history_count<YT_CELLS)
+            c->shape_added_rows[c->shape_history_count++]=row;
+        changed_shape(c,u,&p);
+        return true;
+    }
+
+    if(id==SHAPE_UNDO || id==SHAPE_RESET) {
+        Partition p;
+        if(partition_parse(c->fields[SET_LAMBDA],&p)!=YT_OK) return true;
+        sync_history(c,&p);
+        if(!c->shape_history_count) return true;
+        if(id==SHAPE_RESET) {
+            p=c->shape_history_base;
+            c->shape_history_count=0;
+        } else {
+            int row=c->shape_added_rows[--c->shape_history_count];
+            if(row==p.count-1 && p.rows[row]==1) --p.count;
+            else if(row>=0 && row<p.count) --p.rows[row];
+        }
+        changed_shape(c,u,&p);
+        return true;
+    }
+
+    if(id<PLOT_LEFT || id>PLOT_RESET) return false;
+    double step=0.3*c->wegert.half_height;
+    switch(id) {
+    case PLOT_LEFT: c->wegert.center_real=fmax(-8.0,c->wegert.center_real-step); break;
+    case PLOT_RIGHT: c->wegert.center_real=fmin(8.0,c->wegert.center_real+step); break;
+    case PLOT_UP: c->wegert.center_imag=fmin(8.0,c->wegert.center_imag+step); break;
+    case PLOT_DOWN: c->wegert.center_imag=fmax(-8.0,c->wegert.center_imag-step); break;
+    case PLOT_ZOOM_IN: c->wegert.half_height=fmax(0.015,c->wegert.half_height/1.5); break;
+    case PLOT_ZOOM_OUT: c->wegert.half_height=fmin(6.0,c->wegert.half_height*1.5); break;
+    case PLOT_RESET:
+        c->wegert.center_real=0.0; c->wegert.center_imag=0.0; c->wegert.half_height=1.5;
+        break;
+    default: break;
+    }
+    return true;
+}

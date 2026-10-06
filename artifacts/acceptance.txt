@@ -1,0 +1,29 @@
+Young Tableaux v0.1 acceptance
+audited_base 5a19647fe744a0eec26c1e5b187b8db93cedc02c
+refreshed_base 3bd6b60755a5068aa88bfb5e7053bd786c9d67c9
+source_identity Current PR head; delivery compares an exact-head rebuild with this APK.
+apk artifacts/young-tableaux-armeabi-v7a.apk
+apk_bytes 74155
+apk_sha256 c9e875bc490d6ff8d9a754eb0630cc0dbc779e5476d061aa04ffd3f6aec7055f
+package org.functorialgames.youngtableaux
+version 0.1.0 (code 1)
+abi armeabi-v7a; ELF32; EM_ARM; ARMv7; A32; softfp; 16-KiB LOAD alignment
+sdk min 26; target 34
+signer_sha256 de9b1d47c5a65e6d46a204b79dd9ee566b9d3c9832ba81ebc4213d3392e92ff9
+signature PASS v2, v3
+host_tests PASS 3771 assertions
+mathematical_evidence Known hook tables/counts and P/Q pairs; independent branching recurrence through size ten; all 720 size-six permutations with independent LIS check.
+interaction_evidence Hosted C tests: hits, focus/edit, choice/stepper, drag suppression, cancellation, secondary pointer isolation, bounds, stable IDs, 12 sections, unimplemented results.
+sanitizers PASS AddressSanitizer and UndefinedBehaviorSanitizer
+leak_sanitizer NOT_RUN container process/ptrace restrictions; detect_leaks=0
+preview PASS hosted 576x1152 source projection (launch, keypad, P/Q, LR signature)
+repeat_build PASS byte-identical APK from repeated source builds
+ndk 27.2.12479018 (r27c)
+platform android-34 revision 3
+build_tools 35.0.0
+grease_packaging f19c94c6df18cddbdc1e81463e5bd689533e3c13
+grease_source 6d29702a10ea9eb72a43950554dbcd4174d07a89
+grease_entrypoint bin/ysh reference/dev implementation; native compilation not claimed
+ick NDK fallback; full NativeActivity/header/driver/runtime/APK qualification gap documented
+physical_miro_a1 PENDING; no device connection/installation/launch/behavior evidence
+emulator NOT_RUN

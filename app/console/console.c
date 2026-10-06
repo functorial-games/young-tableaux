@@ -14,7 +14,7 @@ const OperationInfo operation_info[OP_COUNT]={
 };
 static const char *sections[]={"Partition / Young diagram","Tableau","Hooks / corners / cells","RSK","Jeu de taquin","Littlewood-Richardson","Symmetric group / representations","Symmetric functions","Young graph / branching","Random / asymptotic","Type-A / Coxeter","Global conventions"};
 static const char *tableau_kinds[]={"Standard","ArbitraryFilling","RowStandard","ColumnStandard","Semistandard","Skew","Shifted","Ribbon","Oscillating","KTableau"};
-static const char *field_names[FIELD_COUNT]={"","λ: rows","tableau: rows separated by ;","permutation","mu: partition","nu: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after mu","entry"};
+static const char *field_names[FIELD_COUNT]={"","λ: rows","tableau: rows separated by ;","permutation","μ: partition","ν: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after μ","entry"};
 static void append(char *out,const char *format,...)
 {
     size_t used=strlen(out); if(used>=UI_TEXT-1) return;
@@ -68,8 +68,8 @@ static void refresh_partition(Console *c)
     tiles(&c->partition,&p,NULL); tiles(&c->conjugate,&conjugate,NULL);
     append(c->output[0],"Valid partition\nsize |λ| = %d\nconjugate = ",partition_size(&p)); partition_text(c->output[0],&conjugate);
     Cell cells[YT_CELLS+1]; int n=partition_cells(&p,cells); cells_text(c->output[0],"cells",cells,n);
-    n=partition_removable(&p,cells); cells_text(c->output[2],"corners / removable",cells,n);
-    n=partition_addable(&p,cells); cells_text(c->output[2],"addable",cells,n);
+    n=partition_removable(&p,cells);
+    n=partition_addable(&p,cells);
     Tableau h={0}; h.shape=p;
     c->wegert.valid=true;
     for(int r=0;r<p.count;++r) {
@@ -83,11 +83,12 @@ static void refresh_partition(Console *c)
             }
         }
     }
-    tiles(&c->hooks,&p,&h); tableau_text(c->output[2],"hook lengths (rows)",&h);
+    tiles(&c->hooks,&p,&h);
     uint64_t value; s=partition_hook_product(&p,&value);
-    if(s==YT_OK) append(c->output[2],"hook product = %" PRIu64 "\n",value); else append(c->output[2],"hook product: %s\n",math_status(s));
+    if(s==YT_OK) append(c->output[2],"Hook product = %" PRIu64 "\n",value); else append(c->output[2],"Hook product: %s\n",math_status(s));
     s=partition_standard_count(&p,&value);
-    if(s==YT_OK) append(c->output[2],"f^λ = %" PRIu64 "\n",value); else append(c->output[2],"f^λ: %s\n",math_status(s));
+    if(s==YT_OK) append(c->output[2],"Hook-length formula gives %" PRIu64 " standard tableaux.\n",value);
+    else append(c->output[2],"Standard tableaux: %s\n",math_status(s));
 }
 static void refresh_tableau(Console *c)
 {
@@ -97,7 +98,7 @@ static void refresh_tableau(Console *c)
         append(c->output[1],"NOT IMPLEMENTED\nValidation for %s\ninput: Tableau\noutput: Bool\nChoose Standard for v0.1 validation.",tableau_kinds[c->tableau_kind]);
         return;
     }
-    if(a!=YT_OK || b!=YT_OK) { append(c->output[1],"%s: %s\n",a!=YT_OK?"lambda":"tableau",math_status(a!=YT_OK?a:b)); return; }
+    if(a!=YT_OK || b!=YT_OK) { append(c->output[1],"%s: %s\n",a!=YT_OK?"λ":"tableau",math_status(a!=YT_OK?a:b)); return; }
     Validation v=tableau_validate(&p,&t,c->decreasing);
     append(c->output[1],"shape compatible: %s\nrows strictly %s: %s\ncolumns strictly %s: %s\nstandard (1..n once): %s\n",v.shape?"YES":"NO",c->decreasing?"decreasing":"increasing",v.rows?"YES":"NO",c->decreasing?"decreasing":"increasing",v.columns?"YES":"NO",v.standard?"YES":"NO");
     tableau_text(c->output[1],"filling",&t); tiles(&c->tableau,&t.shape,&t); c->tableau_ok=true;
@@ -148,7 +149,7 @@ static void project_jeu(Console *c)
 {
     c->output[4][0]=0; c->jeu_loaded=true; skew_tiles(&c->jeu_tiles,&c->jeu);
     append(c->output[4],"Forward jeu de taquin\nouter λ = "); partition_text(c->output[4],&c->jeu.outer);
-    append(c->output[4],"inner mu = "); partition_text(c->output[4],&c->jeu.inner);
+    append(c->output[4],"inner μ = "); partition_text(c->output[4],&c->jeu.inner);
     if(c->jeu.active) {
         c->jeu_ok=true;
         append(c->output[4],"active hole = (%d,%d)\nSTEP moves the smaller right/below entry; ties move the lower entry.\n",c->jeu.hole.row,c->jeu.hole.column);
@@ -165,7 +166,7 @@ static void refresh_jeu(Console *c)
     c->jeu_loaded=false; c->jeu_ok=false; c->output[4][0]=0;
     MathStatus status=skew_tableau_parse(c->fields[SET_LAMBDA],c->fields[SET_MU],c->fields[SET_SKEW_TABLEAU],&c->jeu);
     if(status!=YT_OK) {
-        append(c->output[4],"skew tableau: %s\nUse λ as outer shape, mu as inner shape, and enter only the visible skew cells in each row.",math_status(status));
+        append(c->output[4],"skew tableau: %s\nUse λ as outer shape, μ as inner shape, and enter only the visible skew cells in each row.",math_status(status));
         return;
     }
     project_jeu(c);
@@ -187,17 +188,15 @@ static void layout_add(Console *c,ScriptLayoutKind kind,int arg,const char *text
 static void default_layout(Console *c)
 {
     c->script_layout_count=0;
-    layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.3.2");
+    layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.3.3");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
     layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"λ: rows");
     layout_add(c,SCRIPT_SHAPE,0,"");
     layout_add(c,SCRIPT_WEGERT,160,"");
     layout_add(c,SCRIPT_PLOT_CONTROLS,0,"");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
-    layout_add(c,SCRIPT_LABEL,0,"Derived facts");
-    layout_add(c,SCRIPT_OUTPUT,0,"");
+    layout_add(c,SCRIPT_HOOKS,0,"Hook lengths: each number counts its cell, cells right, and cells below.");
     layout_add(c,SCRIPT_OUTPUT,2,"");
-    layout_add(c,SCRIPT_HOOKS,0,"Hook cells");
     layout_add(c,SCRIPT_FACTS,0,"");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
     layout_add(c,SCRIPT_LABEL,0,"More operations");
@@ -208,8 +207,8 @@ void console_init(Console *c)
     const char *defaults[FIELD_COUNT]={"","3,2,1","1,2,4;3,5;6","3,1,4,2","1","3,2,1","1,1","1,2,1","1,1,2;1,2,1","1,0;0,1","6","3","2,1","0","2","1","Schur","1","1","x1,x2","1","[]","Plancherel","1,2,1","1,2,3,4","RowReading","LeftAction","1,3;2,5;4","7"};
     for(int i=1;i<FIELD_COUNT;++i) snprintf(c->fields[i],sizeof(c->fields[i]),"%s",defaults[i]);
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
-    snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nRow RSK bumps the first strictly greater entry.\nJeu de taquin uses weak rows / strict columns; ties between right and below move the lower entry.\nSkew rows contain only visible cells after mu.");
-    snprintf(c->scripted_facts,UI_TEXT,"Schur specialization\nLoading...");
+    snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column−row.\nRow RSK bumps the first strictly greater entry.\nJeu de taquin uses weak rows / strict columns; ties between right and below move the lower entry.\nSkew rows contain only visible cells after mu.");
+    snprintf(c->scripted_facts,UI_TEXT,"Schur specialization\nSubstitute 1, z, z², … into s_λ to get one function of z.");
     default_layout(c); c->rsk_step=YT_DIM;
     refresh_partition(c); refresh_tableau(c); refresh_rsk(c); refresh_jeu(c);
 }
@@ -295,7 +294,7 @@ void console_run(Console *c,Operation op)
         if(!c->jeu.active) {
             Cell cell;
             if(selected_cell(c->fields[SET_CELL],&cell)!=YT_OK || jeu_begin(&c->jeu,cell)!=YT_OK) {
-                snprintf(c->output[4],UI_TEXT,"Selected cell must be a removable inner corner of mu."); return;
+                snprintf(c->output[4],UI_TEXT,"Selected cell must be a removable inner corner of μ."); return;
             }
         }
         finish_jeu_slide(c); return;
@@ -371,13 +370,32 @@ static void scripted_top(Console *c,Controls *u)
         }
     }
 }
+static bool operation_exposed(Operation op)
+{
+    switch(op) {
+    case RSKPermutation:
+    case RSKWord:
+    case JeuDeTaquinSlide:
+    case Rectify:
+        return true;
+    default:
+        return false;
+    }
+}
+static bool section_exposed(int section)
+{
+    if(section==11) return true;
+    for(int op=0;op<OP_COUNT;++op)
+        if(operation_info[op].section==section && operation_exposed((Operation)op)) return true;
+    return false;
+}
 void console_layout(Console *c,Controls *u,int w,int h)
 {
     controls_begin(u,w,h,u->focus!=0);
     scripted_top(c,u);
 
     for(int s=0;s<12;++s) {
-        if(s==1 || s==2) continue;
+        if(!section_exposed(s)) continue;
         controls_add(u,0,SEPARATOR,"",2*u->scale,NULL); controls_add(u,0,LABEL,sections[s],0,NULL);
         switch(s) {
         case 0: controls_add(u,0,LABEL,"Uses λ from the top of the screen.",0,NULL); break;
@@ -390,32 +408,33 @@ void console_layout(Console *c,Controls *u,int w,int h)
         case 2: controls_add(u,0,LABEL,"Hook facts and diagram are shown near the top. Cell-based add/remove operations use the selected-cell field in the jeu de taquin section below.",0,NULL); break;
         case 3: {
             controls_add(u,0,LABEL,"Row RSK inserts left to right and bumps the first strictly greater entry. P and Q update insertion by insertion; highlighted P cells are the current bump path.",0,NULL);
-            field(c,u,SET_PERMUTATION); field(c,u,SET_WORD); field(c,u,SET_BIWORD); field(c,u,SET_MATRIX);
-            controls_add(u,CHOOSE_INSERTION,CHOICE,c->insertion?"ColumnInsertion: not implemented":"RowInsertion",0,NULL);
-            const int ids[]={RSK_START,RSK_PREV,RSK_NEXT,RSK_END}; const char *labels[]={"START","PREV","NEXT","END"};
+            field(c,u,SET_PERMUTATION); field(c,u,SET_WORD);
+            const int ids[]={RSK_START,RSK_PREV,RSK_NEXT,RSK_END}; const char *labels[]={"Start","Prev","Next","End"};
             button_strip(u,ids,labels,4); break;
         }
         case 4: {
-            controls_add(u,0,LABEL,"λ is the outer shape. mu is the inner shape. Enter only the visible skew cells in each row. STEP moves one entry into the hole.",0,NULL);
+            controls_add(u,0,LABEL,"λ is the outer shape. μ is the inner shape. Enter only the visible skew cells in each row. Step moves one entry into the hole.",0,NULL);
             field(c,u,SET_MU); field(c,u,SET_SKEW_TABLEAU); field(c,u,SET_CELL);
             if(c->jeu_loaded) diagram(u,"jeu de taquin board",&c->jeu_tiles);
-            const int ids[]={JDT_RESET,JDT_STEP,JDT_SLIDE,JDT_RECTIFY}; const char *labels[]={"RESET","STEP","SLIDE","RECTIFY"};
+            const int ids[]={JDT_RESET,JDT_STEP,JDT_SLIDE,JDT_RECTIFY}; const char *labels[]={"Reset","Step","Slide","Rectify"};
             button_strip(u,ids,labels,4); break;
         }
         case 5:
-            controls_add(u,0,LABEL,"Uses λ above; LR uses outer nu / inner λ and content mu. The mu field is immediately above.",0,NULL);
+            controls_add(u,0,LABEL,"Uses λ above; LR uses outer ν ÷ inner λ and content μ. The μ field is immediately above.",0,NULL);
             field(c,u,SET_NU); break;
         case 6: field(c,u,SET_CHARACTERISTIC); field(c,u,SET_PRIME); field(c,u,SET_HECKE); controls_add(u,0,LABEL,"Uses λ and permutation above. Only characteristic-zero dimension is implemented.",0,NULL); break;
         case 7: field(c,u,SET_BASIS); field(c,u,SET_COEFFICIENTS); field(c,u,SET_VARIABLES); field(c,u,SET_Q); field(c,u,SET_T); break;
-        case 8: field(c,u,SET_PATH); controls_add(u,0,LABEL,"Start lambda, end nu; paths encode box additions.",0,NULL); break;
-        case 9: field(c,u,SET_N); controls_add(u,STEP_MINUS,BUTTON,"n - 1",0,NULL); controls_add(u,STEP_PLUS,BUTTON,"n + 1",0,NULL); field(c,u,SET_LAW); break;
+        case 8: field(c,u,SET_PATH); controls_add(u,0,LABEL,"Start λ, end ν; paths encode box additions.",0,NULL); break;
+        case 9: field(c,u,SET_N); controls_add(u,STEP_MINUS,BUTTON,"n − 1",0,NULL); controls_add(u,STEP_PLUS,BUTTON,"n + 1",0,NULL); field(c,u,SET_LAW); break;
         case 10: field(c,u,SET_COXETER); field(c,u,SET_SECOND_PERMUTATION); break;
         case 11:
             controls_add(u,CHOOSE_ORIENTATION,CHOICE,c->french?"Diagram orientation: French":"Diagram orientation: English",0,NULL);
-            controls_add(u,CHOOSE_CONTENT,CHOICE,c->content_convention?"Content: row-column (inventory)":"Content: column-row (inventory)",0,NULL);
+            controls_add(u,CHOOSE_CONTENT,CHOICE,c->content_convention?"Content: row−column (inventory)":"Content: column−row (inventory)",0,NULL);
             field(c,u,SET_READING); field(c,u,SET_ACTION); break;
         }
-        for(int op=0;op<OP_COUNT;++op) if(operation_info[op].section==s && op!=ConjugatePartition && op!=ListCells) controls_add(u,OP_BASE+op,BUTTON,operation_info[op].label,0,NULL);
+        for(int op=0;op<OP_COUNT;++op)
+            if(operation_info[op].section==s && operation_exposed((Operation)op))
+                controls_add(u,OP_BASE+op,BUTTON,operation_info[op].label,0,NULL);
         if(s!=0 && s!=2) controls_add(u,0,OUTPUT,c->output[s],0,NULL);
         if(s==1 && c->tableau_ok) diagram(u,"filling cells",&c->tableau);
         if(s==3 && c->rsk_ok) { diagram(u,"P cells",&c->p); diagram(u,"Q cells",&c->q); }
@@ -439,7 +458,7 @@ void console_event(Console *c,Controls *u,ControlEvent e)
         if(!c->jeu.active) {
             Cell cell;
             if(selected_cell(c->fields[SET_CELL],&cell)!=YT_OK || jeu_begin(&c->jeu,cell)!=YT_OK) {
-                snprintf(c->output[4],UI_TEXT,"Selected cell must be a removable inner corner of mu."); break;
+                snprintf(c->output[4],UI_TEXT,"Selected cell must be a removable inner corner of μ."); break;
             }
         }
         JeuStepResult result=jeu_step(&c->jeu);

@@ -21,6 +21,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify symbolic Lua fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C third_party/lua rev-parse HEAD)" = dca7e57c16c524c8616144ed294fe598947a029f
+
       - name: Test host mathematics and controls
         shell: bash
         run: |

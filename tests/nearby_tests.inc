@@ -133,7 +133,10 @@ static void nearby_tests(void)
             CHECK(!strstr(control->text,"conjugate blocks"));
             if(control->id) { CHECK(!ids[control->id]); ids[control->id]=true; }
         }
-        for(int op=0;op<OP_COUNT;++op) CHECK(ids[OP_BASE+op]);
+        for(int op=0;op<OP_COUNT;++op) {
+            bool visible=op!=ConjugatePartition && op!=ListCells;
+            CHECK(ids[OP_BASE+op]==visible);
+        }
         CHECK(ids[RSK_START] && ids[RSK_PREV] && ids[RSK_NEXT] && ids[RSK_END]);
         CHECK(ids[JDT_RESET] && ids[JDT_STEP] && ids[JDT_SLIDE] && ids[JDT_RECTIFY]);
     }

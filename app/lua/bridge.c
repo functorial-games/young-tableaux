@@ -266,27 +266,10 @@ static bool same_partition(const Partition *a,const Partition *b)
     return true;
 }
 
-static bool replay_mirror(const Console *console,Partition *out)
-{
-    Partition p=console->shape_history_base;
-    for(int i=0;i<console->shape_history_count;++i) {
-        int row=console->shape_added_rows[i];
-        if(row<0 || row>p.count || row>=YT_DIM) return false;
-        if(row==p.count) p.rows[p.count++]=1;
-        else ++p.rows[row];
-    }
-    *out=p;
-    return true;
-}
-
 static void sync_mirror(Console *console,const Partition *current)
 {
-    Partition replayed;
-    if(console->shape_history_count>0
-       && replay_mirror(console,&replayed)
-       && same_partition(&replayed,current)) return;
-    console->shape_history_base=*current;
-    console->shape_history_count=0;
+    if(same_partition(&console->diagram.current,current)) return;
+    diagram_replace(&console->diagram,current);
 }
 
 static bool call_shape(LuaBridge *bridge,const char *name,const Partition *current,
@@ -367,7 +350,8 @@ bool lua_bridge_shape_event(LuaBridge *bridge,Console *console,Controls *ui,Cont
     if(partition_parse(console->fields[SET_LAMBDA],&current)!=YT_OK) return true;
     sync_mirror(console,&current);
 
-    Partition expected=current, scripted;
+    DiagramState candidate=console->diagram;
+    Partition scripted;
     const char *function=NULL;
     Cell cell={0};
 
@@ -375,51 +359,29 @@ bool lua_bridge_shape_event(LuaBridge *bridge,Console *console,Controls *ui,Cont
         int row=id-REMOVABLE_BASE;
         if(!find_removable(&current,row,&cell)) return true;
         function="young_shape_remove";
-        --expected.rows[row];
-        if(!expected.rows[row]) --expected.count;
-        if(!call_shape(bridge,function,&current,&cell,&scripted)
-           || !same_partition(&scripted,&expected)) {
-            bridge_error(bridge,"Lua click-remove result failed C validation");
-            return true;
-        }
-        console->shape_history_count=0;
-        console->shape_history_base=scripted;
+        if(diagram_remove_cell(&candidate,cell)!=YT_OK) return true;
     } else if(add) {
         int row=id-ADDABLE_BASE;
         if(!find_addable(&current,row,&cell)) return true;
         function="young_shape_add";
-        if(row==expected.count) expected.rows[expected.count++]=1;
-        else ++expected.rows[row];
-        if(!call_shape(bridge,function,&current,&cell,&scripted)
-           || !same_partition(&scripted,&expected)) {
-            bridge_error(bridge,"Lua click-add result failed C validation");
-            return true;
-        }
-        if(!console->shape_history_count) console->shape_history_base=current;
-        if(console->shape_history_count<YT_CELLS)
-            console->shape_added_rows[console->shape_history_count++]=row;
+        if(diagram_add_cell(&candidate,cell)!=YT_OK) return true;
     } else {
-        if(!console->shape_history_count) return true;
+        if(!candidate.addition_count) return true;
         if(id==SHAPE_RESET) {
             function="young_shape_reset";
-            expected=console->shape_history_base;
+            diagram_reset_additions(&candidate);
         } else {
             function="young_shape_undo";
-            int row=console->shape_added_rows[console->shape_history_count-1];
-            if(row==expected.count-1 && expected.rows[row]==1) --expected.count;
-            else if(row>=0 && row<expected.count) --expected.rows[row];
-            else return true;
+            if(diagram_undo_addition(&candidate)!=YT_OK) return true;
         }
-        if(!call_shape(bridge,function,&current,NULL,&scripted)
-           || !same_partition(&scripted,&expected)) {
-            bridge_error(bridge,"Lua undo/reset result failed C validation");
-            return true;
-        }
-        if(id==SHAPE_RESET) console->shape_history_count=0;
-        else --console->shape_history_count;
     }
-
-    install_partition(console,ui,&scripted);
+    if(!call_shape(bridge,function,&current,(add||remove)?&cell:NULL,&scripted)
+       || !same_partition(&scripted,&candidate.current)) {
+        bridge_error(bridge,"Lua diagram result failed native DiagramState validation");
+        return true;
+    }
+    console->diagram=candidate;
+    install_partition(console,ui,&candidate.current);
     snprintf(bridge->last_lambda,sizeof(bridge->last_lambda),"%s",console->fields[SET_LAMBDA]);
     bridge->last_lambda[0]=0;
     return true;

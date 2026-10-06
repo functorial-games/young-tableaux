@@ -13,6 +13,15 @@ struct glyph {
     uint8_t rows[7];
 };
 
+#define GLYPH_MU '\x01'
+#define GLYPH_NU '\x02'
+#define GLYPH_NATURAL '\x03'
+#define GLYPH_MINUS '\x04'
+#define GLYPH_DIVIDE '\x05'
+#define GLYPH_TIMES '\x06'
+#define GLYPH_ELLIPSIS '\x07'
+#define GLYPH_LAMBDA '\x7f'
+
 static const struct glyph glyphs[] = {
     {' ', {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
     {'+', {0x00, 0x04, 0x04, 0x1f, 0x04, 0x04, 0x00}},
@@ -88,7 +97,14 @@ static const struct glyph glyphs[] = {
     {'|', {4,4,4,4,4,4,4}}, {'^', {4,10,17,0,0,0,0}},
     {'<', {1,2,4,8,4,2,1}}, {'>', {16,8,4,2,4,8,16}},
     {'_', {0,0,0,0,0,0,31}}, {'*', {0,21,14,31,14,21,0}},
-    {'\x7f', {0x04,0x04,0x0a,0x0a,0x11,0x11,0x11}},
+    {GLYPH_MU, {0x00,0x00,0x11,0x11,0x11,0x1b,0x10}},
+    {GLYPH_NU, {0x00,0x00,0x11,0x11,0x11,0x0a,0x04}},
+    {GLYPH_NATURAL, {0x1b,0x1b,0x1f,0x15,0x1f,0x1b,0x1b}},
+    {GLYPH_MINUS, {0x00,0x00,0x00,0x1f,0x00,0x00,0x00}},
+    {GLYPH_DIVIDE, {0x00,0x04,0x00,0x1f,0x00,0x04,0x00}},
+    {GLYPH_TIMES, {0x00,0x11,0x0a,0x04,0x0a,0x11,0x00}},
+    {GLYPH_ELLIPSIS, {0x00,0x00,0x00,0x00,0x15,0x00,0x00}},
+    {GLYPH_LAMBDA, {0x04,0x04,0x0a,0x0a,0x11,0x11,0x11}},
     {'?', {0x0e, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04}},
 };
 
@@ -386,10 +402,35 @@ static struct text_token next_text_token(const char *cursor)
         glyph = cursor + 1;
     }
 
-    if ((unsigned char)glyph[0] == 0xceU &&
-        (unsigned char)glyph[1] == 0xbbU) {
-        token.glyph = '\x7f';
-        token.bytes = prefix + 2U;
+    const unsigned char *u=(const unsigned char *)glyph;
+    if (u[0]==0xceU && u[1]==0xbbU) {
+        token.glyph=GLYPH_LAMBDA; token.bytes=prefix+2U;
+    } else if (u[0]==0xceU && u[1]==0xbcU) {
+        token.glyph=GLYPH_MU; token.bytes=prefix+2U;
+    } else if (u[0]==0xceU && u[1]==0xbdU) {
+        token.glyph=GLYPH_NU; token.bytes=prefix+2U;
+    } else if (u[0]==0xe2U && u[1]==0x84U && u[2]==0x95U) {
+        token.glyph=GLYPH_NATURAL; token.bytes=prefix+3U;
+    } else if (u[0]==0xe2U && u[1]==0x88U && u[2]==0x92U) {
+        token.glyph=GLYPH_MINUS; token.bytes=prefix+3U;
+    } else if (u[0]==0xc3U && u[1]==0xb7U) {
+        token.glyph=GLYPH_DIVIDE; token.bytes=prefix+2U;
+    } else if (u[0]==0xc3U && u[1]==0x97U) {
+        token.glyph=GLYPH_TIMES; token.bytes=prefix+2U;
+    } else if (u[0]==0xe2U && u[1]==0x80U && u[2]==0xa6U) {
+        token.glyph=GLYPH_ELLIPSIS; token.bytes=prefix+3U;
+    } else if (u[0]==0xc2U && u[1]==0xb9U) {
+        token.glyph='1'; token.position=TEXT_SUPERSCRIPT; token.bytes=prefix+2U;
+    } else if (u[0]==0xc2U && u[1]==0xb2U) {
+        token.glyph='2'; token.position=TEXT_SUPERSCRIPT; token.bytes=prefix+2U;
+    } else if (u[0]==0xc2U && u[1]==0xb3U) {
+        token.glyph='3'; token.position=TEXT_SUPERSCRIPT; token.bytes=prefix+2U;
+    } else if (u[0]==0xe2U && u[1]==0x81U && u[2]==0xb0U) {
+        token.glyph='0'; token.position=TEXT_SUPERSCRIPT; token.bytes=prefix+3U;
+    } else if (u[0]==0xe2U && u[1]==0x81U && u[2]>=0xb4U && u[2]<=0xb9U) {
+        token.glyph=(char)('4'+(u[2]-0xb4U)); token.position=TEXT_SUPERSCRIPT; token.bytes=prefix+3U;
+    } else if (u[0]==0xe2U && u[1]==0x82U && u[2]>=0x80U && u[2]<=0x89U) {
+        token.glyph=(char)('0'+(u[2]-0x80U)); token.position=TEXT_SUBSCRIPT; token.bytes=prefix+3U;
     } else {
         token.glyph = glyph[0];
         token.bytes = prefix + 1U;

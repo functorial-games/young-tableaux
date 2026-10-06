@@ -23,6 +23,7 @@ typedef enum {
     SCRIPT_PLOT_CONTROLS
 } ScriptLayoutKind;
 typedef struct { ScriptLayoutKind kind; int arg; char text[128]; } ScriptLayoutItem;
+typedef enum { RSK_PERMUTATION_INPUT, RSK_WORD_INPUT, RSK_BIWORD_INPUT, RSK_MATRIX_INPUT } RSKInputKind;
 typedef struct {
     char fields[FIELD_COUNT][512];
     char output[12][UI_TEXT];
@@ -30,14 +31,16 @@ typedef struct {
     TileProjection partition,conjugate,tableau,p,q,hooks,jeu_tiles;
     TileRowProjection editable_rows[YT_DIM];
     WegertProjection wegert;
-    SkewTableau jeu;
+    JeuState jeu;
     ScriptLayoutItem script_layout[SCRIPT_LAYOUT_MAX];
     int script_layout_count;
-    Partition shape_history_base;
-    int shape_added_rows[YT_CELLS];
-    int shape_history_count;
-    bool partition_ok,tableau_ok,rsk_ok,jeu_loaded,jeu_ok,french,decreasing,rsk_word_mode;
-    int insertion,content_convention,tableau_kind,rsk_step,rsk_total;
+    DiagramState diagram;
+    bool partition_ok,tableau_ok,rsk_ok,jeu_loaded,jeu_ok,french,decreasing;
+    RSKInputKind rsk_input_kind;
+    InsertionConvention insertion;
+    ContentConvention content_convention;
+    TableauKind tableau_kind;
+    int rsk_step,rsk_total;
 } Console;
 typedef struct { const char *label,*input,*output; int section; } OperationInfo;
 extern const OperationInfo operation_info[OP_COUNT];

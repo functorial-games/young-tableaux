@@ -16,27 +16,10 @@ static bool same_partition(const Partition *a,const Partition *b)
     return true;
 }
 
-static bool replay_history(const Console *c,Partition *out)
-{
-    Partition p=c->shape_history_base;
-    for(int i=0;i<c->shape_history_count;++i) {
-        int row=c->shape_added_rows[i];
-        if(row<0 || row>p.count || row>=YT_DIM) return false;
-        if(row==p.count) p.rows[p.count++]=1;
-        else ++p.rows[row];
-    }
-    *out=p;
-    return true;
-}
-
 static void sync_history(Console *c,const Partition *current)
 {
-    Partition replayed;
-    if(c->shape_history_count>0
-       && replay_history(c,&replayed)
-       && same_partition(&replayed,current)) return;
-    c->shape_history_base=*current;
-    c->shape_history_count=0;
+    if(same_partition(&c->diagram.current,current)) return;
+    diagram_replace(&c->diagram,current);
 }
 
 void nearby_shape(Console *c,Controls *u)
@@ -88,7 +71,7 @@ void nearby_shape(Console *c,Controls *u)
             if(removable[row]) {
                 int x=margin+2*scale+(p.rows[row]-1)*cell;
                 if(x+button_side>u->width-margin) x=u->width-margin-button_side;
-                button(u,REMOVABLE_BASE+row,"-",
+                button(u,REMOVABLE_BASE+row,"−",
                        (Rect){x,y+(side-button_side)/2,button_side,button_side},true);
             }
             if(addable[row] && partition_size(&p)<YT_CELLS) {
@@ -114,15 +97,15 @@ void nearby_shape(Console *c,Controls *u)
     uint64_t dimension=0;
     MathStatus dimension_status=partition_standard_count(&p,&dimension);
     if(dimension_status==YT_OK)
-        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %" PRIu64,partition_size(&p),dimension);
+        snprintf(stats,sizeof(stats),"|λ| = %d\nstandard tableaux = %" PRIu64,partition_size(&p),dimension);
     else
-        snprintf(stats,sizeof(stats),"|λ| = %d\ndim S^λ = %s",partition_size(&p),math_status(dimension_status));
+        snprintf(stats,sizeof(stats),"|λ| = %d\nstandard tableaux = %s",partition_size(&p),math_status(dimension_status));
     int stats_x=margin+width/3, stats_width=width-stats_x+margin;
     int stats_height=controls_text_height(u,stats);
     controls_add_at(u,0,LABEL,stats,(Rect){stats_x,u->content,stats_width,stats_height},NULL);
 
     int y=u->content, half=(width-gap)/2;
-    bool can_rewind=c->shape_history_count>0;
+    bool can_rewind=c->diagram.addition_count>0;
     button(u,SHAPE_UNDO,"Undo",(Rect){margin,y,half,side},can_rewind);
     button(u,SHAPE_RESET,"Reset",(Rect){margin+half+gap,y,width-half-gap,side},can_rewind);
 }
@@ -130,7 +113,7 @@ void nearby_shape(Console *c,Controls *u)
 void nearby_plot_controls(Console *c,Controls *u)
 {
     const int zoom_ids[]={PLOT_ZOOM_OUT,PLOT_RESET,PLOT_ZOOM_IN};
-    const char *zoom_labels[]={"Zoom -","Reset","Zoom +"};
+    const char *zoom_labels[]={"Zoom −","Reset","Zoom +"};
     const int pan_ids[]={PLOT_LEFT,PLOT_UP,PLOT_DOWN,PLOT_RIGHT};
     const char *pan_labels[]={"Left","Up","Down","Right"};
     int scale=u->scale, margin=4*scale, gap=4*scale;
@@ -200,11 +183,9 @@ bool nearby_event(Console *c,Controls *u,ControlEvent event)
         int row=id-REMOVABLE_BASE;
         Cell cell;
         if(!find_removable(&p,row,&cell)) return true;
-        --p.rows[row];
-        if(!p.rows[row]) --p.count;
-        c->shape_history_count=0;
-        c->shape_history_base=p;
-        changed_shape(c,u,&p);
+        sync_history(c,&p);
+        if(diagram_remove_cell(&c->diagram,cell)!=YT_OK) return true;
+        changed_shape(c,u,&c->diagram.current);
         return true;
     }
 
@@ -215,12 +196,8 @@ bool nearby_event(Console *c,Controls *u,ControlEvent event)
         int row=id-ADDABLE_BASE;
         Cell cell;
         if(!find_addable(&p,row,&cell)) return true;
-        c->shape_history_base=c->shape_history_count?c->shape_history_base:p;
-        if(row==p.count) p.rows[p.count++]=1;
-        else ++p.rows[row];
-        if(c->shape_history_count<YT_CELLS)
-            c->shape_added_rows[c->shape_history_count++]=row;
-        changed_shape(c,u,&p);
+        if(diagram_add_cell(&c->diagram,cell)!=YT_OK) return true;
+        changed_shape(c,u,&c->diagram.current);
         return true;
     }
 
@@ -228,16 +205,13 @@ bool nearby_event(Console *c,Controls *u,ControlEvent event)
         Partition p;
         if(partition_parse(c->fields[SET_LAMBDA],&p)!=YT_OK) return true;
         sync_history(c,&p);
-        if(!c->shape_history_count) return true;
+        if(!c->diagram.addition_count) return true;
         if(id==SHAPE_RESET) {
-            p=c->shape_history_base;
-            c->shape_history_count=0;
+            diagram_reset_additions(&c->diagram);
         } else {
-            int row=c->shape_added_rows[--c->shape_history_count];
-            if(row==p.count-1 && p.rows[row]==1) --p.count;
-            else if(row>=0 && row<p.count) --p.rows[row];
+            if(diagram_undo_addition(&c->diagram)!=YT_OK) return true;
         }
-        changed_shape(c,u,&p);
+        changed_shape(c,u,&c->diagram.current);
         return true;
     }
 

@@ -17,9 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact source
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           submodules: recursive
+
+      - name: Verify symbolic Lua fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C third_party/lua rev-parse HEAD)" = dca7e57c16c524c8616144ed294fe598947a029f
 
       - name: Test host mathematics and controls
         shell: bash
@@ -28,10 +36,23 @@ jobs:
           mkdir -p "$RUNNER_TEMP/young-tests"
           cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
             -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
-            tests/host_tests.c app/core/math.c app/ui/controls.c \
+            tests/host_tests.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c app/ui/controls.c \
             app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
             -lm -o "$RUNNER_TEMP/young-tests/host-tests"
           "$RUNNER_TEMP/young-tests/host-tests" | tee "$RUNNER_TEMP/young-tests/host-tests.txt"
+          cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/core \
+            tests/insertion_ownership.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c \
+            -Wl,--wrap=tableau_row_insert_trace -o "$RUNNER_TEMP/young-tests/insertion-ownership"
+          "$RUNNER_TEMP/young-tests/insertion-ownership"
+          if cc -std=c17 -Werror=incompatible-pointer-types -Iapp/core -c tests/reject_word_as_permutation.c -o "$RUNNER_TEMP/young-tests/reject.o" > "$RUNNER_TEMP/young-tests/reject.log" 2>&1; then exit 1; fi
+          grep -q 'incompatible pointer type' "$RUNNER_TEMP/young-tests/reject.log"
+          if cc -std=c17 -Werror=incompatible-pointer-types -Iapp/core -c tests/reject_filling_as_slide.c -o "$RUNNER_TEMP/young-tests/reject-slide.o" > "$RUNNER_TEMP/young-tests/reject-slide.log" 2>&1; then exit 1; fi
+          grep -q 'incompatible pointer type' "$RUNNER_TEMP/young-tests/reject-slide.log"
+          cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/console tests/operation_correspondence.c -o "$RUNNER_TEMP/young-tests/correspondence"
+          "$RUNNER_TEMP/young-tests/correspondence" types/YoungTableaux/Types.idr
+          sed 's/InputFor RSKPermutation = Permutation/InputFor RSKPermutation = Word/' types/YoungTableaux/Types.idr > "$RUNNER_TEMP/young-tests/drift.idr"
+          if "$RUNNER_TEMP/young-tests/correspondence" "$RUNNER_TEMP/young-tests/drift.idr" > "$RUNNER_TEMP/young-tests/drift.log" 2>&1; then exit 1; fi
+          grep -q 'operation correspondence failed' "$RUNNER_TEMP/young-tests/drift.log"
           cc -std=c17 -O2 third_party/lua/onelua.c -lm -o "$RUNNER_TEMP/young-tests/lua"
           "$RUNNER_TEMP/young-tests/lua" tests/facts_test.lua | tee "$RUNNER_TEMP/young-tests/facts-tests.txt"
 
@@ -94,7 +115,12 @@ jobs:
           )
 
           sources=(
-            core/math
+            core/parse
+            core/diagram
+            core/partition
+            core/tableau
+            core/rsk
+            core/jeu_de_taquin
             ui/controls
             console/console
             console/nearby
@@ -141,8 +167,8 @@ jobs:
             --manifest "$project/app/AndroidManifest.xml" \
             --min-sdk-version 26 \
             --target-sdk-version 34 \
-            --version-code 7 \
-            --version-name 0.3.2 \
+            --version-code 8 \
+            --version-name 0.3.3 \
             -o "$out/unsigned.apk"
 
           (
@@ -185,6 +211,135 @@ jobs:
           git archive HEAD | gzip -n > "$out/source.tar.gz"
           tar -czf "$out/lua-source.tar.gz" --exclude=.git third_party/lua
 
+      - name: Compile and package C67 AArch64 NativeActivity APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          project="$GITHUB_WORKSPACE"
+          sdk="$ANDROID_HOME"
+          ndk="$ANDROID_HOME/ndk/27.2.12479018"
+          tools="$sdk/build-tools/35.0.0"
+          clang_bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          glue="$ndk/sources/android/native_app_glue"
+          out="$project/build/c67"
+          compiler="$clang_bin/aarch64-linux-android26-clang"
+
+          rm -rf "$out"
+          mkdir -p "$out/objects" "$out/staging/lib/arm64-v8a"
+
+          flags=(
+            -std=c17 -O2 -fPIC
+            -ffunction-sections -fdata-sections
+            -fstack-protector-strong -D_FORTIFY_SOURCE=2
+            -Wall -Wextra -Werror -Wpedantic -Wshadow
+          )
+          includes=(
+            "-I$project/app/core"
+            "-I$project/app/ui"
+            "-I$project/app/console"
+            "-I$project/app/render"
+            "-I$project/app/lua"
+            "-I$project/third_party/lua"
+            -isystem "$glue"
+          )
+
+          sources=(
+            core/parse
+            core/diagram
+            core/partition
+            core/tableau
+            core/rsk
+            core/jeu_de_taquin
+            ui/controls
+            console/console
+            console/nearby
+            render/raster
+            render/paint
+            lua/bridge
+            android/native_main
+          )
+          objects=()
+
+          for source in "${sources[@]}"; do
+            name="${source//\//_}"
+            object="$out/objects/$name.o"
+            "$compiler" "${flags[@]}" "${includes[@]}" \
+              -c "$project/app/$source.c" -o "$object"
+            objects+=("$object")
+          done
+
+          "$compiler" -std=c17 -O2 -fPIC \
+            -DMAKE_LIB -w "-I$project/third_party/lua" \
+            -c "$project/third_party/lua/onelua.c" \
+            -o "$out/objects/lua.o"
+          objects+=("$out/objects/lua.o")
+
+          "$compiler" -std=c17 -O2 -fPIC \
+            -isystem "$glue" \
+            -c "$glue/android_native_app_glue.c" \
+            -o "$out/objects/glue.o"
+          objects+=("$out/objects/glue.o")
+
+          "$compiler" -shared \
+            -Wl,--no-undefined -Wl,--gc-sections \
+            -Wl,-z,relro,-z,now -Wl,-z,max-page-size=16384 \
+            -Wl,-u,ANativeActivity_onCreate \
+            "${objects[@]}" -landroid -llog -lm \
+            -o "$out/staging/lib/arm64-v8a/libyoungtableaux.so"
+
+          "$clang_bin/llvm-strip" --strip-unneeded \
+            "$out/staging/lib/arm64-v8a/libyoungtableaux.so"
+
+          "$tools/aapt2" link \
+            -I "$sdk/platforms/android-34/android.jar" \
+            -A "$project/app/assets" \
+            --manifest "$project/app/AndroidManifest.xml" \
+            --min-sdk-version 26 \
+            --target-sdk-version 34 \
+            --version-code 8 \
+            --version-name 0.3.3 \
+            -o "$out/unsigned.apk"
+
+          (
+            cd "$out/staging"
+            touch -t 198001010000 lib/arm64-v8a/libyoungtableaux.so
+            zip -X -0 -q "$out/unsigned.apk" lib/arm64-v8a/libyoungtableaux.so
+          )
+
+          "$tools/zipalign" -f -P 16 4 \
+            "$out/unsigned.apk" "$out/aligned.apk"
+
+          "$tools/apksigner" sign \
+            --ks "$RUNNER_TEMP/wegert-debug.keystore" \
+            --ks-type PKCS12 \
+            --ks-key-alias wegert-debug \
+            --ks-pass pass:wegert-debug \
+            --key-pass pass:wegert-debug \
+            --out "$out/young-tableaux-arm64-v8a.apk" \
+            "$out/aligned.apk"
+
+          "$tools/apksigner" verify --verbose --print-certs \
+            "$out/young-tableaux-arm64-v8a.apk" | tee "$out/signing.txt"
+
+          grep -qi \
+            'Signer #1 certificate SHA-256 digest: de9b1d47c5a65e6d46a204b79dd9ee566b9d3c9832ba81ebc4213d3392e92ff9' \
+            "$out/signing.txt"
+
+          "$clang_bin/llvm-readelf" -h -l \
+            "$out/staging/lib/arm64-v8a/libyoungtableaux.so" \
+            > "$out/abi.txt"
+          grep -Eq 'Class:[[:space:]]+ELF64' "$out/abi.txt"
+          grep -Eq 'Machine:[[:space:]]+AArch64' "$out/abi.txt"
+
+          "$tools/aapt2" dump badging \
+            "$out/young-tableaux-arm64-v8a.apk" \
+            > "$out/package.txt"
+          grep -q "native-code: 'arm64-v8a'" "$out/package.txt"
+
+          sha256sum "$out/young-tableaux-arm64-v8a.apk" | tee "$out/apk.sha256"
+          git rev-parse HEAD | tee "$out/source.txt"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -200,5 +355,11 @@ jobs:
             build/facts-tests.txt
             build/source.tar.gz
             build/lua-source.tar.gz
+            build/c67/young-tableaux-arm64-v8a.apk
+            build/c67/apk.sha256
+            build/c67/signing.txt
+            build/c67/abi.txt
+            build/c67/package.txt
+            build/c67/source.txt
           if-no-files-found: error
           retention-days: 7

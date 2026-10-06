@@ -124,6 +124,9 @@ static void tableau_operations(void)
     CHECK(partition_add_cell(&p,(Cell){2,2},&changed)==YT_OK);
     CHECK(equal_partition(changed,partition("2,2")));
     CHECK(partition_add_cell(&p,(Cell){2,3},&changed)==YT_MALFORMED);
+    Partition malformed_partition={2,{1,2}};
+    CHECK(partition_add_cell(&malformed_partition,(Cell){2,3},&changed)==YT_MALFORMED);
+    CHECK(partition_remove_cell(&malformed_partition,(Cell){2,2},&changed)==YT_MALFORMED);
     p=partition("2,2");
     CHECK(partition_remove_cell(&p,(Cell){2,2},&changed)==YT_OK);
     CHECK(equal_partition(changed,partition("2,1")));
@@ -185,39 +188,44 @@ static void rsk_words_and_trace(void)
 
 static void jeu_de_taquin(void)
 {
-    SkewTableau tableau;
-    CHECK(skew_tableau_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
-    SkewValidation validation=skew_tableau_validate(&tableau);
+    JeuState tableau;
+    CHECK(jeu_state_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
+    SkewValidation validation=skew_tableau_validate(&tableau.filling);
     CHECK(validation.standard && validation.semistandard);
     CHECK(jeu_can_begin(&tableau,(Cell){1,1}));
     CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_OK);
     CHECK(tableau.active && tableau.hole.row==1 && tableau.hole.column==1);
     CHECK(jeu_step(&tableau)==JEU_MOVED);
-    CHECK(tableau.entries[0][0]==1 && tableau.hole.column==2);
+    CHECK(tableau.filling.entries[0][0]==1 && tableau.hole.column==2);
     CHECK(jeu_step(&tableau)==JEU_MOVED);
-    CHECK(tableau.entries[0][1]==3 && tableau.hole.column==3);
+    CHECK(tableau.filling.entries[0][1]==3 && tableau.hole.column==3);
     CHECK(jeu_step(&tableau)==JEU_FINISHED);
-    CHECK(!tableau.active && tableau.inner.count==0);
-    CHECK(equal_partition(tableau.outer,partition("2,2,1")));
-    CHECK(skew_tableau_validate(&tableau).standard);
+    CHECK(!tableau.active && tableau.filling.shape.inner.count==0);
+    CHECK(equal_partition(tableau.filling.shape.outer,partition("2,2,1")));
+    CHECK(skew_tableau_validate(&tableau.filling).standard);
 
-    CHECK(skew_tableau_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
+    CHECK(jeu_state_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
     CHECK(jeu_rectify(&tableau)==YT_OK);
-    CHECK(equal_partition(tableau.outer,partition("2,2,1")));
-    CHECK(tableau.inner.count==0 && skew_tableau_validate(&tableau).standard);
+    CHECK(equal_partition(tableau.filling.shape.outer,partition("2,2,1")));
+    CHECK(tableau.filling.shape.inner.count==0 && skew_tableau_validate(&tableau.filling).standard);
 
-    CHECK(skew_tableau_parse("2,2","1","1;1,2",&tableau)==YT_OK);
-    validation=skew_tableau_validate(&tableau);
+    CHECK(jeu_state_parse("2,2","1","1;1,2",&tableau)==YT_OK);
+    validation=skew_tableau_validate(&tableau.filling);
     CHECK(validation.semistandard && !validation.standard);
     CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_OK);
     CHECK(jeu_step(&tableau)==JEU_MOVED);
     CHECK(tableau.hole.row==2 && tableau.hole.column==1);
     while(tableau.active) CHECK(jeu_step(&tableau)!=JEU_INVALID);
-    CHECK(skew_tableau_validate(&tableau).semistandard);
+    CHECK(skew_tableau_validate(&tableau.filling).semistandard);
 
-    CHECK(skew_tableau_parse("2,1","2","1;2",&tableau)==YT_MALFORMED);
-    CHECK(skew_tableau_parse("2,1","1","1;2",&tableau)==YT_OK);
+    CHECK(jeu_state_parse("2,1","2","1;2",&tableau)==YT_MALFORMED);
+    CHECK(jeu_state_parse("2,1","1","1;2",&tableau)==YT_OK);
     CHECK(jeu_begin(&tableau,(Cell){1,2})==YT_MALFORMED);
+
+    CHECK(jeu_state_parse("2,2","[]","4,3;2,1",&tableau)==YT_OK);
+    CHECK(jeu_rectify(&tableau)==YT_MALFORMED);
+    CHECK(jeu_state_parse("2,1","1","0;1",&tableau)==YT_OK);
+    CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_MALFORMED);
 }
 
 static void interaction(void)
@@ -241,44 +249,73 @@ static void interaction(void)
     bool saw_size=false,saw_dimension=false,saw_hero=false;
     for(int i=0;i<u->count;++i) {
         saw_size=saw_size || strstr(u->controls[i].text,"|λ| = 6");
-        saw_dimension=saw_dimension || strstr(u->controls[i].text,"dim S^λ = 16");
+        saw_dimension=saw_dimension || strstr(u->controls[i].text,"standard tableaux = 16");
         saw_hero=saw_hero || u->controls[i].kind==HERO;
     }
     CHECK(saw_size && saw_dimension && !saw_hero);
+    CHECK(raster_text_width("λ",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("μ",2)==raster_text_width("m",2));
+    CHECK(raster_text_width("ν",2)==raster_text_width("v",2));
+    CHECK(raster_text_width("ℕ",2)==raster_text_width("N",2));
+    CHECK(raster_text_width("−",2)==raster_text_width("-",2));
+    CHECK(raster_text_width("÷",2)==raster_text_width("/",2));
+    CHECK(raster_text_width("×",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("…",2)==raster_text_width("x",2));
+    CHECK(raster_text_width("²",3)==raster_text_width("^2",3));
+    CHECK(raster_text_width("₁",3)==raster_text_width("_1",3));
+    uint32_t ellipsis_pixels[8*8]={0}, fallback_pixels[8*8]={0};
+    Canvas ellipsis_canvas={.width=8,.height=8,.stride=8,.bits=ellipsis_pixels,.clip_top=0,.clip_bottom=8};
+    Canvas fallback_canvas={.width=8,.height=8,.stride=8,.bits=fallback_pixels,.clip_top=0,.clip_bottom=8};
+    raster_text(&ellipsis_canvas,"…",0,0,1,0xffffffffU);
+    raster_text(&fallback_canvas,"?",0,0,1,0xffffffffU);
+    CHECK(memcmp(ellipsis_pixels,fallback_pixels,sizeof(ellipsis_pixels))!=0);
     CHECK(c->wegert.valid); CHECK(c->wegert.n_lambda==4); CHECK(c->wegert.max_hook==5);
     CHECK(c->jeu_loaded && c->jeu_ok);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_STEP});
     CHECK(c->jeu.active && c->jeu.hole.row==1 && c->jeu.hole.column==2);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_SLIDE});
-    CHECK(!c->jeu.active && c->jeu.inner.count==0);
+    CHECK(!c->jeu.active && c->jeu.filling.shape.inner.count==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_RESET});
-    CHECK(c->jeu_ok && c->jeu.inner.count==1);
+    CHECK(c->jeu_ok && c->jeu.filling.shape.inner.count==1);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_RECTIFY});
-    CHECK(c->jeu_ok && c->jeu.inner.count==0);
+    CHECK(c->jeu_ok && c->jeu.filling.shape.inner.count==0);
     CHECK(c->wegert.hook_counts[1]==3 && c->wegert.hook_counts[3]==2 && c->wegert.hook_counts[5]==1);
     u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
-    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"f^λ = 2"));
+    CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"Hook-length formula gives 2 standard tableaux."));
     console_key(c,u,14); CHECK(!c->partition_ok); console_key(c,u,0); CHECK(c->partition_ok); console_key(c,u,19); CHECK(!u->focus);
     console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Nat"));
-    console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_word_mode);
+    console_run(c,RSKMatrix); CHECK(c->rsk_ok && c->rsk_total==2);
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START});
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT});
+    CHECK(c->rsk_input_kind==RSK_MATRIX_INPUT && c->p.values[0][0]==1);
+    console_run(c,RSKBiword); CHECK(c->rsk_ok && c->rsk_total==3 && c->q.values[0][1]==1);
+    console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_WORD_INPUT);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START}); CHECK(c->rsk_step==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT}); CHECK(c->rsk_step==1 && c->p.count==1);
-    console_run(c,RSKPermutation); CHECK(c->rsk_ok && !c->rsk_word_mode && c->rsk_step==c->rsk_total);
+    console_run(c,RSKPermutation); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_PERMUTATION_INPUT && c->rsk_step==c->rsk_total);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,STEP_PLUS}); CHECK(strcmp(c->fields[SET_N],"7")==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_STANDARD}); CHECK(c->decreasing);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_TABLEAU_KIND});
-    CHECK(!c->tableau_ok && strstr(c->output[1],"NOT IMPLEMENTED"));
-    console_layout(c,u,576,1152); CHECK(u->content>10000); int separators=0,wegert=0;
+    CHECK(c->tableau_ok && strstr(c->output[1],"ArbitraryFilling: YES"));
+    TileProjection before_column=c->tableau;
+    c->insertion=COLUMN_INSERTION;
+    console_run(c,InsertLetter);
+    CHECK(strstr(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"));
+    CHECK(memcmp(&before_column,&c->tableau,sizeof(before_column))==0);
+    console_run(c,ReverseInsert);
+    CHECK(strstr(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"));
+    c->insertion=ROW_INSERTION;
+    console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0;
     bool ids[OP_BASE+OP_COUNT]={false};
     for(int i=0;i<u->count;++i) {
         if(u->controls[i].kind==SEPARATOR) ++separators;
         if(u->controls[i].kind==WEGERT) ++wegert;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==13); CHECK(wegert==1);
+    CHECK(separators==6); CHECK(wegert==1);
     for(int op=0;op<OP_COUNT;++op) {
-        bool internal_section=operation_info[op].section==1 || operation_info[op].section==2;
-        bool visible=!internal_section && op!=ConjugatePartition && op!=ListCells;
+        bool visible=op==RSKPermutation || op==RSKWord
+                  || op==JeuDeTaquinSlide || op==Rectify;
         CHECK(ids[OP_BASE+op]==visible);
     }
     console_run(c,ConjugatePartition); CHECK(strstr(c->output[0],"conjugate = "));
@@ -303,4 +340,41 @@ static void interaction(void)
     free(u); free(c);
 }
 #include "nearby_tests.inc"
-int main(void) { partitions(); tableaux(); tableau_operations(); rsk(); rsk_words_and_trace(); jeu_de_taquin(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, jeu de taquin, controls, scrolling, console\n",checks); return 0; }
+static void rsk_result_families(void)
+{
+    RSKTrace trace;
+    Permutation permutation={3,{3,1,2}};
+    PermutationRSKResult standard_pair={0},saved_pair={0};
+    WordRSKResult word_pair;
+    BiwordRSKResult biword_pair;
+    CHECK(rsk_permutation(&permutation,1,&trace)==YT_OK);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(rsk_permutation(&permutation,3,&trace)==YT_OK);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_OK);
+    CHECK(tableau_validate(&standard_pair.insertion.filling.shape,&standard_pair.insertion.filling,false).standard);
+    CHECK(tableau_validate(&standard_pair.recording.filling.shape,&standard_pair.recording.filling,false).standard);
+    saved_pair=standard_pair;
+    Word word={4,{2,1,2,1}};
+    CHECK(rsk_word(&word,4,&trace)==YT_OK);
+    CHECK(rsk_word_result(&trace,&word_pair)==YT_OK);
+    CHECK(word_pair.insertion.filling.entries[0][1]==1);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(memcmp(&standard_pair,&saved_pair,sizeof(standard_pair))==0);
+    Biword biword;
+    CHECK(biword_parse("1,1,2;1,2,1",&biword)==YT_OK);
+    CHECK(rsk_biword(&biword,3,&trace)==YT_OK);
+    CHECK(rsk_biword_result(&trace,&biword_pair)==YT_OK);
+    CHECK(biword_pair.recording.filling.entries[0][1]==1);
+    CHECK(rsk_word_result(&trace,&word_pair)==YT_MALFORMED);
+    CHECK(rsk_permutation(&permutation,3,&trace)==YT_OK);
+    trace.q=(Tableau){.shape={1,{3}},.entries={{1,2,3}}};
+    StandardTableau other_shape;
+    CHECK(tableau_as_standard(&trace.q,&other_shape)==YT_OK);
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(memcmp(&standard_pair,&saved_pair,sizeof(standard_pair))==0);
+    trace.p.shape.count=YT_DIM+1;
+    CHECK(rsk_permutation_result(&trace,&standard_pair)==YT_MALFORMED);
+    CHECK(rsk_word_result(NULL,&word_pair)==YT_MALFORMED);
+    CHECK(rsk_biword_result(&trace,NULL)==YT_MALFORMED);
+}
+int main(void) { partitions(); tableaux(); tableau_operations(); rsk(); rsk_words_and_trace(); rsk_result_families(); jeu_de_taquin(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, jeu de taquin, controls, scrolling, console\n",checks); return 0; }

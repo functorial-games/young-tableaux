@@ -121,7 +121,7 @@ In the Freyd interval example, those infinite descents become binary expansions.
 
 ### Topology
 
-The topology is generated from finite prefixes of the infinite descriptions. A finite initial sequence determines the set of all points whose recursive addresses begin with that sequence.
+Finite prefixes determine basic closed sets: each contains the points admitting a recursive description with that prefix. These sets generate the topology through closed sets; a point can have more than one recursive description.
 
 This provides a topology compatible with the recursion, and the resulting coalgebra is proved terminal both in `Set` and in `Top`.
 
@@ -137,9 +137,9 @@ Part II says: given a candidate recursive space, how can we recognize that it is
 
 ### Precise Recognition Theorem
 
-For a fixed point `J`, universality is characterized by compactness plus the requirement that recursive pieces shrink to single points.
+For a nondegenerate fixed point `J`, Part II, Theorem 1.4 characterizes universality by three requirements: `J` is occupied, each component is compact, and every allowed infinite descent has an intersection containing at most one point. Occupied means that a component of `J` is nonempty whenever an infinite recursive description exists for that component; it prevents an empty candidate from passing the shrinking test vacuously.
 
-Informally: follow any allowed infinite chain of nested pieces. Their diameters must tend to zero, or equivalently the intersection along the infinite descent must contain at most one point.
+Equivalently, each component admits a compatible metric such that, for every positive size bound, one depth makes every recursive piece at that depth smaller than the bound. The depth works uniformly over all allowed pieces in that component.
 
 This is the mathematically useful bridge between abstract coalgebra and ordinary geometric intuition.
 
@@ -147,8 +147,10 @@ This is the mathematically useful bridge between abstract coalgebra and ordinary
 
 When the indexing category is finite, a convenient sufficient condition is:
 
-- each component space is nonempty and compact;
+- each component space is nonempty, compact and equipped with a compatible metric;
 - each map inserting a smaller piece into a larger one is a contraction.
+
+These hypotheses apply to a nondegenerate fixed point, as in Part II, Corollary 1.5. Finiteness supplies one contraction bound below 1 for the whole family.
 
 Then the fixed point is automatically the universal solution.
 

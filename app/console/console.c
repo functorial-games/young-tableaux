@@ -31,15 +31,15 @@ static void tiles(TileProjection *out,const Partition *p,const Tableau *t)
 }
 static int shape_row(const Partition *p,int row)
 { return row>=0 && row<p->count?p->rows[row]:0; }
-static void skew_tiles(TileProjection *out,const SkewTableau *t)
+static void skew_tiles(TileProjection *out,const JeuState *t)
 {
-    memset(out,0,sizeof(*out)); out->count=t->outer.count; out->numbers=true;
-    for(int row=0;row<t->outer.count;++row) {
-        int start=shape_row(&t->inner,row);
-        out->starts[row]=start; out->rows[row]=t->outer.rows[row]-start;
+    memset(out,0,sizeof(*out)); out->count=t->filling.shape.outer.count; out->numbers=true;
+    for(int row=0;row<t->filling.shape.outer.count;++row) {
+        int start=shape_row(&t->filling.shape.inner,row);
+        out->starts[row]=start; out->rows[row]=t->filling.shape.outer.rows[row]-start;
         for(int local=0;local<out->rows[row];++local) {
             int column=start+local;
-            out->values[row][local]=t->entries[row][column];
+            out->values[row][local]=t->filling.entries[row][column];
             if(t->active && row+1==t->hole.row && column+1==t->hole.column)
                 out->marks[row][local]=2;
             else if(t->active && ((row+1==t->hole.row && column==t->hole.column)
@@ -94,25 +94,48 @@ static void refresh_tableau(Console *c)
 {
     Partition p; Tableau t; MathStatus a=partition_parse(c->fields[SET_LAMBDA],&p), b=tableau_parse(c->fields[SET_TABLEAU],&t);
     c->output[1][0]=0; c->tableau_ok=false;
-    if(c->tableau_kind) {
+    if(c->tableau_kind>=TABLEAU_SKEW) {
         append(c->output[1],"NOT IMPLEMENTED\nValidation for %s\ninput: Tableau\noutput: Bool\nChoose Standard for v0.1 validation.",tableau_kinds[c->tableau_kind]);
         return;
     }
     if(a!=YT_OK || b!=YT_OK) { append(c->output[1],"%s: %s\n",a!=YT_OK?"λ":"tableau",math_status(a!=YT_OK?a:b)); return; }
+    bool kind_valid=false;
+    MathStatus kind_status=tableau_check_kind(&t,c->tableau_kind,c->decreasing,&kind_valid);
+    if(kind_status!=YT_OK) { append(c->output[1],"kind: %s",math_status(kind_status)); return; }
+    append(c->output[1],"%s: %s\n",tableau_kinds[c->tableau_kind],kind_valid?"YES":"NO");
     Validation v=tableau_validate(&p,&t,c->decreasing);
     append(c->output[1],"shape compatible: %s\nrows strictly %s: %s\ncolumns strictly %s: %s\nstandard (1..n once): %s\n",v.shape?"YES":"NO",c->decreasing?"decreasing":"increasing",v.rows?"YES":"NO",c->decreasing?"decreasing":"increasing",v.columns?"YES":"NO",v.standard?"YES":"NO");
     tableau_text(c->output[1],"filling",&t); tiles(&c->tableau,&t.shape,&t); c->tableau_ok=true;
 }
+static MathStatus trace_rsk_input(const Console *c,RSKTrace *trace)
+{
+    switch(c->rsk_input_kind) {
+    case RSK_PERMUTATION_INPUT: return permutation_rsk_trace(c->fields[SET_PERMUTATION],c->rsk_step,trace);
+    case RSK_WORD_INPUT: return word_rsk_trace(c->fields[SET_WORD],c->rsk_step,trace);
+    case RSK_BIWORD_INPUT: {
+        Biword input;
+        MathStatus status=biword_parse(c->fields[SET_BIWORD],&input);
+        return status==YT_OK?rsk_biword(&input,c->rsk_step,trace):status;
+    }
+    case RSK_MATRIX_INPUT: {
+        NatMatrix input;
+        MathStatus status=nat_matrix_parse(c->fields[SET_MATRIX],&input);
+        return status==YT_OK?rsk_matrix(&input,c->rsk_step,trace):status;
+    }
+    }
+    return YT_MALFORMED;
+}
+
 static void refresh_rsk(Console *c)
 {
     c->output[3][0]=0; c->rsk_ok=false;
     if(c->insertion) { append(c->output[3],"NOT IMPLEMENTED\nColumnInsertion\nSelect RowInsertion for RSK."); return; }
     RSKTrace trace;
-    const char *source=c->rsk_word_mode?c->fields[SET_WORD]:c->fields[SET_PERMUTATION];
-    MathStatus status=c->rsk_word_mode?word_rsk_trace(source,c->rsk_step,&trace):permutation_rsk_trace(source,c->rsk_step,&trace);
-    if(status!=YT_OK) { append(c->output[3],"%s: %s",c->rsk_word_mode?"word":"permutation",math_status(status)); return; }
+    MathStatus status=trace_rsk_input(c,&trace);
+    if(status!=YT_OK) { append(c->output[3],"RSK input: %s",math_status(status)); return; }
     c->rsk_step=trace.step; c->rsk_total=trace.count;
-    append(c->output[3],"%s row RSK\nstep %d / %d\n",c->rsk_word_mode?"WORD":"PERMUTATION",trace.step,trace.count);
+    const char *names[]={"PERMUTATION","WORD","BIWORD","MATRIX"};
+    append(c->output[3],"%s row RSK\nstep %d / %d\n",names[c->rsk_input_kind],trace.step,trace.count);
     if(trace.step) {
         append(c->output[3],"insert %d\nbump path: ",trace.inserted);
         for(int i=0;i<trace.path_count;++i) append(c->output[3],"%s(%d,%d)",i?" -> ":"",trace.path[i].row,trace.path[i].column);
@@ -148,13 +171,13 @@ static MathStatus integer_field(const char *text,int *value)
 static void project_jeu(Console *c)
 {
     c->output[4][0]=0; c->jeu_loaded=true; skew_tiles(&c->jeu_tiles,&c->jeu);
-    append(c->output[4],"Forward jeu de taquin\nouter λ = "); partition_text(c->output[4],&c->jeu.outer);
-    append(c->output[4],"inner μ = "); partition_text(c->output[4],&c->jeu.inner);
+    append(c->output[4],"Forward jeu de taquin\nouter λ = "); partition_text(c->output[4],&c->jeu.filling.shape.outer);
+    append(c->output[4],"inner μ = "); partition_text(c->output[4],&c->jeu.filling.shape.inner);
     if(c->jeu.active) {
         c->jeu_ok=true;
         append(c->output[4],"active hole = (%d,%d)\nSTEP moves the smaller right/below entry; ties move the lower entry.\n",c->jeu.hole.row,c->jeu.hole.column);
     } else {
-        SkewValidation v=skew_tableau_validate(&c->jeu);
+        SkewValidation v=skew_tableau_validate(&c->jeu.filling);
         c->jeu_ok=v.semistandard;
         append(c->output[4],"rows weakly increasing: %s\ncolumns strictly increasing: %s\npositive entries: %s\nsemistandard: %s\nstandard: %s\n",
                v.rows_weak?"YES":"NO",v.columns_strict?"YES":"NO",v.positive?"YES":"NO",v.semistandard?"YES":"NO",v.standard?"YES":"NO");
@@ -164,7 +187,7 @@ static void refresh_jeu(Console *c)
 {
     memset(&c->jeu,0,sizeof(c->jeu)); memset(&c->jeu_tiles,0,sizeof(c->jeu_tiles));
     c->jeu_loaded=false; c->jeu_ok=false; c->output[4][0]=0;
-    MathStatus status=skew_tableau_parse(c->fields[SET_LAMBDA],c->fields[SET_MU],c->fields[SET_SKEW_TABLEAU],&c->jeu);
+    MathStatus status=jeu_state_parse(c->fields[SET_LAMBDA],c->fields[SET_MU],c->fields[SET_SKEW_TABLEAU],&c->jeu);
     if(status!=YT_OK) {
         append(c->output[4],"skew tableau: %s\nUse λ as outer shape, μ as inner shape, and enter only the visible skew cells in each row.",math_status(status));
         return;
@@ -248,6 +271,7 @@ void console_run(Console *c,Operation op)
         return;
     }
     case InsertLetter: {
+        if(c->insertion!=ROW_INSERTION) { c->output[1][0]=0; append(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"); return; }
         Tableau input,result; Cell added={0}; int entry=0;
         MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
         if(status==YT_OK) status=integer_field(c->fields[SET_ENTRY],&entry);
@@ -262,6 +286,7 @@ void console_run(Console *c,Operation op)
         return;
     }
     case ReverseInsert: {
+        if(c->insertion!=ROW_INSERTION) { c->output[1][0]=0; append(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"); return; }
         Tableau input,result; Cell corner={0}; int bumped=0;
         MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
         if(status==YT_OK) status=selected_cell(c->fields[SET_CELL],&corner);
@@ -287,8 +312,10 @@ void console_run(Console *c,Operation op)
         }
         return;
     }
-    case RSKPermutation: c->rsk_word_mode=false; c->rsk_step=YT_DIM; refresh_rsk(c); return;
-    case RSKWord: c->rsk_word_mode=true; c->rsk_step=YT_DIM; refresh_rsk(c); return;
+    case RSKPermutation: c->rsk_input_kind=RSK_PERMUTATION_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); return;
+    case RSKWord: c->rsk_input_kind=RSK_WORD_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); return;
+    case RSKBiword: c->rsk_input_kind=RSK_BIWORD_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); return;
+    case RSKMatrix: c->rsk_input_kind=RSK_MATRIX_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); return;
     case JeuDeTaquinSlide: {
         if(!c->jeu_ok) { refresh_jeu(c); if(!c->jeu_ok) return; }
         if(!c->jeu.active) {
@@ -504,10 +531,12 @@ void console_key(Console *c,Controls *u,int key)
         else { snprintf(c->output[11],UI_TEXT,"INPUT LIMIT: 511 characters"); return; }
     }
     if(u->focus==SET_LAMBDA) {
-        c->shape_history_count=0; refresh_partition(c); refresh_tableau(c); refresh_jeu(c); c->scripted_facts[0]=0;
+        c->diagram.addition_count=0; refresh_partition(c); refresh_tableau(c); refresh_jeu(c); c->scripted_facts[0]=0;
     }
     if(u->focus==SET_TABLEAU) refresh_tableau(c);
-    if(u->focus==SET_PERMUTATION) { c->rsk_word_mode=false; c->rsk_step=YT_DIM; refresh_rsk(c); }
-    if(u->focus==SET_WORD) { c->rsk_word_mode=true; c->rsk_step=YT_DIM; refresh_rsk(c); }
+    if(u->focus==SET_PERMUTATION) { c->rsk_input_kind=RSK_PERMUTATION_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); }
+    if(u->focus==SET_WORD) { c->rsk_input_kind=RSK_WORD_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); }
+    if(u->focus==SET_BIWORD) { c->rsk_input_kind=RSK_BIWORD_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); }
+    if(u->focus==SET_MATRIX) { c->rsk_input_kind=RSK_MATRIX_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); }
     if(u->focus==SET_MU || u->focus==SET_SKEW_TABLEAU) refresh_jeu(c);
 }

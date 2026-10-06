@@ -30,10 +30,10 @@ static void nearby_tests(void)
     for(int row=0;row<=3;++row) CHECK(maybe_nearby_control(u,ADDABLE_BASE+row));
     for(int row=0;row<3;++row) CHECK(maybe_nearby_control(u,REMOVABLE_BASE+row));
     activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"4,2,1")==0);
-    CHECK(c->shape_history_count==1);
+    CHECK(c->diagram.addition_count==1);
     CHECK(c->wegert.half_height==1.5 && c->scripted_facts[0]==0);
     activate(c,u,SHAPE_UNDO); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1")==0);
-    CHECK(c->shape_history_count==0);
+    CHECK(c->diagram.addition_count==0);
     activate(c,u,ADDABLE_BASE+3); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1,1")==0);
     activate(c,u,SHAPE_RESET); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2,1")==0);
 
@@ -47,7 +47,7 @@ static void nearby_tests(void)
     activate(c,u,ADDABLE_BASE); CHECK(strcmp(c->fields[SET_LAMBDA],"3,2")==0);
     activate(c,u,SHAPE_UNDO); CHECK(strcmp(c->fields[SET_LAMBDA],"2,2")==0);
     activate(c,u,REMOVABLE_BASE+1); CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0);
-    CHECK(c->shape_history_count==0);
+    CHECK(c->diagram.addition_count==0);
 
     choose_shape(c,"[]"); console_layout(c,u,576,1152);
     CHECK(maybe_nearby_control(u,ADDABLE_BASE));

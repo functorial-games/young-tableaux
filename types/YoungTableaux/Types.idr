@@ -1,5 +1,7 @@
 module YoungTableaux.Types
 
+import Data.Vect
+
 %default total
 
 -- Design sketch: intentionally broader than the first APK.
@@ -8,9 +10,16 @@ module YoungTableaux.Types
 -- into the first implementation.
 
 public export
+partitionRowsValid : List Nat -> Bool
+partitionRowsValid [] = True
+partitionRowsValid [row] = row > 0
+partitionRowsValid (row :: next :: rest) = row >= next && partitionRowsValid (next :: rest)
+
+public export
 record Partition where
   constructor MkPartition
   rows : List Nat
+  validRows : partitionRowsValid rows = True
 
 public export
 record Cell where
@@ -24,6 +33,7 @@ record Cell where
 public export
 record DiagramState where
   constructor MkDiagramState
+  base : Partition
   current : Partition
   additions : List Cell
 
@@ -40,6 +50,9 @@ record SkewShape where
   constructor MkSkewShape
   outer : Partition
   inner : Partition
+
+-- Native skew_tableau_parse additionally checks inner containment. A slide
+-- hole is execution state, never a TableauKind or an extra filled cell.
 
 public export
 data TableauKind
@@ -72,26 +85,58 @@ record Tableau where
   shape : SkewShape
   cells : List FilledCell
 
+-- A filling and an in-progress hole belong to different executable types.
+public export
+record SkewTableau where
+  constructor MkSkewTableau
+  shape : SkewShape
+  cells : List FilledCell
+
+public export
+data JeuPhase = CompleteFilling | SlidingHole Cell
+
+public export
+record JeuState where
+  constructor MkJeuState
+  filling : SkewTableau
+  phase : JeuPhase
+
+public export
+occurrences : Nat -> List Nat -> Nat
+occurrences value [] = 0
+occurrences value (first :: rest) = (if value == first then 1 else 0) + occurrences value rest
+
+public export
+permutationValid : List Nat -> Bool
+permutationValid values = all (\value => value > 0 && value <= length values && occurrences value values == 1) values
+
 public export
 record Permutation where
   constructor MkPermutation
   values : List Nat
+  validPermutation : permutationValid values = True
 
 public export
 record Word where
   constructor MkWord
   letters : List Integer
+  positiveLetters : all (> 0) letters = True
 
 public export
 record Biword where
   constructor MkBiword
-  top : List Integer
-  bottom : List Integer
+  count : Nat
+  letters : Vect count (Integer, Integer)
+  -- Native Biword is a list of paired Biletter values. rsk_biword checks
+  -- positive letters and lexicographic order for row insertion, including
+  -- nondecreasing bottom letters when top letters are equal.
 
 public export
 record NatMatrix where
   constructor MkNatMatrix
-  rows : List (List Nat)
+  height : Nat
+  width : Nat
+  entries : Vect height (Vect width Nat)
 
 public export
 data Characteristic
@@ -253,8 +298,8 @@ InputFor ValidateTableau = Tableau
 InputFor StandardizeTableau = Tableau
 InputFor InsertLetter = (Tableau, Entry)
 InputFor ReverseInsert = (Tableau, Cell)
-InputFor JeuDeTaquinSlide = (Tableau, Cell)
-InputFor Rectify = Tableau
+InputFor JeuDeTaquinSlide = (SkewTableau, Cell)
+InputFor Rectify = SkewTableau
 InputFor Promote = Tableau
 InputFor Evacuate = Tableau
 InputFor TransposeTableau = Tableau
@@ -305,8 +350,8 @@ OutputFor ValidateTableau = Bool
 OutputFor StandardizeTableau = Tableau
 OutputFor InsertLetter = Tableau
 OutputFor ReverseInsert = Tableau
-OutputFor JeuDeTaquinSlide = Tableau
-OutputFor Rectify = Tableau
+OutputFor JeuDeTaquinSlide = SkewTableau
+OutputFor Rectify = SkewTableau
 OutputFor Promote = Tableau
 OutputFor Evacuate = Tableau
 OutputFor TransposeTableau = Tableau

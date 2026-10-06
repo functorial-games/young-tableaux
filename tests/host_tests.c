@@ -185,38 +185,38 @@ static void rsk_words_and_trace(void)
 
 static void jeu_de_taquin(void)
 {
-    SkewTableau tableau;
-    CHECK(skew_tableau_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
-    SkewValidation validation=skew_tableau_validate(&tableau);
+    JeuState tableau;
+    CHECK(jeu_state_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
+    SkewValidation validation=skew_tableau_validate(&tableau.filling);
     CHECK(validation.standard && validation.semistandard);
     CHECK(jeu_can_begin(&tableau,(Cell){1,1}));
     CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_OK);
     CHECK(tableau.active && tableau.hole.row==1 && tableau.hole.column==1);
     CHECK(jeu_step(&tableau)==JEU_MOVED);
-    CHECK(tableau.entries[0][0]==1 && tableau.hole.column==2);
+    CHECK(tableau.filling.entries[0][0]==1 && tableau.hole.column==2);
     CHECK(jeu_step(&tableau)==JEU_MOVED);
-    CHECK(tableau.entries[0][1]==3 && tableau.hole.column==3);
+    CHECK(tableau.filling.entries[0][1]==3 && tableau.hole.column==3);
     CHECK(jeu_step(&tableau)==JEU_FINISHED);
-    CHECK(!tableau.active && tableau.inner.count==0);
-    CHECK(equal_partition(tableau.outer,partition("2,2,1")));
-    CHECK(skew_tableau_validate(&tableau).standard);
+    CHECK(!tableau.active && tableau.filling.shape.inner.count==0);
+    CHECK(equal_partition(tableau.filling.shape.outer,partition("2,2,1")));
+    CHECK(skew_tableau_validate(&tableau.filling).standard);
 
-    CHECK(skew_tableau_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
+    CHECK(jeu_state_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
     CHECK(jeu_rectify(&tableau)==YT_OK);
-    CHECK(equal_partition(tableau.outer,partition("2,2,1")));
-    CHECK(tableau.inner.count==0 && skew_tableau_validate(&tableau).standard);
+    CHECK(equal_partition(tableau.filling.shape.outer,partition("2,2,1")));
+    CHECK(tableau.filling.shape.inner.count==0 && skew_tableau_validate(&tableau.filling).standard);
 
-    CHECK(skew_tableau_parse("2,2","1","1;1,2",&tableau)==YT_OK);
-    validation=skew_tableau_validate(&tableau);
+    CHECK(jeu_state_parse("2,2","1","1;1,2",&tableau)==YT_OK);
+    validation=skew_tableau_validate(&tableau.filling);
     CHECK(validation.semistandard && !validation.standard);
     CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_OK);
     CHECK(jeu_step(&tableau)==JEU_MOVED);
     CHECK(tableau.hole.row==2 && tableau.hole.column==1);
     while(tableau.active) CHECK(jeu_step(&tableau)!=JEU_INVALID);
-    CHECK(skew_tableau_validate(&tableau).semistandard);
+    CHECK(skew_tableau_validate(&tableau.filling).semistandard);
 
-    CHECK(skew_tableau_parse("2,1","2","1;2",&tableau)==YT_MALFORMED);
-    CHECK(skew_tableau_parse("2,1","1","1;2",&tableau)==YT_OK);
+    CHECK(jeu_state_parse("2,1","2","1;2",&tableau)==YT_MALFORMED);
+    CHECK(jeu_state_parse("2,1","1","1;2",&tableau)==YT_OK);
     CHECK(jeu_begin(&tableau,(Cell){1,2})==YT_MALFORMED);
 }
 
@@ -259,24 +259,37 @@ static void interaction(void)
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_STEP});
     CHECK(c->jeu.active && c->jeu.hole.row==1 && c->jeu.hole.column==2);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_SLIDE});
-    CHECK(!c->jeu.active && c->jeu.inner.count==0);
+    CHECK(!c->jeu.active && c->jeu.filling.shape.inner.count==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_RESET});
-    CHECK(c->jeu_ok && c->jeu.inner.count==1);
+    CHECK(c->jeu_ok && c->jeu.filling.shape.inner.count==1);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_RECTIFY});
-    CHECK(c->jeu_ok && c->jeu.inner.count==0);
+    CHECK(c->jeu_ok && c->jeu.filling.shape.inner.count==0);
     CHECK(c->wegert.hook_counts[1]==3 && c->wegert.hook_counts[3]==2 && c->wegert.hook_counts[5]==1);
     u->focus=SET_LAMBDA; console_key(c,u,15); console_key(c,u,1); console_key(c,u,10); console_key(c,u,0);
     CHECK(strcmp(c->fields[SET_LAMBDA],"2,1")==0); CHECK(strstr(c->output[2],"Hook-length formula gives 2 standard tableaux."));
     console_key(c,u,14); CHECK(!c->partition_ok); console_key(c,u,0); CHECK(c->partition_ok); console_key(c,u,19); CHECK(!u->focus);
-    console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Number"));
-    console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_word_mode);
+    console_run(c,LittlewoodRichardsonCoefficient); CHECK(strstr(c->output[5],"NOT IMPLEMENTED")); CHECK(strstr(c->output[5],"(Partition, Partition, Partition)")); CHECK(strstr(c->output[5],"output: Nat"));
+    console_run(c,RSKMatrix); CHECK(c->rsk_ok && c->rsk_total==2);
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START});
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT});
+    CHECK(c->rsk_input_kind==RSK_MATRIX_INPUT && c->p.values[0][0]==1);
+    console_run(c,RSKBiword); CHECK(c->rsk_ok && c->rsk_total==3 && c->q.values[0][1]==1);
+    console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_WORD_INPUT);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START}); CHECK(c->rsk_step==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT}); CHECK(c->rsk_step==1 && c->p.count==1);
-    console_run(c,RSKPermutation); CHECK(c->rsk_ok && !c->rsk_word_mode && c->rsk_step==c->rsk_total);
+    console_run(c,RSKPermutation); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_PERMUTATION_INPUT && c->rsk_step==c->rsk_total);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,STEP_PLUS}); CHECK(strcmp(c->fields[SET_N],"7")==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_STANDARD}); CHECK(c->decreasing);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_TABLEAU_KIND});
-    CHECK(!c->tableau_ok && strstr(c->output[1],"NOT IMPLEMENTED"));
+    CHECK(c->tableau_ok && strstr(c->output[1],"ArbitraryFilling: YES"));
+    TileProjection before_column=c->tableau;
+    c->insertion=COLUMN_INSERTION;
+    console_run(c,InsertLetter);
+    CHECK(strstr(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"));
+    CHECK(memcmp(&before_column,&c->tableau,sizeof(before_column))==0);
+    console_run(c,ReverseInsert);
+    CHECK(strstr(c->output[1],"NOT IMPLEMENTED: ColumnInsertion"));
+    c->insertion=ROW_INSERTION;
     console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0;
     bool ids[OP_BASE+OP_COUNT]={false};
     for(int i=0;i<u->count;++i) {

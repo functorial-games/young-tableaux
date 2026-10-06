@@ -108,7 +108,7 @@ void android_main(struct android_app *app)
     s->key_pointer=-1; s->key_down=-1; s->dirty=true;
     if(app->savedState && app->savedStateSize==sizeof(Console)) {
         memcpy(&s->console,app->savedState,sizeof(Console));
-        s->console.shape_history_count=0;
+        s->console.diagram.addition_count=0;
     }
     app->userData=s; app->onAppCmd=command; app->onInputEvent=input;
     while(!app->destroyRequested) {

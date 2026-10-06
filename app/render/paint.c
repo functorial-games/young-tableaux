@@ -122,6 +122,13 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
             else if(u->pressed==c->id || u->focus==c->id) color=0xff775d3eU;
             raster_rect(b,r.x,r.y,r.w,r.h,color);
         }
+        if(c->kind==HERO) {
+            int size=3*scale;
+            while(size>scale && raster_text_width(c->text,size)>r.w-8*scale) --size;
+            raster_text(b,c->text,r.x+(r.w-raster_text_width(c->text,size))/2,
+                        r.y+(r.h-7*size)/2,size,FG);
+            continue;
+        }
         if(c->kind==BUTTON || c->kind==DISABLED_BUTTON) {
             int size=scale, length=(int)strlen(c->text);
             while(size>1 && length*6*size>r.w-4*scale) --size;

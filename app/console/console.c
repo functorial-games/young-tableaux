@@ -197,6 +197,12 @@ static void scripted_top(Console *c,Controls *u)
 void console_layout(Console *c,Controls *u,int w,int h)
 {
     controls_begin(u,w,h,u->focus!=0);
+    char total[16]="?";
+    Partition total_partition;
+    if(partition_parse(c->fields[SET_LAMBDA],&total_partition)==YT_OK)
+        snprintf(total,sizeof(total),"%d",partition_size(&total_partition));
+    controls_add(u,0,HERO,total,24*u->scale,NULL);
+    controls_add(u,0,LABEL,"DEBUG BUILD",0,NULL);
     scripted_top(c,u);
 
     for(int s=0;s<12;++s) {

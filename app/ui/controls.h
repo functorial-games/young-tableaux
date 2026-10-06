@@ -5,7 +5,7 @@
 #define UI_MAX 384
 #define UI_TEXT 16384
 #define WEGERT_HOOK_MAX 127
-typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT, ROW_BLOCKS, DISABLED_BUTTON } ControlKind;
+typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT, ROW_BLOCKS, DISABLED_BUTTON, HERO } ControlKind;
 typedef struct { int x,y,w,h; } Rect;
 /* Output projection: generic ragged rows of tiles, optional integer labels. */
 typedef struct { int count,rows[64],values[64][64]; bool numbers; } TileProjection;

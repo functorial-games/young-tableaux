@@ -181,32 +181,276 @@ Validation tableau_validate(const Partition *shape, const Tableau *t, bool decre
     v.standard = v.standard && v.shape && v.rows && v.columns;
     return v;
 }
-MathStatus permutation_rsk(const char *text, Tableau *pout, Tableau *qout)
+static MathStatus sequence_parse(const char *text,int *values,int *count,bool permutation)
 {
-    int values[YT_DIM], n; const char *cursor = text;
-    MathStatus s = list(&cursor,values,&n,false);
-    if (s != YT_OK) return s;
-    spaces(&cursor); if (*cursor) return YT_MALFORMED;
-    bool seen[YT_DIM+1] = {false};
-    for (int i = 0; i < n; ++i) {
-        if (values[i] < 1 || values[i] > n || seen[values[i]]) return YT_MALFORMED;
-        seen[values[i]] = true;
-    }
-    Tableau p = {0}, q = {0};
-    for (int i = 0; i < n; ++i) {
-        int value = values[i];
-        for (int r = 0; r < YT_DIM; ++r) {
-            int c = 0;
-            while (c < p.shape.rows[r] && p.entries[r][c] < value) ++c;
-            if (c == p.shape.rows[r]) {
-                p.entries[r][c] = value; q.entries[r][c] = i+1;
-                ++p.shape.rows[r]; q.shape.rows[r] = p.shape.rows[r];
-                if (r == p.shape.count) ++p.shape.count;
-                q.shape.count = p.shape.count;
-                break;
-            }
-            int bumped = p.entries[r][c]; p.entries[r][c] = value; value = bumped;
+    const char *cursor=text;
+    MathStatus status=list(&cursor,values,count,false);
+    if(status!=YT_OK) return status;
+    spaces(&cursor);
+    if(*cursor) return YT_MALFORMED;
+    bool seen[YT_DIM+1]={false};
+    for(int index=0;index<*count;++index) {
+        int value=values[index];
+        if(value<1) return YT_MALFORMED;
+        if(permutation) {
+            if(value>*count || seen[value]) return YT_MALFORMED;
+            seen[value]=true;
         }
     }
-    *pout = p; *qout = q; return YT_OK;
+    return YT_OK;
+}
+
+static void rsk_insert(Tableau *p,Tableau *q,int value,int record,Cell *path,int *path_count)
+{
+    for(int row=0;row<YT_DIM;++row) {
+        int column=0;
+        while(column<p->shape.rows[row] && p->entries[row][column]<=value) ++column;
+        if(path && path_count && *path_count<YT_DIM)
+            path[(*path_count)++]=(Cell){row+1,column+1};
+        if(column==p->shape.rows[row]) {
+            p->entries[row][column]=value;
+            q->entries[row][column]=record;
+            ++p->shape.rows[row];
+            q->shape.rows[row]=p->shape.rows[row];
+            if(row==p->shape.count) ++p->shape.count;
+            q->shape.count=p->shape.count;
+            return;
+        }
+        int bumped=p->entries[row][column];
+        p->entries[row][column]=value;
+        value=bumped;
+    }
+}
+
+static MathStatus rsk_trace(const char *text,bool permutation,int step,RSKTrace *out)
+{
+    RSKTrace trace={0};
+    MathStatus status=sequence_parse(text,trace.values,&trace.count,permutation);
+    if(status!=YT_OK) return status;
+    if(step<0) step=0;
+    if(step>trace.count) step=trace.count;
+    trace.step=step;
+    trace.complete=step==trace.count;
+    for(int index=0;index<step;++index) {
+        Cell *path=NULL;
+        int *path_count=NULL;
+        if(index+1==step) {
+            trace.path_count=0;
+            path=trace.path;
+            path_count=&trace.path_count;
+            trace.inserted=trace.values[index];
+        }
+        rsk_insert(&trace.p,&trace.q,trace.values[index],index+1,path,path_count);
+    }
+    *out=trace;
+    return YT_OK;
+}
+
+MathStatus permutation_rsk_trace(const char *text,int step,RSKTrace *out)
+{ return rsk_trace(text,true,step,out); }
+
+MathStatus word_rsk_trace(const char *text,int step,RSKTrace *out)
+{ return rsk_trace(text,false,step,out); }
+
+MathStatus permutation_rsk(const char *text,Tableau *pout,Tableau *qout)
+{
+    RSKTrace trace;
+    MathStatus status=permutation_rsk_trace(text,YT_DIM,&trace);
+    if(status!=YT_OK) return status;
+    *pout=trace.p;
+    *qout=trace.q;
+    return YT_OK;
+}
+
+MathStatus word_rsk(const char *text,Tableau *pout,Tableau *qout)
+{
+    RSKTrace trace;
+    MathStatus status=word_rsk_trace(text,YT_DIM,&trace);
+    if(status!=YT_OK) return status;
+    *pout=trace.p;
+    *qout=trace.q;
+    return YT_OK;
+}
+
+static int partition_row(const Partition *partition,int row)
+{ return row>=0 && row<partition->count?partition->rows[row]:0; }
+
+static bool partition_contains_partition(const Partition *outer,const Partition *inner)
+{
+    if(inner->count>outer->count) return false;
+    for(int row=0;row<inner->count;++row)
+        if(inner->rows[row]>outer->rows[row]) return false;
+    return true;
+}
+
+MathStatus skew_tableau_parse(const char *outer_text,const char *inner_text,
+                              const char *entries_text,SkewTableau *out)
+{
+    SkewTableau tableau={0};
+    MathStatus status=partition_parse(outer_text,&tableau.outer);
+    if(status!=YT_OK) return status;
+    status=partition_parse(inner_text,&tableau.inner);
+    if(status!=YT_OK) return status;
+    if(!partition_contains_partition(&tableau.outer,&tableau.inner)) return YT_MALFORMED;
+
+    const char *cursor=entries_text;
+    spaces(&cursor);
+    if(!tableau.outer.count) {
+        int values[YT_DIM],count=0;
+        status=list(&cursor,values,&count,false);
+        if(status!=YT_OK) return status;
+        spaces(&cursor);
+        if(*cursor || count) return YT_MALFORMED;
+        *out=tableau;
+        return YT_OK;
+    }
+
+    for(int row=0;row<tableau.outer.count;++row) {
+        int values[YT_DIM],count=0;
+        status=list(&cursor,values,&count,true);
+        if(status!=YT_OK) return status;
+        int start=partition_row(&tableau.inner,row);
+        int expected=tableau.outer.rows[row]-start;
+        if(count!=expected) return YT_MALFORMED;
+        for(int column=0;column<count;++column)
+            tableau.entries[row][start+column]=values[column];
+        spaces(&cursor);
+        if(row+1<tableau.outer.count) {
+            if(*cursor!=';') return YT_MALFORMED;
+            ++cursor;
+            spaces(&cursor);
+        } else if(*cursor) return YT_MALFORMED;
+    }
+    *out=tableau;
+    return YT_OK;
+}
+
+SkewValidation skew_tableau_validate(const SkewTableau *tableau)
+{
+    SkewValidation validation={true,true,true,true,true,true};
+    if(!partition_contains_partition(&tableau->outer,&tableau->inner))
+        validation.shape=false;
+    int size=partition_size(&tableau->outer)-partition_size(&tableau->inner);
+    bool seen[YT_CELLS+1]={false};
+    for(int row=0;row<tableau->outer.count;++row) {
+        int start=partition_row(&tableau->inner,row);
+        for(int column=start;column<tableau->outer.rows[row];++column) {
+            int entry=tableau->entries[row][column];
+            if(entry<=0) validation.positive=false;
+            if(column>start && tableau->entries[row][column-1]>entry)
+                validation.rows_weak=false;
+            if(row>0) {
+                int above_start=partition_row(&tableau->inner,row-1);
+                if(column>=above_start && column<tableau->outer.rows[row-1]
+                   && tableau->entries[row-1][column]>=entry)
+                    validation.columns_strict=false;
+            }
+            if(entry<1 || entry>size || seen[entry]) validation.standard=false;
+            else seen[entry]=true;
+        }
+    }
+    for(int value=1;value<=size;++value)
+        if(!seen[value]) validation.standard=false;
+    validation.semistandard=validation.shape && validation.positive
+        && validation.rows_weak && validation.columns_strict;
+    validation.standard=validation.standard && validation.semistandard;
+    return validation;
+}
+
+static bool cell_in_partition(const Partition *partition,Cell cell)
+{
+    return cell.row>=1 && cell.row<=partition->count
+        && cell.column>=1 && cell.column<=partition->rows[cell.row-1];
+}
+
+static bool removable_cell(const Partition *partition,Cell cell)
+{
+    if(!cell_in_partition(partition,cell)) return false;
+    int row=cell.row-1;
+    return cell.column==partition->rows[row]
+        && (row+1==partition->count || partition->rows[row]>partition->rows[row+1]);
+}
+
+static bool skew_cell(const SkewTableau *tableau,Cell cell)
+{
+    return cell_in_partition(&tableau->outer,cell)
+        && !cell_in_partition(&tableau->inner,cell)
+        && !(tableau->active && cell.row==tableau->hole.row
+             && cell.column==tableau->hole.column);
+}
+
+bool jeu_can_begin(const SkewTableau *tableau,Cell cell)
+{
+    return !tableau->active && removable_cell(&tableau->inner,cell)
+        && cell_in_partition(&tableau->outer,cell);
+}
+
+MathStatus jeu_begin(SkewTableau *tableau,Cell cell)
+{
+    if(!jeu_can_begin(tableau,cell)) return YT_MALFORMED;
+    int row=cell.row-1;
+    --tableau->inner.rows[row];
+    if(row+1==tableau->inner.count && !tableau->inner.rows[row])
+        --tableau->inner.count;
+    tableau->hole=cell;
+    tableau->active=true;
+    return YT_OK;
+}
+
+JeuStepResult jeu_step(SkewTableau *tableau)
+{
+    if(!tableau->active) return JEU_INVALID;
+    Cell right={tableau->hole.row,tableau->hole.column+1};
+    Cell below={tableau->hole.row+1,tableau->hole.column};
+    bool has_right=skew_cell(tableau,right);
+    bool has_below=skew_cell(tableau,below);
+    if(!has_right && !has_below) {
+        if(!removable_cell(&tableau->outer,tableau->hole)) return JEU_INVALID;
+        int row=tableau->hole.row-1;
+        int column=tableau->hole.column-1;
+        tableau->entries[row][column]=0;
+        --tableau->outer.rows[row];
+        if(row+1==tableau->outer.count && !tableau->outer.rows[row])
+            --tableau->outer.count;
+        tableau->active=false;
+        return JEU_FINISHED;
+    }
+
+    Cell source;
+    if(has_right && (!has_below
+       || tableau->entries[right.row-1][right.column-1]
+          < tableau->entries[below.row-1][below.column-1]))
+        source=right;
+    else
+        source=below;
+
+    int hole_row=tableau->hole.row-1,hole_column=tableau->hole.column-1;
+    int source_row=source.row-1,source_column=source.column-1;
+    tableau->entries[hole_row][hole_column]=tableau->entries[source_row][source_column];
+    tableau->entries[source_row][source_column]=0;
+    tableau->hole=source;
+    return JEU_MOVED;
+}
+
+MathStatus jeu_slide(SkewTableau *tableau,Cell cell)
+{
+    if(tableau->active) return YT_MALFORMED;
+    MathStatus status=jeu_begin(tableau,cell);
+    if(status!=YT_OK) return status;
+    while(tableau->active)
+        if(jeu_step(tableau)==JEU_INVALID) return YT_MALFORMED;
+    return YT_OK;
+}
+
+MathStatus jeu_rectify(SkewTableau *tableau)
+{
+    while(tableau->active)
+        if(jeu_step(tableau)==JEU_INVALID) return YT_MALFORMED;
+    while(tableau->inner.count) {
+        int row=tableau->inner.count-1;
+        Cell start={row+1,tableau->inner.rows[row]};
+        MathStatus status=jeu_slide(tableau,start);
+        if(status!=YT_OK) return status;
+    }
+    return YT_OK;
 }

@@ -116,6 +116,68 @@ static void rsk(void)
         else { int j=5; while(values[j]<values[pivot]) --j; int swap=values[j]; values[j]=values[pivot]; values[pivot]=swap; for(int a=pivot+1,b=5;a<b;++a,--b) { swap=values[a]; values[a]=values[b]; values[b]=swap; } }
     }
 }
+static void rsk_words_and_trace(void)
+{
+    Tableau p,q,want_p,want_q;
+    CHECK(word_rsk("2,1,2,1",&p,&q)==YT_OK);
+    CHECK(tableau_parse("1,1;2,2",&want_p)==YT_OK);
+    CHECK(tableau_parse("1,3;2,4",&want_q)==YT_OK);
+    CHECK(equal_tableau(&p,&want_p));
+    CHECK(equal_tableau(&q,&want_q));
+    CHECK(word_rsk("0,1",&p,&q)==YT_MALFORMED);
+    CHECK(word_rsk("-1",&p,&q)==YT_MALFORMED);
+
+    RSKTrace trace;
+    CHECK(permutation_rsk_trace("3,1,4,2",2,&trace)==YT_OK);
+    CHECK(trace.count==4 && trace.step==2 && trace.inserted==1);
+    CHECK(trace.path_count==2);
+    CHECK(trace.path[0].row==1 && trace.path[0].column==1);
+    CHECK(trace.path[1].row==2 && trace.path[1].column==1);
+    CHECK(tableau_parse("1;3",&want_p)==YT_OK);
+    CHECK(equal_tableau(&trace.p,&want_p));
+    CHECK(permutation_rsk_trace("3,1,4,2",99,&trace)==YT_OK);
+    CHECK(trace.complete && trace.step==4);
+    CHECK(permutation_rsk("3,1,4,2",&p,&q)==YT_OK);
+    CHECK(equal_tableau(&trace.p,&p) && equal_tableau(&trace.q,&q));
+}
+
+static void jeu_de_taquin(void)
+{
+    SkewTableau tableau;
+    CHECK(skew_tableau_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
+    SkewValidation validation=skew_tableau_validate(&tableau);
+    CHECK(validation.standard && validation.semistandard);
+    CHECK(jeu_can_begin(&tableau,(Cell){1,1}));
+    CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_OK);
+    CHECK(tableau.active && tableau.hole.row==1 && tableau.hole.column==1);
+    CHECK(jeu_step(&tableau)==JEU_MOVED);
+    CHECK(tableau.entries[0][0]==1 && tableau.hole.column==2);
+    CHECK(jeu_step(&tableau)==JEU_MOVED);
+    CHECK(tableau.entries[0][1]==3 && tableau.hole.column==3);
+    CHECK(jeu_step(&tableau)==JEU_FINISHED);
+    CHECK(!tableau.active && tableau.inner.count==0);
+    CHECK(equal_partition(tableau.outer,partition("2,2,1")));
+    CHECK(skew_tableau_validate(&tableau).standard);
+
+    CHECK(skew_tableau_parse("3,2,1","1","1,3;2,5;4",&tableau)==YT_OK);
+    CHECK(jeu_rectify(&tableau)==YT_OK);
+    CHECK(equal_partition(tableau.outer,partition("2,2,1")));
+    CHECK(tableau.inner.count==0 && skew_tableau_validate(&tableau).standard);
+
+    CHECK(skew_tableau_parse("2,2","1","1;1,2",&tableau)==YT_OK);
+    validation=skew_tableau_validate(&tableau);
+    CHECK(validation.semistandard && !validation.standard);
+    CHECK(jeu_begin(&tableau,(Cell){1,1})==YT_OK);
+    CHECK(jeu_step(&tableau)==JEU_MOVED);
+    CHECK(tableau.hole.row==2 && tableau.hole.column==1);
+    while(tableau.active) CHECK(jeu_step(&tableau)!=JEU_INVALID);
+    CHECK(skew_tableau_validate(&tableau).semistandard);
+
+    CHECK(skew_tableau_parse("2,1","2","1;2",&tableau)==YT_MALFORMED);
+    CHECK(skew_tableau_parse("2,1","1","1;2",&tableau)==YT_OK);
+    CHECK(jeu_begin(&tableau,(Cell){1,2})==YT_MALFORMED);
+}
+
 static void interaction(void)
 {
     Controls *u=calloc(1,sizeof(*u)); Console *c=calloc(1,sizeof(*c)); CHECK(u && c);
@@ -157,4 +219,4 @@ static void interaction(void)
     free(u); free(c);
 }
 #include "nearby_tests.inc"
-int main(void) { partitions(); tableaux(); rsk(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, controls, scrolling, console\n",checks); return 0; }
+int main(void) { partitions(); tableaux(); rsk(); rsk_words_and_trace(); jeu_de_taquin(); interaction(); nearby_tests(); printf("PASS %u checks: mathematics, RSK, jeu de taquin, controls, scrolling, console\n",checks); return 0; }

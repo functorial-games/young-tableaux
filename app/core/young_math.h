@@ -9,6 +9,23 @@ typedef struct { int count; int rows[YT_DIM]; } Partition;
 typedef struct { int row, column; } Cell;
 typedef struct { Partition shape; int entries[YT_DIM][YT_DIM]; } Tableau;
 typedef struct { bool shape, rows, columns, standard; } Validation;
+typedef struct {
+    int count, step, values[YT_DIM];
+    int inserted, path_count;
+    Cell path[YT_DIM];
+    Tableau p, q;
+    bool complete;
+} RSKTrace;
+typedef struct {
+    Partition outer, inner;
+    int entries[YT_DIM][YT_DIM];
+    Cell hole;
+    bool active;
+} SkewTableau;
+typedef struct {
+    bool shape, rows_weak, columns_strict, positive, semistandard, standard;
+} SkewValidation;
+typedef enum { JEU_INVALID, JEU_MOVED, JEU_FINISHED } JeuStepResult;
 const char *math_status(MathStatus status);
 MathStatus partition_parse(const char *text, Partition *out);
 int partition_size(const Partition *partition);
@@ -22,4 +39,14 @@ MathStatus partition_standard_count(const Partition *partition, uint64_t *out);
 MathStatus tableau_parse(const char *text, Tableau *out);
 Validation tableau_validate(const Partition *shape, const Tableau *tableau, bool decreasing);
 MathStatus permutation_rsk(const char *text, Tableau *p, Tableau *q);
+MathStatus word_rsk(const char *text, Tableau *p, Tableau *q);
+MathStatus permutation_rsk_trace(const char *text, int step, RSKTrace *out);
+MathStatus word_rsk_trace(const char *text, int step, RSKTrace *out);
+MathStatus skew_tableau_parse(const char *outer, const char *inner, const char *entries, SkewTableau *out);
+SkewValidation skew_tableau_validate(const SkewTableau *tableau);
+bool jeu_can_begin(const SkewTableau *tableau, Cell cell);
+MathStatus jeu_begin(SkewTableau *tableau, Cell cell);
+JeuStepResult jeu_step(SkewTableau *tableau);
+MathStatus jeu_slide(SkewTableau *tableau, Cell cell);
+MathStatus jeu_rectify(SkewTableau *tableau);
 #endif

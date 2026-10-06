@@ -87,7 +87,8 @@ static int32_t input(struct android_app *app,AInputEvent *event)
         if(touch==TOUCH_UP) { if(key>=0 && key==s->key_down) console_key(&s->console,&s->ui,key); s->key_pointer=-1; s->key_down=-1; }
     } else {
         ControlEvent semantic=controls_touch(&s->ui,touch,pointer,x,y);
-        console_event(&s->console,&s->ui,semantic);
+        if(!lua_bridge_shape_event(&s->lua,&s->console,&s->ui,semantic))
+            console_event(&s->console,&s->ui,semantic);
         if(semantic.kind==EVENT_FOCUS) {
             console_layout(&s->console,&s->ui,s->width,s->height);
             for(int i=0;i<s->ui.count;++i) if(s->ui.controls[i].id==s->ui.focus) {
@@ -105,7 +106,10 @@ void android_main(struct android_app *app)
     s->app=app; console_init(&s->console); controls_init(&s->ui);
     lua_bridge_init(&s->lua,app->activity->assetManager);
     s->key_pointer=-1; s->key_down=-1; s->dirty=true;
-    if(app->savedState && app->savedStateSize==sizeof(Console)) memcpy(&s->console,app->savedState,sizeof(Console));
+    if(app->savedState && app->savedStateSize==sizeof(Console)) {
+        memcpy(&s->console,app->savedState,sizeof(Console));
+        s->console.shape_history_count=0;
+    }
     app->userData=s; app->onAppCmd=command; app->onInputEvent=input;
     while(!app->destroyRequested) {
         int events; struct android_poll_source *source=NULL;

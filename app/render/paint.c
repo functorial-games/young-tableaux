@@ -7,16 +7,48 @@
 #define BLUE 0xffc7ac76U
 #define WEGERT_TAU 6.28318530717958647692f
 #define WEGERT_LOG_10 2.30258509299404568402f
+static size_t wrapped_token_bytes(const char *text)
+{
+    size_t prefix=0U;
+    const char *glyph=text;
+    if((text[0]=='_' || text[0]=='^') && text[1] && text[1]!='\n') {
+        prefix=1U; glyph=text+1;
+    }
+    if((unsigned char)glyph[0]==0xceU && (unsigned char)glyph[1]==0xbbU)
+        return prefix+2U;
+    return prefix+1U;
+}
 static void wrapped(Canvas *b,const char *text,int x,int y,int scale,int columns,uint32_t color)
 {
-    int col=0;
-    for(const char *p=text;*p;++p) {
-        if(*p=='\n') { y+=10*scale; col=0; continue; }
-        if(col==columns) { y+=10*scale; col=0; }
-        char one[]={*p,0};
-        if(y+7*scale>b->clip_top && y<b->clip_bottom) raster_text(b,one,x+col*6*scale,y,scale,color);
-        ++col;
+    char line[1024];
+    size_t used=0U;
+    int visual=0;
+    const char *p=text;
+
+    while(*p) {
+        if(*p=='\n') {
+            line[used]=0;
+            if(used && y+7*scale>b->clip_top && y<b->clip_bottom)
+                raster_text(b,line,x,y,scale,color);
+            used=0U; visual=0; y+=10*scale; ++p;
+            continue;
+        }
+
+        size_t bytes=wrapped_token_bytes(p);
+        if(visual>=columns || used+bytes>=sizeof(line)-1U) {
+            line[used]=0;
+            if(used && y+7*scale>b->clip_top && y<b->clip_bottom)
+                raster_text(b,line,x,y,scale,color);
+            used=0U; visual=0; y+=10*scale;
+        }
+
+        memcpy(line+used,p,bytes);
+        used+=bytes; ++visual; p+=bytes;
     }
+
+    line[used]=0;
+    if(used && y+7*scale>b->clip_top && y<b->clip_bottom)
+        raster_text(b,line,x,y,scale,color);
 }
 static float clamp01(float value)
 {

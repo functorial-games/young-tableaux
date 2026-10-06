@@ -5,14 +5,16 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <ctype.h>
+#include <limits.h>
 const OperationInfo operation_info[OP_COUNT]={
 #define OP(symbol,section,label,input,output) [symbol]={label,input,output,section},
 #include "operations.def"
 #undef OP
 };
-static const char *sections[]={"1 Partition / Young diagram","2 Tableau","3 Hooks / corners / cells","4 RSK","5 Jeu de taquin","6 Littlewood-Richardson","7 Symmetric group / representations","8 Symmetric functions","9 Young graph / branching","10 Random / asymptotic","11 Type-A / Coxeter","12 Global conventions"};
+static const char *sections[]={"Partition / Young diagram","Tableau","Hooks / corners / cells","RSK","Jeu de taquin","Littlewood-Richardson","Symmetric group / representations","Symmetric functions","Young graph / branching","Random / asymptotic","Type-A / Coxeter","Global conventions"};
 static const char *tableau_kinds[]={"Standard","ArbitraryFilling","RowStandard","ColumnStandard","Semistandard","Skew","Shifted","Ribbon","Oscillating","KTableau"};
-static const char *field_names[FIELD_COUNT]={"","λ: rows","tableau: rows separated by ;","permutation","mu: partition","nu: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after mu"};
+static const char *field_names[FIELD_COUNT]={"","λ: rows","tableau: rows separated by ;","permutation","mu: partition","nu: partition","selected cell: row,column","word","biword: top ; bottom","matrix: rows separated by ;","n","alphabet maximum","weight / content","characteristic: 0 or p","prime p","Hecke parameter","basis","q","t","variables / specialization","coefficients","Young graph path","probability law","simple transposition word","second permutation","reading convention","left / right action","skew tableau: visible rows after mu","entry"};
 static void append(char *out,const char *format,...)
 {
     size_t used=strlen(out); if(used>=UI_TEXT-1) return;
@@ -130,6 +132,18 @@ static MathStatus selected_cell(const char *text,Cell *cell)
     if(sscanf(text," %d , %d %c",&row,&column,&extra)!=2 || row<1 || column<1) return YT_MALFORMED;
     *cell=(Cell){row,column}; return YT_OK;
 }
+
+static MathStatus integer_field(const char *text,int *value)
+{
+    if(!text || !value) return YT_MALFORMED;
+    char *end=NULL;
+    long parsed=strtol(text,&end,10);
+    if(end==text || parsed<INT_MIN || parsed>INT_MAX) return YT_MALFORMED;
+    while(*end && isspace((unsigned char)*end)) ++end;
+    if(*end) return YT_MALFORMED;
+    *value=(int)parsed;
+    return YT_OK;
+}
 static void project_jeu(Console *c)
 {
     c->output[4][0]=0; c->jeu_loaded=true; skew_tiles(&c->jeu_tiles,&c->jeu);
@@ -175,7 +189,6 @@ static void default_layout(Console *c)
     c->script_layout_count=0;
     layout_add(c,SCRIPT_LABEL,0,"Young Tableaux 0.3.1");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
-    layout_add(c,SCRIPT_LABEL,0,"Shape");
     layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"λ: rows");
     layout_add(c,SCRIPT_SHAPE,0,"");
     layout_add(c,SCRIPT_WEGERT,160,"");
@@ -192,7 +205,7 @@ static void default_layout(Console *c)
 void console_init(Console *c)
 {
     memset(c,0,sizeof(*c));
-    const char *defaults[FIELD_COUNT]={"","3,2,1","1,2,4;3,5;6","3,1,4,2","1","3,2,1","1,1","1,2,1","1,1,2;1,2,1","1,0;0,1","6","3","2,1","0","2","1","Schur","1","1","x1,x2","1","[]","Plancherel","1,2,1","1,2,3,4","RowReading","LeftAction","1,3;2,5;4"};
+    const char *defaults[FIELD_COUNT]={"","3,2,1","1,2,4;3,5;6","3,1,4,2","1","3,2,1","1,1","1,2,1","1,1,2;1,2,1","1,0;0,1","6","3","2,1","0","2","1","Schur","1","1","x1,x2","1","[]","Plancherel","1,2,1","1,2,3,4","RowReading","LeftAction","1,3;2,5;4","7"};
     for(int i=1;i<FIELD_COUNT;++i) snprintf(c->fields[i],sizeof(c->fields[i]),"%s",defaults[i]);
     for(int i=4;i<11;++i) snprintf(c->output[i],UI_TEXT,"Select an operation to inspect its input/output types.");
     snprintf(c->output[11],UI_TEXT,"English: top row longest.\nCells use one-based (row,column).\nContent default: column-row.\nRow RSK bumps the first strictly greater entry.\nJeu de taquin uses weak rows / strict columns; ties between right and below move the lower entry.\nSkew rows contain only visible cells after mu.");
@@ -208,7 +221,73 @@ void console_run(Console *c,Operation op)
     case DisplayPartition: refresh_partition(c); refresh_jeu(c); return;
     case ConjugatePartition: case ListCells: case ComputeHookLengths: case ComputeHookProduct:
     case CountStandardTableaux: case FindCorners: case FindAddableCells: case FindRemovableCells: refresh_partition(c); return;
+    case AddCell: case RemoveCell: {
+        Partition input,result; Cell cell={0};
+        MathStatus status=partition_parse(c->fields[SET_LAMBDA],&input);
+        if(status==YT_OK) status=selected_cell(c->fields[SET_CELL],&cell);
+        if(status==YT_OK)
+            status=op==AddCell?partition_add_cell(&input,cell,&result):partition_remove_cell(&input,cell,&result);
+        c->output[2][0]=0;
+        if(status!=YT_OK) append(c->output[2],"%s cell: %s",op==AddCell?"add":"remove",math_status(status));
+        else {
+            append(c->output[2],"%s (%d,%d) -> ",op==AddCell?"add":"remove",cell.row,cell.column);
+            partition_text(c->output[2],&result);
+        }
+        return;
+    }
     case DisplayTableau: case ValidateTableau: refresh_tableau(c); return;
+    case StandardizeTableau: {
+        Tableau input,result;
+        MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
+        if(status==YT_OK) status=tableau_standardize(&input,&result);
+        c->output[1][0]=0; c->tableau_ok=false;
+        if(status!=YT_OK) append(c->output[1],"standardize: %s",math_status(status));
+        else {
+            tableau_text(c->output[1],"standardized",&result);
+            tiles(&c->tableau,&result.shape,&result); c->tableau_ok=true;
+        }
+        return;
+    }
+    case InsertLetter: {
+        Tableau input,result; Cell added={0}; int entry=0;
+        MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
+        if(status==YT_OK) status=integer_field(c->fields[SET_ENTRY],&entry);
+        if(status==YT_OK) status=tableau_row_insert(&input,entry,&result,&added);
+        c->output[1][0]=0; c->tableau_ok=false;
+        if(status!=YT_OK) append(c->output[1],"row insertion: %s",math_status(status));
+        else {
+            append(c->output[1],"insert %d; new cell (%d,%d)\n",entry,added.row,added.column);
+            tableau_text(c->output[1],"result",&result);
+            tiles(&c->tableau,&result.shape,&result); c->tableau_ok=true;
+        }
+        return;
+    }
+    case ReverseInsert: {
+        Tableau input,result; Cell corner={0}; int bumped=0;
+        MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
+        if(status==YT_OK) status=selected_cell(c->fields[SET_CELL],&corner);
+        if(status==YT_OK) status=tableau_reverse_insert(&input,corner,&result,&bumped);
+        c->output[1][0]=0; c->tableau_ok=false;
+        if(status!=YT_OK) append(c->output[1],"reverse insertion: %s",math_status(status));
+        else {
+            append(c->output[1],"reverse bump from (%d,%d); ejected %d\n",corner.row,corner.column,bumped);
+            tableau_text(c->output[1],"result",&result);
+            tiles(&c->tableau,&result.shape,&result); c->tableau_ok=true;
+        }
+        return;
+    }
+    case TransposeTableau: {
+        Tableau input,result;
+        MathStatus status=tableau_parse(c->fields[SET_TABLEAU],&input);
+        if(status==YT_OK) status=tableau_transpose(&input,&result);
+        c->output[1][0]=0; c->tableau_ok=false;
+        if(status!=YT_OK) append(c->output[1],"transpose: %s",math_status(status));
+        else {
+            tableau_text(c->output[1],"transpose",&result);
+            tiles(&c->tableau,&result.shape,&result); c->tableau_ok=true;
+        }
+        return;
+    }
     case RSKPermutation: c->rsk_word_mode=false; c->rsk_step=YT_DIM; refresh_rsk(c); return;
     case RSKWord: c->rsk_word_mode=true; c->rsk_step=YT_DIM; refresh_rsk(c); return;
     case JeuDeTaquinSlide: {
@@ -295,14 +374,10 @@ static void scripted_top(Console *c,Controls *u)
 void console_layout(Console *c,Controls *u,int w,int h)
 {
     controls_begin(u,w,h,u->focus!=0);
-    char total[16]="?";
-    Partition total_partition;
-    if(partition_parse(c->fields[SET_LAMBDA],&total_partition)==YT_OK)
-        snprintf(total,sizeof(total),"%d",partition_size(&total_partition));
-    controls_add(u,0,HERO,total,24*u->scale,NULL);
     scripted_top(c,u);
 
     for(int s=0;s<12;++s) {
+        if(s==1 || s==2) continue;
         controls_add(u,0,SEPARATOR,"",2*u->scale,NULL); controls_add(u,0,LABEL,sections[s],0,NULL);
         switch(s) {
         case 0: controls_add(u,0,LABEL,"Uses lambda from the top of the screen.",0,NULL); break;

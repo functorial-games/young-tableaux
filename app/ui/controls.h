@@ -5,7 +5,8 @@
 #define UI_MAX 384
 #define UI_TEXT 16384
 #define WEGERT_HOOK_MAX 127
-typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT, ROW_BLOCKS, DISABLED_BUTTON, HERO } ControlKind;
+#define RSK_PLOT_MAX 64
+typedef enum { LABEL, SEPARATOR, FIELD, BUTTON, CHOICE, OUTPUT, DIAGRAM, WEGERT, RSK_PLOT, ROW_BLOCKS, DISABLED_BUTTON, HERO } ControlKind;
 typedef struct { int x,y,w,h; } Rect;
 /* Output projection: generic ragged rows of tiles, optional integer labels. */
 typedef struct {
@@ -23,6 +24,12 @@ typedef struct {
     int max_hook;
     uint16_t hook_counts[WEGERT_HOOK_MAX+1];
 } WegertProjection;
+/* RSK companion plot: one point per insertion, x = insertion step,
+ * y = inserted value.  step is the visible prefix of the trace. */
+typedef struct {
+    int count, step;
+    int values[RSK_PLOT_MAX];
+} RSKPlotProjection;
 /* Identity is semantic, never inferred from array index or rectangle. */
 typedef struct { int id; ControlKind kind; Rect rect; char text[UI_TEXT]; const void *projection; } Control;
 typedef struct {

@@ -1,0 +1,77 @@
+name: Publish Young Tableaux 0.4.0-rc2
+
+on:
+  push:
+    branches:
+      - release/v0.4.0-rc2
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download qualified paired build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 37561976376 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name young-tableaux-apk \
+            --dir release-assets
+
+      - name: Verify source and prepare assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat release-assets/source.txt)" = d218064ed9615903c1af9e734d3a159771d93961
+          test "$(cat release-assets/c67/source.txt)" = d218064ed9615903c1af9e734d3a159771d93961
+          cp release-assets/young-tableaux-armeabi-v7a.apk young-tableaux-0.4.0-rc2-a1-armeabi-v7a.apk
+          cp release-assets/c67/young-tableaux-arm64-v8a.apk young-tableaux-0.4.0-rc2-c67-arm64-v8a.apk
+          sha256sum young-tableaux-0.4.0-rc2-a1-armeabi-v7a.apk > young-tableaux-0.4.0-rc2-a1-armeabi-v7a.apk.sha256
+          sha256sum young-tableaux-0.4.0-rc2-c67-arm64-v8a.apk > young-tableaux-0.4.0-rc2-c67-arm64-v8a.apk.sha256
+
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          Second 0.4.0 pre-release of the native Young Tableaux app.
+
+          Visual algorithm changes:
+          - Five linked Wegert projections across the long surface.
+          - RSK shows P before the current insertion and P after it.
+          - The RSK bump path is highlighted in P and the new recording cell is highlighted in Q.
+          - Jeu de taquin STEP shows the board before and after the move so the hole movement is visible.
+
+          Type/audit changes:
+          - All 44 registered operations have explicit named Edriç function-type specifications.
+          - The build gate checks the C registry against both the Idris sketch and Edriç specifications.
+          - Every registered operation must execute a non-placeholder C dispatch path.
+
+          Qualification:
+          - 9,893 host checks passed.
+          - 106,612 consolidation checks passed.
+          - symbolic Lua layout/facts test passed.
+          - stable signer verification passed.
+          - paired A1 ARMv7 and C67 AArch64 packaging passed.
+
+          Physical-device acceptance remains separate from hosted build qualification.
+          EOF
+
+          gh release create v0.4.0-rc2 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target b2ffa7b25a415a550512c1ffb4eabfb99daec8c3 \
+            --title "Young Tableaux 0.4.0-rc2" \
+            --notes-file release-notes.md \
+            --prerelease \
+            young-tableaux-0.4.0-rc2-a1-armeabi-v7a.apk \
+            young-tableaux-0.4.0-rc2-a1-armeabi-v7a.apk.sha256 \
+            young-tableaux-0.4.0-rc2-c67-arm64-v8a.apk \
+            young-tableaux-0.4.0-rc2-c67-arm64-v8a.apk.sha256

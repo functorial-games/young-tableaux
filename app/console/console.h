@@ -32,6 +32,7 @@ typedef struct {
     TileProjection partition,conjugate,tableau,p,q,hooks,jeu_tiles,rsk_before_p,jeu_before_tiles;
     TileRowProjection editable_rows[YT_DIM];
     WegertProjection wegert;
+    RSKPlotProjection rsk_plot;
     JeuState jeu;
     ScriptLayoutItem script_layout[SCRIPT_LAYOUT_MAX];
     int script_layout_count;

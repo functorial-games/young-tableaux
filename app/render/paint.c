@@ -141,6 +141,39 @@ static void paint_wegert(Canvas *b,Rect r,const WegertProjection *projection)
         }
     }
 }
+static void paint_rsk_plot(Canvas *b,Rect r,const RSKPlotProjection *projection,int scale)
+{
+    if(!projection || projection->count<=0 || r.w<12*scale || r.h<12*scale) return;
+    int minimum=projection->values[0],maximum=projection->values[0];
+    for(int i=1;i<projection->count;++i) {
+        if(projection->values[i]<minimum) minimum=projection->values[i];
+        if(projection->values[i]>maximum) maximum=projection->values[i];
+    }
+    if(minimum==maximum) { --minimum; ++maximum; }
+    int left=r.x+10*scale,right=r.x+r.w-6*scale;
+    int top=r.y+5*scale,bottom=r.y+r.h-12*scale;
+    if(right<=left || bottom<=top) return;
+    raster_rect(b,left,bottom,right-left+1,scale,0xff584330U);
+    raster_rect(b,left,top,scale,bottom-top+1,0xff584330U);
+    int width=right-left,height=bottom-top;
+    int point=scale>1?3*scale:3;
+    for(int i=0;i<projection->count;++i) {
+        int x=projection->count==1?left+width/2:left+i*width/(projection->count-1);
+        long long numerator=(long long)(projection->values[i]-minimum)*height;
+        int y=bottom-(int)(numerator/(maximum-minimum));
+        uint32_t color=0xff584330U;
+        if(i+1<projection->step) color=BLUE;
+        else if(i+1==projection->step) color=FG;
+        raster_rect(b,x-point/2,y-point/2,point,point,color);
+    }
+    char label[64];
+    snprintf(label,sizeof(label),"insertions 1..%d",projection->count);
+    raster_text(b,label,left,bottom+3*scale,scale,FG);
+    snprintf(label,sizeof(label),"%d",maximum);
+    raster_text(b,label,r.x+2*scale,top,scale,FG);
+    snprintf(label,sizeof(label),"%d",minimum);
+    raster_text(b,label,r.x+2*scale,bottom-7*scale,scale,FG);
+}
 void paint_controls(Canvas *b,const Controls *u,bool reverse)
 {
     b->clip_top=0; b->clip_bottom=b->height;
@@ -200,6 +233,8 @@ void paint_controls(Canvas *b,const Controls *u,bool reverse)
             }
         } else if(c->kind==WEGERT) {
             paint_wegert(b,r,(const WegertProjection *)c->projection);
+        } else if(c->kind==RSK_PLOT) {
+            paint_rsk_plot(b,r,(const RSKPlotProjection *)c->projection,scale);
         } else {
             int columns=(r.w-8*scale)/(6*scale); if(columns<1) columns=1;
             wrapped(b,c->text,r.x+4*scale,r.y+4*scale,scale,columns,c->kind==OUTPUT?BLUE:FG);

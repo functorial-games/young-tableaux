@@ -1,0 +1,5 @@
+operation	input	actual_exit	expected_exit	result
+word	1	0	0	PASS
+biword	1;1	0	0	PASS
+word	2147483647	-4	0	FAIL
+biword	1;2147483647	-4	0	FAIL

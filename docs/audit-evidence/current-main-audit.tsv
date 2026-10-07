@@ -1,0 +1,75 @@
+kind	family	fixture_or_count	actual	expected
+CHECKS	partition	556	-	-
+CHECKS	hooks	1384	-	-
+CHECKS	corners	985	-	-
+CHECKS	partition validation	9	-	-
+CHECKS	RSK permutation	5914	-	-
+CHECKS	cycle type	5914	-	-
+CHECKS	inverse RSK	5914	-	-
+CHECKS	RSK symmetry	11828	-	-
+CHECKS	lis	17742	-	-
+CHECKS	lds	17742	-	-
+CHECKS	Coxeter	5914	-	-
+CHECKS	Coxeter complete oracle	154	-	-
+CHECKS	RSK bijection	8	-	-
+CHECKS	RSK word	3279	-	-
+CHECKS	RSK trace	6015	-	-
+CHECKS	insertion reverse	6015	-	-
+CHECKS	RSK matrix	81	-	-
+CHECKS	RSK biword	81	-	-
+CHECKS	RSK matrix symmetry	81	-	-
+CHECKS	tableau kinds	22090	-	-
+CHECKS	transpose	2209	-	-
+CHECKS	standardization	140	-	-
+CHECKS	tableau_promote	352	-	-
+CHECKS	tableau_evacuate	704	-	-
+CHECKS	rectification order	700	-	-
+CHECKS	rectification	700	-	-
+CHECKS	jeu step	1363	-	-
+CHECKS	jeu slide	595	-	-
+CHECKS	branch	90	-	-
+CHECKS	graph paths	90	-	-
+CHECKS	Bruhat	15018	-	-
+CHECKS	characters	919	-	-
+CHECKS	characters orthogonality	1838	-	-
+CHECKS	characters identity	67	-	-
+CHECKS	characters trivial	9	-	-
+CHECKS	characters sign	9	-	-
+CHECKS	LR coefficient	1110	-	-
+CHECKS	LR enumeration	1110	-	-
+CHECKS	LR symmetry	1110	-	-
+CHECKS	Schur product	139	-	-
+CHECKS	Schur polynomial	74	-	-
+CHECKS	basis conversion	475	-	-
+CHECKS	specialization	475	-	-
+CHECKS	plethysm	400	-	-
+CHECKS	random support	24000	-	-
+CHECKS	random distribution	3	-	-
+CHECKS	public dispatch	44	-	-
+CHECKS	public rendering	27	-	-
+CHECKS	visual RSK	25	-	-
+CHECKS	UI edits	3	-	-
+CHECKS	visual jeu	4	-	-
+CHECKS	cell validation	4	-	-
+CHECKS	public malformed	21	-	-
+CHECKS	bounds	16	-	-
+CHECKS	degree8 specialization	22	-	-
+CHECKS	native skew validation	1	-	-
+CHECKS	plethysm constants	4	-	-
+CHECKS	actual Idric declarations	132	-	-
+CHECKS	reference algebra agreement	95	-	-
+CHECKS	basis degree6-8	1200	-	-
+CHECKS	plethysm degree8	4175	-	-
+CHECKS	mixed rational sums	25	-	-
+CHECKS	mixed rational plethysm	25	-	-
+FAIL_COUNT	public dispatch	3	-	-
+FAIL_COUNT	cell validation	4	-	-
+FAIL_COUNT	native skew validation	1	-	-
+FAIL	public dispatch	'FindCorners'	'Hook product = 1\nHook-length formula gives 1 standard tableaux.\n'	'(1,1)'
+FAIL	public dispatch	'FindAddableCells'	'Hook product = 1\nHook-length formula gives 1 standard tableaux.\n'	'(1,1)'
+FAIL	public dispatch	'FindRemovableCells'	'Hook product = 1\nHook-length formula gives 1 standard tableaux.\n'	'(1,1)'
+FAIL	cell validation	'AddCell'	'add (1,1) -> [1]\n'	'INVALID INPUT'
+FAIL	cell validation	'RemoveCell'	'remove (1,1) -> []\n'	'INVALID INPUT'
+FAIL	cell validation	'ReverseInsert'	'reverse bump from (1,1); ejected 1\nresult\n[]\n'	'INVALID INPUT'
+FAIL	cell validation	'JeuDeTaquinSlide'	'Forward jeu de taquin\nouter λ = []\ninner μ = []\nrows weakly increasing: YES\ncolumns strictly increasing: YES\npositive entries: YES\nsemistandard: YES\nstandard: YES\n'	'Selected cell must be a removable inner corner of μ.'
+FAIL	native skew validation	'outer=(1,2), inner=(), rows 1;2,3'	0	1

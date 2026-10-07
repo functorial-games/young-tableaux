@@ -1,10 +1,15 @@
 # Exact 44-operation ledger
 
-Anchor, definitions of PASS, oracles, bounds and C1–C8 are in
+Anchor, definitions of PASS, oracles, bounds and C1–C10 are in
 `independent-audit.md`. Every row was exercised via `console_event(OP_BASE+id)`
 and `console_run`; exact fields/results/visibility are in `public-dispatch.tsv`.
 All InputFor/OutputFor pairs match both the registry and actual text declarations
 in `Types.idr` and `Operations.idric`; no external type checking is claimed.
+
+This final ledger includes the separately reproduced rendering failures on
+new main `f16ca4008a0959753a50067281f869e34bab94cd`. The mathematical audit
+started at `b2ffa7b25a415a550512c1ffb4eabfb99daec8c3`; mathematical owners
+and operation definitions did not change between those heads.
 
 P = **PASS — independently verified** within the listed range.
 V = **FAIL — UI/wiring/validation**. No row is assigned mathematical FAIL
@@ -35,8 +40,8 @@ Public output is section text unless a projection is explicitly named.
 | AddCell | (Partition,Cell) → enlarged partition | Legal outer addable cell only | partition.c; selected_cell | Internal selected-cell dispatch; direct diagram addition uses separate checked route | H,O | Cell-set union | every legal addition for partitions ≤10 | V | C4: [] and row 4294967297 treated as row1 |
 | RemoveCell | (Partition,Cell) → smaller partition | Legal removable cell only | partition.c; selected_cell | Internal selected-cell dispatch; direct diagram removal separate | H,O | Cell-set difference | every legal removal for partitions ≤10 | V | C5: (1) and row4294967297 treated as row1 |
 | RSKPermutation | Permutation → standard (P,Q) of equal shape | 1..n one-line, strict bump | rsk.c → tableau.c; permutation_parse | Permutation field/button, P/Q text/diagrams, step controls | H,C,O | Independent insertion; bijection, inverse and symmetry | all permutations n≤7; n=64 boundaries | P | — |
-| RSKWord | Word → semistandard P, standard Q | Positive letters; weak rows/strict columns | rsk.c → tableau.c; word_parse | Word field/button and shared step controls | H,O | Independent insertion, weak LIS/strict LDS | all ternary words length≤6 | P | — |
-| RSKBiword | Biword → semistandard P,Q | Lexicographically sorted top/bottom pairs | rsk.c; biword_parse | Top;bottom field/button and stepping | H,O | Independent paired insertion/recording | all biletter multisets from 81 2×2 matrices | P | — |
+| RSKWord | Word → semistandard P, standard Q | Positive letters; weak rows/strict columns | rsk.c → tableau.c; word_parse; paint.c renderer | Word field/button and shared step controls | H,O | Independent insertion, weak LIS/strict LDS | all ternary words length≤6; INT_MAX renderer probe | V | C9 on new main: word2147483647 triggers plot signed overflow; mathematics passes |
+| RSKBiword | Biword → semistandard P,Q | Lexicographically sorted top/bottom pairs | rsk.c; biword_parse; paint.c renderer | Top;bottom field/button and stepping | H,O | Independent paired insertion/recording | all biletter multisets from 81 2×2 matrices; INT_MAX renderer probe | V | C10 on new main: biword1;2147483647 triggers plot signed overflow; mathematics passes |
 | RSKMatrix | NatMatrix → semistandard P,Q | Row index records; column index inserted | rsk.c; nat_matrix_parse | Matrix field/button and stepping | H,O | Direct expansion; transpose exchanges P,Q | every 2×2 matrix entries 0..2 | P | — |
 | InverseRSK | Standard equal-shape (P,Q) → permutation | Remove largest Q label first | combinatorics.c → tableau.c; two checked tableau parses | P/Q fields; inverse button/list | C,O | Independent forward pairs and original permutation | all permutations n≤7 | P | — |
 | JeuDeTaquinSlide | (SkewTableau,Cell) → slid skew tableau | Removable inner corner; ties take below | jeu_de_taquin.c; three shape/filling parses and selected_cell | λ/μ/skew/cell; Slide/STEP plus before/after projections | H,O | Dictionary hole movement | outer≤5; ternary semistandard and all standard fillings; every legal corner | V | C8: row4294967297 accepted as row1; mathematics passes |

@@ -36,6 +36,37 @@ Final local run: **171,228 checks, eight failing counterexamples**. The
 eight mathematical mutants compiled and were killed. Detailed counts and
 verbatim counterexamples are in `audit-evidence/independent-audit.tsv`.
 
+### Main advanced during execution
+
+During publication, main advanced to
+`f16ca4008a0959753a50067281f869e34bab94cd`, merging the companion plot.
+All mathematical owners and the operation registry are byte-for-byte unchanged.
+The complete independent suite was replayed in a detached checkout of that
+exact source; its receipt is `audit-evidence/current-main-audit.tsv`.
+The new renderer was additionally compiled with signed-integer-overflow traps
+and exercised through console input → layout → `paint_controls` in isolated
+processes. This found C9 and C10 below. The updated live-main ledger therefore
+has **34 PASS and ten FAIL — UI/wiring/validation**. This is not evidence of
+ten wrong mathematical algorithms: three missing results, six unsafe input /
+render paths (one shared cell parser accounts for four operations), and one
+native validation omission account for the failures as itemized below.
+
+The audit branch intentionally retains its original production-source anchor;
+no production files were integrated, fixed, merged or released. The additional
+renderer test is conditional on the plot feature's presence and explicitly
+reports UNVERIFIED for older source, rather than claiming it passed there.
+
+| ID | New-main operation/input | Observation | Correct behavior / owner |
+|---|---|---|---|
+| C9 | RSKWord; word=`2147483647`; scroll to companion plot and paint | Signed-overflow trap, exit −4; control word=`1` exits0 | Render valid integer without overflow; `paint.c: paint_rsk_plot`, constant-range `++maximum` overflows INT_MAX |
+| C10 | RSKBiword; biword=`1;2147483647`; same paint route | Same trap; control biword=`1;1` exits0 | Same renderer correction; biword parser correctly accepts this positive integer |
+
+Rendering probe receipt: `audit-evidence/current-main-renderer.tsv`. Trapping
+instrumentation demonstrates undefined arithmetic on the hosted source. It
+does not claim an uninstrumented APK necessarily crashes or that the failure
+was observed on a physical phone. `maximum-minimum` and subtraction before
+widening also need review in the same narrow renderer fix.
+
 ## Concrete counterexamples
 
 | ID | Operation / exact input | Actual | Required | Owner |
@@ -177,6 +208,15 @@ qualification can be reported independently of known mathematical failures.
 Starting workflow evidence is recorded in `independent-audit-runs.tsv`.
 New exact-head hosted run URLs/results are reported in the visible audit
 handoff after publication. A green package build never overrides a failing audit.
+
+First published audit commit `5040825fdb39aa6e450e6c8f7987ea1cf5b2f0b1`:
+paired-build run **37662763680 passed**; mathematical audit **37662764201
+failed on the preserved counterexamples**, with its mutation step passing.
+The latter published TSV/log artifacts. Main `f16ca40` has exactly the same
+source tree as `95611b1e8a356bfbaa6cd8a10e9b416474d4d2ef`, whose paired build
+**37659347293 passed**. Tree identity was checked, not inferred from titles.
+These earlier-head results are distinguished from final audit-head runs in
+the visible handoff.
 
 Physical MIRO A1 and MIRO C67 acceptance: **NOT RUN**. Neither installation,
 launch, touch behavior nor visual performance on a device is claimed.

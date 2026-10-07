@@ -42,3 +42,10 @@ jobs:
             build/public-dispatch.tsv
             build/mutations/*.tsv
             build/mutations/*.log
+      - name: Check renderer integer bounds when the plot is present
+        if: always()
+        shell: python
+        run: |
+          import os, pathlib, subprocess, sys
+          compiler = pathlib.Path(os.environ['ANDROID_HOME']) / 'ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/clang'
+          subprocess.run([sys.executable, 'tests/audit_renderer.py', '--compiler', str(compiler)], check=True)

@@ -127,6 +127,19 @@ static MathStatus trace_rsk_input_at_step(const Console *c,int step,RSKTrace *tr
     return YT_MALFORMED;
 }
 
+static void project_rsk_plot(Console *c,int total,int visible_step)
+{
+    memset(&c->rsk_plot,0,sizeof(c->rsk_plot));
+    int limit=total<RSK_PLOT_MAX?total:RSK_PLOT_MAX;
+    for(int step=1;step<=limit;++step) {
+        RSKTrace point;
+        if(trace_rsk_input_at_step(c,step,&point)!=YT_OK) break;
+        c->rsk_plot.values[c->rsk_plot.count++]=point.inserted;
+    }
+    c->rsk_plot.step=visible_step;
+    if(c->rsk_plot.step<0) c->rsk_plot.step=0;
+}
+
 static MathStatus check_completed_rsk_result(const Console *c,const RSKTrace *trace)
 {
     if(!trace->complete) return YT_OK;
@@ -151,12 +164,14 @@ static void refresh_rsk(Console *c)
 {
     c->output[3][0]=0; c->rsk_ok=false; c->rsk_has_before=false;
     memset(&c->rsk_before_p,0,sizeof(c->rsk_before_p));
+    memset(&c->rsk_plot,0,sizeof(c->rsk_plot));
     if(c->insertion) { append(c->output[3],"UNSUPPORTED CONVENTION: this contract uses row insertion."); return; }
     RSKTrace trace;
     MathStatus status=trace_rsk_input_at_step(c,c->rsk_step,&trace);
     if(status==YT_OK) status=check_completed_rsk_result(c,&trace);
     if(status!=YT_OK) { append(c->output[3],"RSK input: %s",math_status(status)); return; }
     c->rsk_step=trace.step; c->rsk_total=trace.count;
+    project_rsk_plot(c,trace.count,trace.step);
     const char *names[]={"PERMUTATION","WORD","BIWORD","MATRIX"};
     append(c->output[3],"%s row RSK\nstep %d / %d\n",names[c->rsk_input_kind],trace.step,trace.count);
     if(trace.step) {
@@ -695,7 +710,18 @@ void console_layout(Console *c,Controls *u,int w,int h)
             if(c->rsk_has_before) diagram(u,"P before this insertion",&c->rsk_before_p);
             diagram(u,c->rsk_has_before?"P after insertion — bump path highlighted":"P insertion tableau",&c->p);
             diagram(u,c->rsk_has_before?"Q after insertion — new recording cell highlighted":"Q recording tableau",&c->q);
-            if(c->partition_ok) controls_add(u,0,WEGERT,"",120*u->scale,&c->wegert);
+            controls_add(u,0,LABEL,"RSK input plot: x = insertion step, y = inserted value. Gold is the inserted prefix; white is the current insertion.",0,NULL);
+            if(c->partition_ok && c->rsk_plot.count>0) {
+                int y=u->content,gap=4*u->scale,full=u->width-8*u->scale;
+                int left_width=(full-gap)/2,right_width=full-gap-left_width;
+                int height=120*u->scale,left=4*u->scale;
+                controls_add_at(u,0,RSK_PLOT,"",(Rect){left,y,left_width,height},&c->rsk_plot);
+                controls_add_at(u,0,WEGERT,"",(Rect){left+left_width+gap,y,right_width,height},&c->wegert);
+            } else if(c->rsk_plot.count>0) {
+                controls_add(u,0,RSK_PLOT,"",120*u->scale,&c->rsk_plot);
+            } else if(c->partition_ok) {
+                controls_add(u,0,WEGERT,"",120*u->scale,&c->wegert);
+            }
         }
     }
     controls_end(u);

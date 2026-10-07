@@ -82,17 +82,18 @@ column-insertion, modular-character and parameter-dependent symmetric-function
 choices are not advertised. Defensive rejection of legacy unsupported values
 remains distinct from a missing operation.
 
-The correspondence executable checks every inventory signature against the
-type sketch and invokes every C dispatch case. Consolidation tests additionally
+The correspondence executable checks every inventory signature against both the
+Idris sketch and the Edriç function specifications, then invokes every C dispatch case. Consolidation tests additionally
 check rendered results and errors, exhaustive permutations through size 6,
 character orthogonality through size 6, basis round trips through degree 5,
 LR products of all shapes of sizes up to 3 against independent power-sum
 convolution, empty-to-shape paths through size 6, all strong Bruhat comparisons
 in S₄ against a transitive cover graph, and generator support/distributions.
 The native workflow also runs address/undefined sanitizers, the pinned Lua
-facts tests, and signed NDK ARMv7 and C67 AArch64 packaging. The Idris file
-remains a correspondence sketch; textual/native checks do not claim Idris
-type-checker execution or physical-device acceptance.
+facts tests, and signed NDK ARMv7 and C67 AArch64 packaging. The Idris file remains a correspondence sketch. The Edriç file gives every
+registered operation an explicit named function type, independent of implementation
+status. Textual/native correspondence checks do not by themselves claim either type
+file was accepted by an external type checker or that a physical device accepted the build.
 
 Reference conventions and executable examples:
 [Sage tableaux](https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/tableau.html),

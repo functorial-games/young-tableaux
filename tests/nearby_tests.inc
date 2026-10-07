@@ -83,7 +83,7 @@ static void nearby_tests(void)
         CHECK(!strstr(u->controls[i].text,"WEGERT PLOT"));
     }
     CHECK(plot_index>=0 && hooks_index>plot_index);
-    CHECK(wegert_count==3 && tableau_mirror_count==3);
+    CHECK(wegert_count==5 && tableau_mirror_count==3);
     CHECK(zoom->rect.y==plot_bottom+4*u->scale);
     controls_scroll(u,zoom->rect.y);
     int x=zoom->rect.x+zoom->rect.w/2,y=zoom->rect.y-u->scroll+zoom->rect.h/2;

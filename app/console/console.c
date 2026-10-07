@@ -108,20 +108,20 @@ static void refresh_tableau(Console *c)
     append(c->output[1],"shape compatible: %s\nrows strictly %s: %s\ncolumns strictly %s: %s\nstandard (1..n once): %s\n",v.shape?"YES":"NO",c->decreasing?"decreasing":"increasing",v.rows?"YES":"NO",c->decreasing?"decreasing":"increasing",v.columns?"YES":"NO",v.standard?"YES":"NO");
     tableau_text(c->output[1],"filling",&t); tiles(&c->tableau,&t.shape,&t); c->tableau_ok=true;
 }
-static MathStatus trace_rsk_input(const Console *c,RSKTrace *trace)
+static MathStatus trace_rsk_input_at_step(const Console *c,int step,RSKTrace *trace)
 {
     switch(c->rsk_input_kind) {
-    case RSK_PERMUTATION_INPUT: return permutation_rsk_trace(c->fields[SET_PERMUTATION],c->rsk_step,trace);
-    case RSK_WORD_INPUT: return word_rsk_trace(c->fields[SET_WORD],c->rsk_step,trace);
+    case RSK_PERMUTATION_INPUT: return permutation_rsk_trace(c->fields[SET_PERMUTATION],step,trace);
+    case RSK_WORD_INPUT: return word_rsk_trace(c->fields[SET_WORD],step,trace);
     case RSK_BIWORD_INPUT: {
         Biword input;
         MathStatus status=biword_parse(c->fields[SET_BIWORD],&input);
-        return status==YT_OK?rsk_biword(&input,c->rsk_step,trace):status;
+        return status==YT_OK?rsk_biword(&input,step,trace):status;
     }
     case RSK_MATRIX_INPUT: {
         NatMatrix input;
         MathStatus status=nat_matrix_parse(c->fields[SET_MATRIX],&input);
-        return status==YT_OK?rsk_matrix(&input,c->rsk_step,trace):status;
+        return status==YT_OK?rsk_matrix(&input,step,trace):status;
     }
     }
     return YT_MALFORMED;
@@ -149,10 +149,11 @@ static MathStatus check_completed_rsk_result(const Console *c,const RSKTrace *tr
 
 static void refresh_rsk(Console *c)
 {
-    c->output[3][0]=0; c->rsk_ok=false;
+    c->output[3][0]=0; c->rsk_ok=false; c->rsk_has_before=false;
+    memset(&c->rsk_before_p,0,sizeof(c->rsk_before_p));
     if(c->insertion) { append(c->output[3],"UNSUPPORTED CONVENTION: this contract uses row insertion."); return; }
     RSKTrace trace;
-    MathStatus status=trace_rsk_input(c,&trace);
+    MathStatus status=trace_rsk_input_at_step(c,c->rsk_step,&trace);
     if(status==YT_OK) status=check_completed_rsk_result(c,&trace);
     if(status!=YT_OK) { append(c->output[3],"RSK input: %s",math_status(status)); return; }
     c->rsk_step=trace.step; c->rsk_total=trace.count;
@@ -160,15 +161,26 @@ static void refresh_rsk(Console *c)
     append(c->output[3],"%s row RSK\nstep %d / %d\n",names[c->rsk_input_kind],trace.step,trace.count);
     if(trace.step) {
         append(c->output[3],"insert %d\nbump path: ",trace.inserted);
-        for(int i=0;i<trace.path_count;++i) append(c->output[3],"%s(%d,%d)",i?" -> ":"",trace.path[i].row,trace.path[i].column);
-        append(c->output[3],"\n");
+        for(int i=0;i<trace.path_count;++i) append(c->output[3],"%s(%d,%d)",i?" → ":"",trace.path[i].row,trace.path[i].column);
+        append(c->output[3],"\nCompare P before with P after below. Highlighted P cells are this insertion's bump path; the highlighted Q cell records this step.\n");
     } else append(c->output[3],"Press NEXT to insert the first entry.\n");
     tableau_text(c->output[3],"P: insertion tableau",&trace.p);
     tableau_text(c->output[3],"Q: recording tableau",&trace.q);
     tiles(&c->p,&trace.p.shape,&trace.p); tiles(&c->q,&trace.q.shape,&trace.q);
+    if(trace.step>0) {
+        RSKTrace before;
+        if(trace_rsk_input_at_step(c,trace.step-1,&before)==YT_OK) {
+            tiles(&c->rsk_before_p,&before.p.shape,&before.p);
+            c->rsk_has_before=true;
+        }
+    }
     for(int i=0;i<trace.path_count;++i) {
         int row=trace.path[i].row-1,column=trace.path[i].column-1;
         if(row>=0 && row<c->p.count && column>=0 && column<c->p.rows[row]) c->p.marks[row][column]=1;
+    }
+    if(trace.path_count>0) {
+        int row=trace.path[trace.path_count-1].row-1,column=trace.path[trace.path_count-1].column-1;
+        if(row>=0 && row<c->q.count && column>=0 && column<c->q.rows[row]) c->q.marks[row][column]=1;
     }
     c->rsk_ok=true;
 }
@@ -208,7 +220,8 @@ static void project_jeu(Console *c)
 static void refresh_jeu(Console *c)
 {
     memset(&c->jeu,0,sizeof(c->jeu)); memset(&c->jeu_tiles,0,sizeof(c->jeu_tiles));
-    c->jeu_loaded=false; c->jeu_ok=false; c->output[4][0]=0;
+    memset(&c->jeu_before_tiles,0,sizeof(c->jeu_before_tiles));
+    c->jeu_loaded=false; c->jeu_ok=false; c->jeu_has_before=false; c->output[4][0]=0;
     MathStatus status=jeu_state_parse(c->fields[SET_LAMBDA],c->fields[SET_MU],c->fields[SET_SKEW_TABLEAU],&c->jeu);
     if(status!=YT_OK) {
         append(c->output[4],"skew tableau: %s\nUse λ as outer shape, μ as inner shape, and enter only the visible skew cells in each row.",math_status(status));
@@ -218,6 +231,7 @@ static void refresh_jeu(Console *c)
 }
 static bool finish_jeu_slide(Console *c)
 {
+    c->jeu_has_before=false;
     while(c->jeu.active) if(jeu_step(&c->jeu)==JEU_INVALID) {
         c->jeu_ok=false; snprintf(c->output[4],UI_TEXT,"INVALID jeu de taquin state"); return false;
     }
@@ -510,6 +524,7 @@ void console_run(Console *c,Operation op)
     case RSKBiword: c->rsk_input_kind=RSK_BIWORD_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); return;
     case RSKMatrix: c->rsk_input_kind=RSK_MATRIX_INPUT; c->rsk_step=YT_DIM; refresh_rsk(c); return;
     case JeuDeTaquinSlide: {
+        c->jeu_has_before=false;
         if(!c->jeu_ok) { refresh_jeu(c); if(!c->jeu_ok) return; }
         if(!c->jeu.active) {
             Cell cell;
@@ -520,6 +535,7 @@ void console_run(Console *c,Operation op)
         finish_jeu_slide(c); return;
     }
     case Rectify: {
+        c->jeu_has_before=false;
         if(!c->jeu_ok) { refresh_jeu(c); if(!c->jeu_ok) return; }
         MathStatus status=jeu_rectify(&c->jeu);
         if(status!=YT_OK) { snprintf(c->output[4],UI_TEXT,"Rectification failed: %s",math_status(status)); c->jeu_ok=false; return; }
@@ -642,9 +658,12 @@ void console_layout(Console *c,Controls *u,int w,int h)
             controls_add(u,0,LABEL,"λ is the outer shape. μ is the inner shape. Enter only the visible skew cells in each row. Step moves one entry into the hole.",0,NULL);
             linked_tableau_wegert(c,u);
             field(c,u,SET_MU); field(c,u,SET_SKEW_TABLEAU); field(c,u,SET_CELL);
-            if(c->jeu_loaded) diagram(u,"jeu de taquin board",&c->jeu_tiles);
+            if(c->jeu_has_before) diagram(u,"Before STEP — hole before the move",&c->jeu_before_tiles);
+            if(c->jeu_loaded) diagram(u,c->jeu_has_before?"After STEP — hole after the move":"jeu de taquin board — choose a removable inner corner",&c->jeu_tiles);
             const int ids[]={JDT_RESET,JDT_STEP,JDT_SLIDE,JDT_RECTIFY}; const char *labels[]={"Reset","Step","Slide","Rectify"};
-            button_strip(u,ids,labels,4); break;
+            button_strip(u,ids,labels,4);
+            if(c->partition_ok) controls_add(u,0,WEGERT,"",120*u->scale,&c->wegert);
+            break;
         }
         case 5:
             controls_add(u,0,LABEL,"Uses λ above; LR uses outer ν ÷ inner λ and content μ. The μ field is immediately above.",0,NULL);
@@ -672,7 +691,12 @@ void console_layout(Console *c,Controls *u,int w,int h)
                 controls_add(u,OP_BASE+op,BUTTON,operation_info[op].label,0,NULL);
         if(s!=0 && s!=2) controls_add(u,0,OUTPUT,c->output[s],0,NULL);
         if(s==1 && c->tableau_ok) diagram(u,"filling cells",&c->tableau);
-        if(s==3 && c->rsk_ok) { diagram(u,"P cells",&c->p); diagram(u,"Q cells",&c->q); }
+        if(s==3 && c->rsk_ok) {
+            if(c->rsk_has_before) diagram(u,"P before this insertion",&c->rsk_before_p);
+            diagram(u,c->rsk_has_before?"P after insertion — bump path highlighted":"P insertion tableau",&c->p);
+            diagram(u,c->rsk_has_before?"Q after insertion — new recording cell highlighted":"Q recording tableau",&c->q);
+            if(c->partition_ok) controls_add(u,0,WEGERT,"",120*u->scale,&c->wegert);
+        }
     }
     controls_end(u);
 }
@@ -696,8 +720,10 @@ void console_event(Console *c,Controls *u,ControlEvent e)
                 snprintf(c->output[4],UI_TEXT,"Selected cell must be a removable inner corner of μ."); break;
             }
         }
+        skew_tiles(&c->jeu_before_tiles,&c->jeu);
+        c->jeu_has_before=true;
         JeuStepResult result=jeu_step(&c->jeu);
-        if(result==JEU_INVALID) { snprintf(c->output[4],UI_TEXT,"INVALID jeu de taquin state"); c->jeu_ok=false; }
+        if(result==JEU_INVALID) { snprintf(c->output[4],UI_TEXT,"INVALID jeu de taquin state"); c->jeu_ok=false; c->jeu_has_before=false; }
         else project_jeu(c);
         break;
     }

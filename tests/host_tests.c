@@ -276,6 +276,7 @@ static void interaction(void)
     CHECK(c->jeu_loaded && c->jeu_ok);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_STEP});
     CHECK(c->jeu.active && c->jeu.hole.row==1 && c->jeu.hole.column==2);
+    CHECK(c->jeu_has_before && c->jeu_before_tiles.marks[0][0]==2);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_SLIDE});
     CHECK(!c->jeu.active && c->jeu.filling.shape.inner.count==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,JDT_RESET});
@@ -294,7 +295,10 @@ static void interaction(void)
     console_run(c,RSKBiword); CHECK(c->rsk_ok && c->rsk_total==3 && c->q.values[0][1]==1);
     console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_WORD_INPUT);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START}); CHECK(c->rsk_step==0);
-    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT}); CHECK(c->rsk_step==1 && c->p.count==1);
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT});
+    CHECK(c->rsk_step==1 && c->p.count==1);
+    CHECK(c->rsk_has_before && c->rsk_before_p.count==0);
+    CHECK(c->p.marks[0][0]==1 && c->q.marks[0][0]==1);
     console_run(c,RSKPermutation); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_PERMUTATION_INPUT && c->rsk_step==c->rsk_total);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,STEP_PLUS}); CHECK(strcmp(c->fields[SET_N],"7")==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_STANDARD}); CHECK(c->decreasing);
@@ -316,7 +320,7 @@ static void interaction(void)
         if(!strcmp(u->controls[i].text,"Current tableau")) ++current_tableau;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==12); CHECK(wegert==3); CHECK(current_tableau==3);
+    CHECK(separators==12); CHECK(wegert==5); CHECK(current_tableau==3);
     for(int op=0;op<OP_COUNT;++op) {
         bool visible=operation_info[op].section>=3;
         CHECK(ids[OP_BASE+op]==visible);

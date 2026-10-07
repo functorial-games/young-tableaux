@@ -29,14 +29,14 @@ typedef struct {
     char fields[FIELD_COUNT][512];
     char output[12][UI_TEXT];
     char scripted_facts[UI_TEXT];
-    TileProjection partition,conjugate,tableau,p,q,hooks,jeu_tiles;
+    TileProjection partition,conjugate,tableau,p,q,hooks,jeu_tiles,rsk_before_p,jeu_before_tiles;
     TileRowProjection editable_rows[YT_DIM];
     WegertProjection wegert;
     JeuState jeu;
     ScriptLayoutItem script_layout[SCRIPT_LAYOUT_MAX];
     int script_layout_count;
     DiagramState diagram;
-    bool partition_ok,tableau_ok,rsk_ok,jeu_loaded,jeu_ok,french,decreasing;
+    bool partition_ok,tableau_ok,rsk_ok,jeu_loaded,jeu_ok,rsk_has_before,jeu_has_before,french,decreasing;
     RSKInputKind rsk_input_kind;
     InsertionConvention insertion;
     ContentConvention content_convention;

@@ -49,10 +49,13 @@ jobs:
           if cc -std=c17 -Werror=incompatible-pointer-types -Iapp/core -c tests/reject_filling_as_slide.c -o "$RUNNER_TEMP/young-tests/reject-slide.o" > "$RUNNER_TEMP/young-tests/reject-slide.log" 2>&1; then exit 1; fi
           grep -q 'incompatible pointer type' "$RUNNER_TEMP/young-tests/reject-slide.log"
           cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/core -Iapp/ui -Iapp/console -Iapp/render tests/operation_correspondence.c app/core/*.c app/ui/controls.c app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c -lm -o "$RUNNER_TEMP/young-tests/correspondence"
-          "$RUNNER_TEMP/young-tests/correspondence" types/YoungTableaux/Types.idr
+          "$RUNNER_TEMP/young-tests/correspondence" types/YoungTableaux/Types.idr types/YoungTableaux/Operations.idric
           sed 's/InputFor RSKPermutation = Permutation/InputFor RSKPermutation = Word/' types/YoungTableaux/Types.idr > "$RUNNER_TEMP/young-tests/drift.idr"
-          if "$RUNNER_TEMP/young-tests/correspondence" "$RUNNER_TEMP/young-tests/drift.idr" > "$RUNNER_TEMP/young-tests/drift.log" 2>&1; then exit 1; fi
+          if "$RUNNER_TEMP/young-tests/correspondence" "$RUNNER_TEMP/young-tests/drift.idr" types/YoungTableaux/Operations.idric > "$RUNNER_TEMP/young-tests/drift.log" 2>&1; then exit 1; fi
           grep -q 'operation correspondence failed' "$RUNNER_TEMP/young-tests/drift.log"
+          sed 's/-- SPEC RSKPermutation|Permutation|PermutationRSKResult/-- SPEC RSKPermutation|Word|PermutationRSKResult/' types/YoungTableaux/Operations.idric > "$RUNNER_TEMP/young-tests/drift.idric"
+          if "$RUNNER_TEMP/young-tests/correspondence" types/YoungTableaux/Types.idr "$RUNNER_TEMP/young-tests/drift.idric" > "$RUNNER_TEMP/young-tests/edric-drift.log" 2>&1; then exit 1; fi
+          grep -q 'Edriç correspondence failed: RSKPermutation' "$RUNNER_TEMP/young-tests/edric-drift.log"
 
           cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
             -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \

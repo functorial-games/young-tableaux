@@ -1,0 +1,77 @@
+name: Publish Young Tableaux 0.4.0 prerelease
+
+on:
+  push:
+    branches:
+      - ui-linked-tableau-wegert-mirrors
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the qualified paired build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 37558821770 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name young-tableaux-apk \
+            --dir release-assets
+
+      - name: Verify exact corrected source and prepare assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat release-assets/source.txt)" = 72e1f76aeadbff1db3aa6ce48b570eeff9ceb43f
+          test "$(cat release-assets/c67/source.txt)" = 72e1f76aeadbff1db3aa6ce48b570eeff9ceb43f
+          cp release-assets/young-tableaux-armeabi-v7a.apk young-tableaux-0.4.0-a1-armeabi-v7a.apk
+          cp release-assets/c67/young-tableaux-arm64-v8a.apk young-tableaux-0.4.0-c67-arm64-v8a.apk
+          sha256sum young-tableaux-0.4.0-a1-armeabi-v7a.apk > young-tableaux-0.4.0-a1-armeabi-v7a.apk.sha256
+          sha256sum young-tableaux-0.4.0-c67-arm64-v8a.apk > young-tableaux-0.4.0-c67-arm64-v8a.apk.sha256
+
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          First 0.4.0 pre-release of the native Young Tableaux app.
+
+          This build restores the intended repeated linked visual state:
+          - Current tableau at the top, in RSK, and in jeu de taquin.
+          - Wegert plot at the top, in RSK, and in jeu de taquin.
+          - All Wegert copies share the same projection state.
+          - RSK P/Q and the jeu de taquin board remain visible alongside the shared views.
+
+          Qualification:
+          - 9,834 host checks passed.
+          - 106,612 consolidation checks passed.
+          - symbolic Lua layout/facts test passed.
+          - stable signer verification passed.
+          - paired A1 ARMv7 and C67 AArch64 packaging passed.
+
+          Physical-device acceptance remains separate from hosted build qualification.
+          EOF
+
+          if gh release view v0.4.0-rc1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v0.4.0-rc1 already exists" >&2
+            exit 1
+          fi
+
+          gh release create v0.4.0-rc1 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target fa111b90dc1e5049ece9f82b1fb9b30248d70c8f \
+            --title "Young Tableaux 0.4.0-rc1" \
+            --notes-file release-notes.md \
+            --prerelease \
+            young-tableaux-0.4.0-a1-armeabi-v7a.apk \
+            young-tableaux-0.4.0-a1-armeabi-v7a.apk.sha256 \
+            young-tableaux-0.4.0-c67-arm64-v8a.apk \
+            young-tableaux-0.4.0-c67-arm64-v8a.apk.sha256

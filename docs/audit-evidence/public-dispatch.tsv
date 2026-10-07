@@ -1,0 +1,45 @@
+operation	fields	actual	expected_substring	button_visible	output_rendered
+DisplayPartition	{1: '2,1'}	'Valid partition\nsize |λ| = 3\nconjugate = [2,1]\ncells: (1,1) (1,2) (2,1) \n'	'size |λ| = 3'	0	0
+ConjugatePartition	{1: '3,1'}	'Valid partition\nsize |λ| = 4\nconjugate = [2,1,1]\ncells: (1,1) (1,2) (1,3) (2,1) \n'	'conjugate = [2,1,1]'	0	0
+ListCells	{1: '2,1'}	'Valid partition\nsize |λ| = 3\nconjugate = [2,1]\ncells: (1,1) (1,2) (2,1) \n'	'cells: (1,1) (1,2) (2,1)'	0	0
+DisplayTableau	{1: '2,1', 2: '1,3;2'}	'Standard: YES\nshape compatible: YES\nrows strictly increasing: YES\ncolumns strictly increasing: YES\nstandard (1..n once): YES\nfilling\n1 3 \n2 \n'	'filling\n1 3 \n2 \n'	0	0
+ValidateTableau	{1: '2,1', 2: '1,3;2'}	'Standard: YES\nshape compatible: YES\nrows strictly increasing: YES\ncolumns strictly increasing: YES\nstandard (1..n once): YES\nfilling\n1 3 \n2 \n'	'standard (1..n once): YES'	0	0
+StandardizeTableau	{2: '1,1;2'}	'standardized\n1 2 \n3 \n'	'standardized\n1 2 \n3 \n'	0	0
+InsertLetter	{2: '1,3;2', 28: '2'}	'insert 2; new cell (2,2)\nresult\n1 2 \n2 3 \n'	'result\n1 2 \n2 3 \n'	0	0
+ReverseInsert	{2: '1,2;2,3', 6: '2,2'}	'reverse bump from (2,2); ejected 2\nresult\n1 3 \n2 \n'	'ejected 2\nresult\n1 3 \n2 \n'	0	0
+TransposeTableau	{2: '1,3;2'}	'transpose\n1 2 \n3 \n'	'transpose\n1 2 \n3 \n'	0	0
+ComputeHookLengths	{1: '2,1'}	'Hook product = 3\nHook-length formula gives 2 standard tableaux.\n'	'Hook product = 3'	0	1
+ComputeHookProduct	{1: '2,1'}	'Hook product = 3\nHook-length formula gives 2 standard tableaux.\n'	'Hook product = 3'	0	1
+CountStandardTableaux	{1: '2,1'}	'Hook product = 3\nHook-length formula gives 2 standard tableaux.\n'	'gives 2 standard tableaux'	0	1
+FindCorners	{1: '1'}	'Hook product = 1\nHook-length formula gives 1 standard tableaux.\n'	'(1,1)'	0	1
+FindAddableCells	{1: '[]'}	'Hook product = 1\nHook-length formula gives 1 standard tableaux.\n'	'(1,1)'	0	1
+FindRemovableCells	{1: '1'}	'Hook product = 1\nHook-length formula gives 1 standard tableaux.\n'	'(1,1)'	0	1
+AddCell	{1: '[]', 6: '1,1'}	'add (1,1) -> [1]\n'	'add (1,1) -> [1]'	0	1
+RemoveCell	{1: '1', 6: '1,1'}	'remove (1,1) -> []\n'	'remove (1,1) -> []'	0	1
+RSKPermutation	{3: '2,1'}	"PERMUTATION row RSK\nstep 2 / 2\ninsert 1\nbump path: (1,1) → (2,1)\nCompare P before with P after below. Highlighted P cells are this insertion's bump path; the highlighted Q cell records this step.\nP: insertion tableau\n1 \n2 \nQ: recording tableau\n1 \n2 \n"	'P: insertion tableau\n1 \n2 \nQ: recording tableau\n1 \n2 \n'	1	1
+RSKWord	{7: '1,1'}	"WORD row RSK\nstep 2 / 2\ninsert 1\nbump path: (1,2)\nCompare P before with P after below. Highlighted P cells are this insertion's bump path; the highlighted Q cell records this step.\nP: insertion tableau\n1 1 \nQ: recording tableau\n1 2 \n"	'P: insertion tableau\n1 1 \nQ: recording tableau\n1 2 \n'	1	1
+RSKBiword	{8: '1,1;1,2'}	"BIWORD row RSK\nstep 2 / 2\ninsert 2\nbump path: (1,2)\nCompare P before with P after below. Highlighted P cells are this insertion's bump path; the highlighted Q cell records this step.\nP: insertion tableau\n1 2 \nQ: recording tableau\n1 1 \n"	'P: insertion tableau\n1 2 \nQ: recording tableau\n1 1 \n'	1	1
+RSKMatrix	{9: '0,1;1,0'}	"MATRIX row RSK\nstep 2 / 2\ninsert 1\nbump path: (1,1) → (2,1)\nCompare P before with P after below. Highlighted P cells are this insertion's bump path; the highlighted Q cell records this step.\nP: insertion tableau\n1 \n2 \nQ: recording tableau\n1 \n2 \n"	'P: insertion tableau\n1 \n2 \nQ: recording tableau\n1 \n2 \n'	1	1
+InverseRSK	{2: '1;2', 29: '1;2'}	'[2,1]'	'[2,1]'	1	1
+JeuDeTaquinSlide	{1: '2,1', 4: '1', 27: '1;1', 6: '1,1'}	'Forward jeu de taquin\nouter λ = [2]\ninner μ = []\nrows weakly increasing: YES\ncolumns strictly increasing: YES\npositive entries: YES\nsemistandard: YES\nstandard: NO\n'	'inner μ = []'	1	1
+Rectify	{1: '2,1', 4: '1', 27: '1;1', 6: '1,1'}	'Forward jeu de taquin\nouter λ = [2]\ninner μ = []\nrows weakly increasing: YES\ncolumns strictly increasing: YES\npositive entries: YES\nsemistandard: YES\nstandard: NO\n'	'inner μ = []'	1	1
+Promote	{2: '1,2;3'}	'Promotion\n1 3 \n2 \n'	'Promotion\n1 3 \n2 \n'	1	1
+Evacuate	{2: '1,2;3'}	'Evacuation\n1 3 \n2 \n'	'Evacuation\n1 3 \n2 \n'	1	1
+LittlewoodRichardsonCoefficient	{1: '1', 4: '1', 5: '2'}	'c(λ, μ; ν) = 1'	'c(λ, μ; ν) = 1'	1	1
+EnumerateLRTableaux	{1: '1', 4: '1', 5: '2'}	'1 LR tableaux of ν ÷ λ, content μ\nTableau 1\n1 \n'	'1 LR tableaux of ν ÷ λ, content μ\nTableau 1\n1 \n'	1	1
+MultiplySchurFunctions	{1: '1', 4: '1'}	'1 × s[2] + 1 × s[1,1]'	'1 × s[2] + 1 × s[1,1]'	1	1
+CharacterValue	{1: '1,1', 3: '2,1'}	'Ordinary complex character χλ = -1'	'Ordinary complex character χλ = -1'	1	1
+RepresentationDimension	{1: '2,1'}	'Ordinary complex Specht dimension = 2'	'Ordinary complex Specht dimension = 2'	1	1
+ChangeBasis	{20: '0;1;2', 16: '1'}	'1÷2 × p[2] + 1÷2 × p[1,1]'	'1÷2 × p[2] + 1÷2 × p[1,1]'	1	1
+Specialize	{20: '0;1;2', 19: '1,2'}	'Finite alphabet value = 7 ÷ 1'	'Finite alphabet value = 7 ÷ 1'	1	1
+Plethysm	{20: '0;1;2', 31: '0;1;2'}	'1 × s[4] + 1 × s[2,2]'	'1 × s[4] + 1 × s[2,2]'	1	1
+BranchUp	{1: '1'}	'[2]\n[1,1]\n'	'[2]\n[1,1]'	1	1
+BranchDown	{1: '1'}	'[]\n'	'[]'	1	1
+EnumerateYoungGraphPaths	{1: '[]', 5: '2'}	'1 paths\n[] → [1] → [2]\n'	'1 paths\n[] → [1] → [2]'	1	1
+GenerateRandomPermutation	{10: '1'}	'[1]'	'[1]'	1	1
+GenerateRandomStandardTableau	{1: '1'}	'Uniform standard tableau\n1 \n'	'Uniform standard tableau\n1 \n'	1	1
+SamplePlancherelPartition	{10: '1'}	'[1]\n'	'[1]'	1	1
+ComputeLongestIncreasingSubsequence	{3: '2,1'}	'[2]'	'[2]'	1	1
+ComputeLongestDecreasingSubsequence	{3: '2,1'}	'[2,1]'	'[2,1]'	1	1
+CoxeterReducedWord	{3: '2,1'}	'[1]'	'[1]'	1	1
+BruhatRelations	{3: '1,2', 24: '2,1'}	'Strong Bruhat order: first ≤ second = YES'	'first ≤ second = YES'	1	1

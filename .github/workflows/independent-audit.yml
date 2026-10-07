@@ -1,0 +1,44 @@
+name: Independent mathematical audit
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Install the repository's pinned audit compiler
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          sdk = pathlib.Path(os.environ['ANDROID_HOME'])
+          subprocess.run([str(sdk / 'cmdline-tools/latest/bin/sdkmanager'), 'ndk;27.2.12479018'], check=True)
+      - name: Kill mathematical mutants
+        shell: python
+        run: |
+          import os, pathlib, subprocess, sys
+          compiler = pathlib.Path(os.environ['ANDROID_HOME']) / 'ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/clang'
+          subprocess.run([sys.executable, 'tests/audit_mutations.py', '--compiler', str(compiler)], check=True)
+      - name: Check all operations against independent oracles
+        if: always()
+        shell: python
+        run: |
+          import os, pathlib, subprocess, sys
+          compiler = pathlib.Path(os.environ['ANDROID_HOME']) / 'ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/clang'
+          subprocess.run([sys.executable, 'tests/independent_audit.py', '--compiler', str(compiler)], check=True)
+      - name: Preserve mathematical counterexamples and mutation receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: independent-mathematical-audit
+          path: |
+            build/independent-audit.tsv
+            build/public-dispatch.tsv
+            build/mutations/*.tsv
+            build/mutations/*.log

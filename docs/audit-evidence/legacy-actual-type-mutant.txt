@@ -1,0 +1,2 @@
+exit=0
+PASS every registry signature matches Idris, Edriç, and an executable C dispatch path

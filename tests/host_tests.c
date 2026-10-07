@@ -294,12 +294,14 @@ static void interaction(void)
     CHECK(c->rsk_input_kind==RSK_MATRIX_INPUT && c->p.values[0][0]==1);
     console_run(c,RSKBiword); CHECK(c->rsk_ok && c->rsk_total==3 && c->q.values[0][1]==1);
     console_run(c,RSKWord); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_WORD_INPUT);
-    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START}); CHECK(c->rsk_step==0);
+    CHECK(c->rsk_plot.count==3 && c->rsk_plot.values[0]==1 && c->rsk_plot.values[1]==2 && c->rsk_plot.values[2]==1);
+    console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_START}); CHECK(c->rsk_step==0 && c->rsk_plot.step==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,RSK_NEXT});
-    CHECK(c->rsk_step==1 && c->p.count==1);
+    CHECK(c->rsk_step==1 && c->p.count==1 && c->rsk_plot.step==1);
     CHECK(c->rsk_has_before && c->rsk_before_p.count==0);
     CHECK(c->p.marks[0][0]==1 && c->q.marks[0][0]==1);
     console_run(c,RSKPermutation); CHECK(c->rsk_ok && c->rsk_input_kind==RSK_PERMUTATION_INPUT && c->rsk_step==c->rsk_total);
+    CHECK(c->rsk_plot.count==4 && c->rsk_plot.values[0]==3 && c->rsk_plot.values[1]==1 && c->rsk_plot.values[2]==4 && c->rsk_plot.values[3]==2);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,STEP_PLUS}); CHECK(strcmp(c->fields[SET_N],"7")==0);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_STANDARD}); CHECK(c->decreasing);
     console_event(c,u,(ControlEvent){EVENT_ACTIVATE,CHOOSE_TABLEAU_KIND});
@@ -312,15 +314,16 @@ static void interaction(void)
     console_run(c,ReverseInsert);
     CHECK(strstr(c->output[1],"UNSUPPORTED CONVENTION"));
     c->insertion=ROW_INSERTION;
-    console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0,current_tableau=0;
+    console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0,rsk_plots=0,current_tableau=0;
     bool ids[OP_BASE+OP_COUNT]={false};
     for(int i=0;i<u->count;++i) {
         if(u->controls[i].kind==SEPARATOR) ++separators;
         if(u->controls[i].kind==WEGERT) ++wegert;
+        if(u->controls[i].kind==RSK_PLOT) ++rsk_plots;
         if(!strcmp(u->controls[i].text,"Current tableau")) ++current_tableau;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==12); CHECK(wegert==5); CHECK(current_tableau==3);
+    CHECK(separators==12); CHECK(wegert==5); CHECK(rsk_plots==1); CHECK(current_tableau==3);
     for(int op=0;op<OP_COUNT;++op) {
         bool visible=operation_info[op].section>=3;
         CHECK(ids[OP_BASE+op]==visible);

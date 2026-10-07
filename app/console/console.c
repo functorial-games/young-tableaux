@@ -237,6 +237,7 @@ static void default_layout(Console *c)
     layout_add(c,SCRIPT_SEPARATOR,0,"");
     layout_add(c,SCRIPT_FIELD,SET_LAMBDA,"λ: rows");
     layout_add(c,SCRIPT_SHAPE,0,"");
+    layout_add(c,SCRIPT_TABLEAU,0,"Current tableau");
     layout_add(c,SCRIPT_WEGERT,160,"");
     layout_add(c,SCRIPT_PLOT_CONTROLS,0,"");
     layout_add(c,SCRIPT_SEPARATOR,0,"");
@@ -570,6 +571,9 @@ static void scripted_top(Console *c,Controls *u)
         case SCRIPT_SHAPE:
             if(c->partition_ok) nearby_shape(c,u);
             break;
+        case SCRIPT_TABLEAU:
+            if(c->tableau_ok) diagram(u,item->text[0]?item->text:"Current tableau",&c->tableau);
+            break;
         case SCRIPT_OUTPUT:
             if(item->arg>=0 && item->arg<12) controls_add(u,0,OUTPUT,c->output[item->arg],0,NULL);
             break;
@@ -588,6 +592,12 @@ static void scripted_top(Console *c,Controls *u)
         }
     }
 }
+static void linked_tableau_wegert(Console *c,Controls *u)
+{
+    if(c->tableau_ok) diagram(u,"Current tableau",&c->tableau);
+    if(c->partition_ok) controls_add(u,0,WEGERT,"",120*u->scale,&c->wegert);
+}
+
 static bool operation_exposed(Operation op)
 {
     return operation_info[op].section>=3;
@@ -618,6 +628,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
         case 2: controls_add(u,0,LABEL,"Hook facts and diagram are shown near the top. Cell-based add/remove operations use the selected-cell field in the jeu de taquin section below.",0,NULL); break;
         case 3: {
             controls_add(u,0,LABEL,"Row RSK inserts left to right and bumps the first strictly greater entry. P and Q update insertion by insertion; highlighted P cells are the current bump path.",0,NULL);
+            linked_tableau_wegert(c,u);
             field(c,u,SET_PERMUTATION); field(c,u,SET_WORD); field(c,u,SET_BIWORD); field(c,u,SET_MATRIX);
             controls_add(u,0,LABEL,"Inverse RSK uses standard P and Q below. Promotion and evacuation also use P.",0,NULL);
             controls_add(u,0,LABEL,"P: ordinary standard tableau, rows separated by ;",0,NULL);
@@ -629,6 +640,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
         }
         case 4: {
             controls_add(u,0,LABEL,"λ is the outer shape. μ is the inner shape. Enter only the visible skew cells in each row. Step moves one entry into the hole.",0,NULL);
+            linked_tableau_wegert(c,u);
             field(c,u,SET_MU); field(c,u,SET_SKEW_TABLEAU); field(c,u,SET_CELL);
             if(c->jeu_loaded) diagram(u,"jeu de taquin board",&c->jeu_tiles);
             const int ids[]={JDT_RESET,JDT_STEP,JDT_SLIDE,JDT_RECTIFY}; const char *labels[]={"Reset","Step","Slide","Rectify"};

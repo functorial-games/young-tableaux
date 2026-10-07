@@ -68,17 +68,22 @@ static void nearby_tests(void)
 
     choose_shape(c,"2,1"); console_layout(c,u,576,1152);
     Control *zoom=nearby_control(u,PLOT_ZOOM_IN);
-    int plot_bottom=0, plot_index=-1, hooks_index=-1;
+    int plot_bottom=0, plot_index=-1, hooks_index=-1, wegert_count=0, tableau_mirror_count=0;
     for(int i=0;i<u->count;++i) {
         if(u->controls[i].kind==WEGERT) {
-            plot_bottom=u->controls[i].rect.y+u->controls[i].rect.h;
-            plot_index=i;
+            ++wegert_count;
+            if(plot_index<0) {
+                plot_bottom=u->controls[i].rect.y+u->controls[i].rect.h;
+                plot_index=i;
+            }
         }
+        if(!strcmp(u->controls[i].text,"Current tableau")) ++tableau_mirror_count;
         if(strstr(u->controls[i].text,"Hook lengths:")) hooks_index=i;
         CHECK(!strstr(u->controls[i].text,"conjugate blocks"));
         CHECK(!strstr(u->controls[i].text,"WEGERT PLOT"));
     }
     CHECK(plot_index>=0 && hooks_index>plot_index);
+    CHECK(wegert_count==3 && tableau_mirror_count==3);
     CHECK(zoom->rect.y==plot_bottom+4*u->scale);
     controls_scroll(u,zoom->rect.y);
     int x=zoom->rect.x+zoom->rect.w/2,y=zoom->rect.y-u->scroll+zoom->rect.h/2;

@@ -308,14 +308,15 @@ static void interaction(void)
     console_run(c,ReverseInsert);
     CHECK(strstr(c->output[1],"UNSUPPORTED CONVENTION"));
     c->insertion=ROW_INSERTION;
-    console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0;
+    console_layout(c,u,576,1152); CHECK(u->content>u->height); int separators=0,wegert=0,current_tableau=0;
     bool ids[OP_BASE+OP_COUNT]={false};
     for(int i=0;i<u->count;++i) {
         if(u->controls[i].kind==SEPARATOR) ++separators;
         if(u->controls[i].kind==WEGERT) ++wegert;
+        if(!strcmp(u->controls[i].text,"Current tableau")) ++current_tableau;
         int id=u->controls[i].id; if(id) { CHECK(!ids[id]); ids[id]=true; }
     }
-    CHECK(separators==12); CHECK(wegert==1);
+    CHECK(separators==12); CHECK(wegert==3); CHECK(current_tableau==3);
     for(int op=0;op<OP_COUNT;++op) {
         bool visible=operation_info[op].section>=3;
         CHECK(ids[OP_BASE+op]==visible);

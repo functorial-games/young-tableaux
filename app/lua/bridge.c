@@ -44,6 +44,7 @@ static int layout_kind(const char *kind)
     if(!strcmp(kind,"separator")) return SCRIPT_SEPARATOR;
     if(!strcmp(kind,"field")) return SCRIPT_FIELD;
     if(!strcmp(kind,"shape")) return SCRIPT_SHAPE;
+    if(!strcmp(kind,"tableau")) return SCRIPT_TABLEAU;
     if(!strcmp(kind,"output")) return SCRIPT_OUTPUT;
     if(!strcmp(kind,"hooks")) return SCRIPT_HOOKS;
     if(!strcmp(kind,"facts")) return SCRIPT_FACTS;

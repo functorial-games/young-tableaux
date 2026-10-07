@@ -57,6 +57,7 @@ young_layout ← λ()
     {kind ← "separator"},
     {kind ← "field", arg ← 1, text ← "λ: rows"},
     {kind ← "shape"},
+    {kind ← "tableau", text ← "Current tableau"},
     {kind ← "wegert", arg ← 160},
     {kind ← "plot_controls"},
     {kind ← "separator"},

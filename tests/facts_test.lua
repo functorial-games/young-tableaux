@@ -25,7 +25,7 @@ assert(wegert.hook_counts[3] = 2)
 assert(wegert.hook_counts[5] = 1)
 
 local layout ← young_layout()
-local saw_shape, saw_wegert, saw_hooks, saw_facts ← false, false, false, false
+local saw_shape, saw_tableau, saw_wegert, saw_hooks, saw_facts ← false, false, false, false, false
 for _, item in ipairs(layout) do
   local text ← item.text or ''
   assert(not text:lower():find('conjugate blocks', 1, true))
@@ -33,7 +33,8 @@ for _, item in ipairs(layout) do
   assert(not text:find('Derived facts', 1, true))
   assert(not text:find('WEGERT PLOT', 1, true))
   if item.kind = 'shape' then saw_shape ← true end
-  if item.kind = 'wegert' then assert(saw_shape); saw_wegert ← true end
+  if item.kind = 'tableau' then assert(saw_shape); saw_tableau ← true end
+  if item.kind = 'wegert' then assert(saw_tableau); saw_wegert ← true end
   if item.kind = 'hooks' then
     assert(saw_wegert)
     assert(text:find('each number counts its cell', 1, true))
@@ -41,7 +42,7 @@ for _, item in ipairs(layout) do
   end
   if item.kind = 'facts' then assert(saw_hooks); saw_facts ← true end
 end
-assert(saw_shape and saw_wegert and saw_hooks and saw_facts)
+assert(saw_shape and saw_tableau and saw_wegert and saw_hooks and saw_facts)
 
 local shape ← young_shape_add({2,1}, 1, 3)
 assert(shape[1] = 3 and shape[2] = 1)

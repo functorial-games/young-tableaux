@@ -1,0 +1,466 @@
+module YoungTableaux.Operations
+
+%default total
+
+-- Edriç source-level contracts for the complete operation surface.
+-- This file specifies types independently of whether an implementation is
+-- currently supplied by native C.  The executable registry may therefore be
+-- checked against these contracts without turning implementation status into
+-- part of the mathematical type.
+
+public export
+number : Type
+number = Nat
+
+public export
+choice partition one_of
+  partition_value (List number)
+
+public export
+choice cell one_of
+  cell_value number number
+
+public export
+choice entry one_of
+  entry_value Integer
+
+public export
+choice tableau one_of
+  tableau_value partition (List (cell, entry))
+
+public export
+choice standard_tableau one_of
+  standard_tableau_value tableau
+
+public export
+choice semistandard_tableau one_of
+  semistandard_tableau_value tableau
+
+public export
+choice skew_tableau one_of
+  skew_tableau_value partition partition (List (cell, entry))
+
+public export
+choice permutation one_of
+  permutation_value (List number)
+
+public export
+choice word one_of
+  word_value (List number)
+
+public export
+choice biword one_of
+  biword_value (List (number, number))
+
+public export
+choice nat_matrix one_of
+  nat_matrix_value (List (List number))
+
+public export
+choice rational one_of
+  rational_value Integer number
+
+public export
+choice rng_state one_of
+  rng_state_value number
+
+public export
+choice symmetric_function_basis one_of
+  schur_basis
+  power_sum_basis
+  monomial_basis
+  complete_homogeneous_basis
+  elementary_basis
+
+public export
+choice symmetric_function one_of
+  symmetric_function_value symmetric_function_basis
+
+public export
+choice specialization one_of
+  finite_integer_alphabet (List Integer)
+
+public export
+choice diagram_result one_of
+  partition_diagram partition
+  tableau_diagram tableau
+
+public export
+choice permutation_rsk_result one_of
+  permutation_rsk_pair standard_tableau standard_tableau
+
+public export
+choice word_rsk_result one_of
+  word_rsk_pair semistandard_tableau standard_tableau
+
+public export
+choice biword_rsk_result one_of
+  biword_rsk_pair semistandard_tableau semistandard_tableau
+
+public export
+choice operation one_of
+  display_partition
+  conjugate_partition
+  list_cells
+  display_tableau
+  validate_tableau
+  standardize_tableau
+  insert_letter
+  reverse_insert
+  transpose_tableau
+  compute_hook_lengths
+  compute_hook_product
+  count_standard_tableaux
+  find_corners
+  find_addable_cells
+  find_removable_cells
+  add_cell
+  remove_cell
+  rsk_permutation
+  rsk_word
+  rsk_biword
+  rsk_matrix
+  inverse_rsk
+  jeu_de_taquin_slide
+  rectify
+  promote
+  evacuate
+  littlewood_richardson_coefficient
+  enumerate_lr_tableaux
+  multiply_schur_functions
+  character_value
+  representation_dimension
+  change_basis
+  specialize
+  plethysm
+  branch_up
+  branch_down
+  enumerate_young_graph_paths
+  generate_random_permutation
+  generate_random_standard_tableau
+  sample_plancherel_partition
+  compute_longest_increasing_subsequence
+  compute_longest_decreasing_subsequence
+  coxeter_reduced_word
+  bruhat_relations
+
+public export
+input_for : operation -> Type
+input_for display_partition = partition
+input_for conjugate_partition = partition
+input_for list_cells = partition
+input_for display_tableau = tableau
+input_for validate_tableau = tableau
+input_for standardize_tableau = tableau
+input_for insert_letter = (tableau, entry)
+input_for reverse_insert = (tableau, cell)
+input_for transpose_tableau = tableau
+input_for compute_hook_lengths = partition
+input_for compute_hook_product = partition
+input_for count_standard_tableaux = partition
+input_for find_corners = partition
+input_for find_addable_cells = partition
+input_for find_removable_cells = partition
+input_for add_cell = (partition, cell)
+input_for remove_cell = (partition, cell)
+input_for rsk_permutation = permutation
+input_for rsk_word = word
+input_for rsk_biword = biword
+input_for rsk_matrix = nat_matrix
+input_for inverse_rsk = permutation_rsk_result
+input_for jeu_de_taquin_slide = (skew_tableau, cell)
+input_for rectify = skew_tableau
+input_for promote = standard_tableau
+input_for evacuate = standard_tableau
+input_for littlewood_richardson_coefficient = (partition, partition, partition)
+input_for enumerate_lr_tableaux = (partition, partition, partition)
+input_for multiply_schur_functions = (partition, partition)
+input_for character_value = (partition, permutation)
+input_for representation_dimension = partition
+input_for change_basis = (symmetric_function, symmetric_function_basis)
+input_for specialize = (symmetric_function, specialization)
+input_for plethysm = (symmetric_function, symmetric_function)
+input_for branch_up = partition
+input_for branch_down = partition
+input_for enumerate_young_graph_paths = (partition, partition)
+input_for generate_random_permutation = (number, rng_state)
+input_for generate_random_standard_tableau = (partition, rng_state)
+input_for sample_plancherel_partition = (number, rng_state)
+input_for compute_longest_increasing_subsequence = permutation
+input_for compute_longest_decreasing_subsequence = permutation
+input_for coxeter_reduced_word = permutation
+input_for bruhat_relations = (permutation, permutation)
+
+public export
+output_for : operation -> Type
+output_for display_partition = diagram_result
+output_for conjugate_partition = partition
+output_for list_cells = List cell
+output_for display_tableau = diagram_result
+output_for validate_tableau = Bool
+output_for standardize_tableau = tableau
+output_for insert_letter = tableau
+output_for reverse_insert = tableau
+output_for transpose_tableau = tableau
+output_for compute_hook_lengths = List (cell, number)
+output_for compute_hook_product = Integer
+output_for count_standard_tableaux = Integer
+output_for find_corners = List cell
+output_for find_addable_cells = List cell
+output_for find_removable_cells = List cell
+output_for add_cell = partition
+output_for remove_cell = partition
+output_for rsk_permutation = permutation_rsk_result
+output_for rsk_word = word_rsk_result
+output_for rsk_biword = biword_rsk_result
+output_for rsk_matrix = biword_rsk_result
+output_for inverse_rsk = permutation
+output_for jeu_de_taquin_slide = skew_tableau
+output_for rectify = skew_tableau
+output_for promote = standard_tableau
+output_for evacuate = standard_tableau
+output_for littlewood_richardson_coefficient = number
+output_for enumerate_lr_tableaux = List skew_tableau
+output_for multiply_schur_functions = symmetric_function
+output_for character_value = Integer
+output_for representation_dimension = Integer
+output_for change_basis = symmetric_function
+output_for specialize = rational
+output_for plethysm = symmetric_function
+output_for branch_up = List partition
+output_for branch_down = List partition
+output_for enumerate_young_graph_paths = List (List partition)
+output_for generate_random_permutation = (permutation, rng_state)
+output_for generate_random_standard_tableau = (standard_tableau, rng_state)
+output_for sample_plancherel_partition = (partition, rng_state)
+output_for compute_longest_increasing_subsequence = List number
+output_for compute_longest_decreasing_subsequence = List number
+output_for coxeter_reduced_word = List number
+output_for bruhat_relations = Bool
+
+-- Exact registry correspondence markers.  The C checker reads these comments
+-- in addition to the executable Edriç types below.
+-- SPEC DisplayPartition|Partition|DiagramResult
+-- SPEC ConjugatePartition|Partition|Partition
+-- SPEC ListCells|Partition|List Cell
+-- SPEC DisplayTableau|Tableau|DiagramResult
+-- SPEC ValidateTableau|Tableau|Bool
+-- SPEC StandardizeTableau|Tableau|Tableau
+-- SPEC InsertLetter|(Tableau, Entry)|Tableau
+-- SPEC ReverseInsert|(Tableau, Cell)|Tableau
+-- SPEC TransposeTableau|Tableau|Tableau
+-- SPEC ComputeHookLengths|Partition|List (Cell, number)
+-- SPEC ComputeHookProduct|Partition|Integer
+-- SPEC CountStandardTableaux|Partition|Integer
+-- SPEC FindCorners|Partition|List Cell
+-- SPEC FindAddableCells|Partition|List Cell
+-- SPEC FindRemovableCells|Partition|List Cell
+-- SPEC AddCell|(Partition, Cell)|Partition
+-- SPEC RemoveCell|(Partition, Cell)|Partition
+-- SPEC RSKPermutation|Permutation|PermutationRSKResult
+-- SPEC RSKWord|Word|WordRSKResult
+-- SPEC RSKBiword|Biword|BiwordRSKResult
+-- SPEC RSKMatrix|NatMatrix|BiwordRSKResult
+-- SPEC InverseRSK|PermutationRSKResult|Permutation
+-- SPEC JeuDeTaquinSlide|(SkewTableau, Cell)|SkewTableau
+-- SPEC Rectify|SkewTableau|SkewTableau
+-- SPEC Promote|StandardTableau|StandardTableau
+-- SPEC Evacuate|StandardTableau|StandardTableau
+-- SPEC LittlewoodRichardsonCoefficient|(Partition, Partition, Partition)|number
+-- SPEC EnumerateLRTableaux|(Partition, Partition, Partition)|List SkewTableau
+-- SPEC MultiplySchurFunctions|(Partition, Partition)|SymmetricFunction
+-- SPEC CharacterValue|(Partition, Permutation)|Integer
+-- SPEC RepresentationDimension|Partition|Integer
+-- SPEC ChangeBasis|(SymmetricFunction, SymmetricFunctionBasis)|SymmetricFunction
+-- SPEC Specialize|(SymmetricFunction, Specialization)|Rational
+-- SPEC Plethysm|(SymmetricFunction, SymmetricFunction)|SymmetricFunction
+-- SPEC BranchUp|Partition|List Partition
+-- SPEC BranchDown|Partition|List Partition
+-- SPEC EnumerateYoungGraphPaths|(Partition, Partition)|List (List Partition)
+-- SPEC GenerateRandomPermutation|(number, RNGState)|(Permutation, RNGState)
+-- SPEC GenerateRandomStandardTableau|(Partition, RNGState)|(StandardTableau, RNGState)
+-- SPEC SamplePlancherelPartition|(number, RNGState)|(Partition, RNGState)
+-- SPEC ComputeLongestIncreasingSubsequence|Permutation|List number
+-- SPEC ComputeLongestDecreasingSubsequence|Permutation|List number
+-- SPEC CoxeterReducedWord|Permutation|List number
+-- SPEC BruhatRelations|(Permutation, Permutation)|Bool
+
+-- Named function-type specifications.  These are intentionally values of Type,
+-- not placeholder implementations, so an operation may remain specified even
+-- when a backend implementation is absent.
+
+public export
+display_partition_signature : Type
+display_partition_signature = partition -> diagram_result
+
+public export
+conjugate_partition_signature : Type
+conjugate_partition_signature = partition -> partition
+
+public export
+list_cells_signature : Type
+list_cells_signature = partition -> List cell
+
+public export
+display_tableau_signature : Type
+display_tableau_signature = tableau -> diagram_result
+
+public export
+validate_tableau_signature : Type
+validate_tableau_signature = tableau -> Bool
+
+public export
+standardize_tableau_signature : Type
+standardize_tableau_signature = tableau -> tableau
+
+public export
+insert_letter_signature : Type
+insert_letter_signature = (tableau, entry) -> tableau
+
+public export
+reverse_insert_signature : Type
+reverse_insert_signature = (tableau, cell) -> tableau
+
+public export
+transpose_tableau_signature : Type
+transpose_tableau_signature = tableau -> tableau
+
+public export
+compute_hook_lengths_signature : Type
+compute_hook_lengths_signature = partition -> List (cell, number)
+
+public export
+compute_hook_product_signature : Type
+compute_hook_product_signature = partition -> Integer
+
+public export
+count_standard_tableaux_signature : Type
+count_standard_tableaux_signature = partition -> Integer
+
+public export
+find_corners_signature : Type
+find_corners_signature = partition -> List cell
+
+public export
+find_addable_cells_signature : Type
+find_addable_cells_signature = partition -> List cell
+
+public export
+find_removable_cells_signature : Type
+find_removable_cells_signature = partition -> List cell
+
+public export
+add_cell_signature : Type
+add_cell_signature = (partition, cell) -> partition
+
+public export
+remove_cell_signature : Type
+remove_cell_signature = (partition, cell) -> partition
+
+public export
+rsk_permutation_signature : Type
+rsk_permutation_signature = permutation -> permutation_rsk_result
+
+public export
+rsk_word_signature : Type
+rsk_word_signature = word -> word_rsk_result
+
+public export
+rsk_biword_signature : Type
+rsk_biword_signature = biword -> biword_rsk_result
+
+public export
+rsk_matrix_signature : Type
+rsk_matrix_signature = nat_matrix -> biword_rsk_result
+
+public export
+inverse_rsk_signature : Type
+inverse_rsk_signature = permutation_rsk_result -> permutation
+
+public export
+jeu_de_taquin_slide_signature : Type
+jeu_de_taquin_slide_signature = (skew_tableau, cell) -> skew_tableau
+
+public export
+rectify_signature : Type
+rectify_signature = skew_tableau -> skew_tableau
+
+public export
+promote_signature : Type
+promote_signature = standard_tableau -> standard_tableau
+
+public export
+evacuate_signature : Type
+evacuate_signature = standard_tableau -> standard_tableau
+
+public export
+littlewood_richardson_coefficient_signature : Type
+littlewood_richardson_coefficient_signature = (partition, partition, partition) -> number
+
+public export
+enumerate_lr_tableaux_signature : Type
+enumerate_lr_tableaux_signature = (partition, partition, partition) -> List skew_tableau
+
+public export
+multiply_schur_functions_signature : Type
+multiply_schur_functions_signature = (partition, partition) -> symmetric_function
+
+public export
+character_value_signature : Type
+character_value_signature = (partition, permutation) -> Integer
+
+public export
+representation_dimension_signature : Type
+representation_dimension_signature = partition -> Integer
+
+public export
+change_basis_signature : Type
+change_basis_signature = (symmetric_function, symmetric_function_basis) -> symmetric_function
+
+public export
+specialize_signature : Type
+specialize_signature = (symmetric_function, specialization) -> rational
+
+public export
+plethysm_signature : Type
+plethysm_signature = (symmetric_function, symmetric_function) -> symmetric_function
+
+public export
+branch_up_signature : Type
+branch_up_signature = partition -> List partition
+
+public export
+branch_down_signature : Type
+branch_down_signature = partition -> List partition
+
+public export
+enumerate_young_graph_paths_signature : Type
+enumerate_young_graph_paths_signature = (partition, partition) -> List (List partition)
+
+public export
+generate_random_permutation_signature : Type
+generate_random_permutation_signature = (number, rng_state) -> (permutation, rng_state)
+
+public export
+generate_random_standard_tableau_signature : Type
+generate_random_standard_tableau_signature = (partition, rng_state) -> (standard_tableau, rng_state)
+
+public export
+sample_plancherel_partition_signature : Type
+sample_plancherel_partition_signature = (number, rng_state) -> (partition, rng_state)
+
+public export
+compute_longest_increasing_subsequence_signature : Type
+compute_longest_increasing_subsequence_signature = permutation -> List number
+
+public export
+compute_longest_decreasing_subsequence_signature : Type
+compute_longest_decreasing_subsequence_signature = permutation -> List number
+
+public export
+coxeter_reduced_word_signature : Type
+coxeter_reduced_word_signature = permutation -> List number
+
+public export
+bruhat_relations_signature : Type
+bruhat_relations_signature = (permutation, permutation) -> Bool

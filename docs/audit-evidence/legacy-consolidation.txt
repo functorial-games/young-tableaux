@@ -1,0 +1,1 @@
+PASS 106612 consolidation checks: exact examples, exhaustive laws, independent algebra/order oracles, distributions, rendered dispatch

@@ -1,0 +1,9 @@
+mutant	family	result	first_counterexample
+hook-arm	partition	KILLED	FAIL	hooks	('hook', (1,), 0, 0)	2	1
+weak-bump	word	KILLED	FAIL	RSK word	(1, 1)	(1, (), ())	(0, ((1, 1),), ((1, 2),))
+jeu-tie	jeu	KILLED	FAIL	jeu step	((2, 1), (1,), (1, 1), (0, 0), (1, 0))	(1, {(1, 0): 1, (0, 0): 1}, (0, 1))	(1, {(0, 1): 1, (0, 0): 1}, (1, 0))
+LR-no-lattice	algebra	KILLED	FAIL	LR coefficient	((), (1, 1), (2,))	(0, 1)	(0, 0)
+MN-sign	characters	KILLED	FAIL	characters	((1,), (1,))	(0, -1)	(0, 1)
+missing-edge	graph	KILLED	FAIL	branch	((), True)	(0, set())	(0, {(1,)})
+Bruhat-reversed	bruhat	KILLED	FAIL	Bruhat	((2, 1), (1, 2))	(0, True)	(0, False)
+inverse-removal	permutation	KILLED	FAIL	inverse RSK	(1, 2)	(1, ())	(0, (1, 2))

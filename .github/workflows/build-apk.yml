@@ -11,9 +11,126 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  modified-lua-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ASAN_OPTIONS: detect_leaks=0
+    steps:
+      - name: Exact consumer source and Lua gitlink
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+      - name: Exact shared runtime admission source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: isomorphisms/flexible-pipes
+          ref: 5caaba31256bfb424638f8a3d4d554c56fa9a970
+          path: runtime-owner
+          persist-credentials: false
+      - name: Same-version stock control
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: isomorphisms/lua
+          ref: 0b29f408433e92953cc72b1d3e06c7ac8139e439
+          path: stock-source
+          persist-credentials: false
+      - name: Exact qualified host ICK
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          repository: isomorphisms/fastchat
+          run-id: 37589849631
+          artifact-ids: 11468256648
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          path: host-ick
+      - name: Exact Grease implementation artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          repository: dilapidated-shed/grease
+          run-id: 37478624499
+          artifact-ids: 11419719229
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          path: grease-runtime
+      - name: Exact Grease packaging source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: dilapidated-shed/grease
+          ref: ba869518c7d850de6c47d8c6234654575e264e6c
+          path: grease-owner
+          persist-credentials: false
+      - name: Shared build and workflow policy
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: isomorphisms/ai-ci
+          ref: 01608a2493fa409463f70e8fbfd8a123ef59ee85
+          path: shared-policy
+          persist-credentials: false
+      # These fixed packaging commands reproduce the runtime owner's launcher.
+      # All authored qualification policy is Grease in tests/qualify-lua.grease.
+      - name: Check Grease implementation bytes
+        run: echo '7e31cd05b7a9d8fb2a4a9e003a7f3fcb0159138506d17f0fb28da8cbe22aa85c  grease-runtime/_bin/cxx-asan/ysh' | sha256sum -c -
+      - name: Reuse unchanged Grease owner launcher
+        run: sed -n '123,125p' grease-owner/phone/build-armv7-runtime.sh > grease-runtime/grease
+      - name: Install engine at owner launcher path
+        run: cp grease-runtime/_bin/cxx-asan/ysh grease-runtime/ysh
+      - name: Restore artifact executable modes
+        run: chmod +x host-ick/compiler/build/gcc/xgcc host-ick/compiler/build/gcc/cc1 host-ick/compiler/build/gcc/collect2 grease-runtime/grease grease-runtime/ysh
+      - name: Producer dependency closure
+        run: sudo apt-get install -y libgmp10 libmpfr6 libmpc3 libisl23 libzstd1 ripgrep
+      - name: Build shared toolchain verifier through ICK
+        run: >
+          host-ick/compiler/build/gcc/xgcc -Bhost-ick/compiler/build/gcc/
+          -B/usr/lib/gcc/x86_64-linux-gnu/13/
+          -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include
+          -fno-use-linker-plugin -std=c11 -O2 shared-policy/src/aici.c -o shared-policy-check
+      - name: Required shared build-toolchain contract
+        run: ./shared-policy-check verify shared-policy/contracts/build-toolchain-v0.contract.tsv .
+      - name: Build shared workflow verifier through ICK
+        run: >
+          host-ick/compiler/build/gcc/xgcc -Bhost-ick/compiler/build/gcc/
+          -B/usr/lib/gcc/x86_64-linux-gnu/13/
+          -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include
+          -fno-use-linker-plugin -std=c17 -O2 shared-policy/src/aici_github.c -o workflow-policy-check
+      - name: Required shared workflow policy
+        run: ./workflow-policy-check verify . - public
+      - name: Actual interpreter, embedded consumer and negative controls
+        run: >
+          grease-runtime/grease tests/qualify-lua.grease
+          "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/runtime-owner"
+          "$GITHUB_WORKSPACE/stock-source" "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc/xgcc"
+          "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc" "$GITHUB_WORKSPACE/grease-runtime/grease"
+          "$RUNNER_TEMP/young-lua-admission"
+      - name: Native host mathematics, ownership controls and sanitizers through ICK
+        run: >
+          grease-runtime/grease test-host.ysh "$GITHUB_WORKSPACE"
+          "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc/xgcc"
+          "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc"
+          > "$RUNNER_TEMP/young-lua-admission/native-host.stdout"
+          2> "$RUNNER_TEMP/young-lua-admission/native-host.stderr"
+      - name: Preserve exact-head admission evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: young-lua-admission-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/young-lua-admission/
+          if-no-files-found: error
+      - name: Preserve exact-head native negative-control logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: young-native-controls-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/*.log
+          if-no-files-found: error
   build:
+    needs: modified-lua-admission
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact source
@@ -23,62 +140,17 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      - name: Exact-head prerequisite admission receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: young-lua-admission-${{ github.event.pull_request.head.sha || github.sha }}
+          path: admission-evidence
+
       - name: Verify symbolic Lua fork
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C third_party/lua rev-parse HEAD)" = dca7e57c16c524c8616144ed294fe598947a029f
-
-      - name: Test host mathematics and controls
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/young-tests"
-          cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
-            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
-            tests/host_tests.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c app/core/algebra.c app/core/combinatorics.c app/ui/controls.c \
-            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
-            -lm -o "$RUNNER_TEMP/young-tests/host-tests"
-          "$RUNNER_TEMP/young-tests/host-tests" | tee "$RUNNER_TEMP/young-tests/host-tests.txt"
-          cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/core \
-            tests/insertion_ownership.c app/core/parse.c app/core/diagram.c app/core/partition.c app/core/tableau.c app/core/rsk.c app/core/jeu_de_taquin.c app/core/algebra.c app/core/combinatorics.c \
-            -Wl,--wrap=tableau_row_insert_trace -o "$RUNNER_TEMP/young-tests/insertion-ownership"
-          "$RUNNER_TEMP/young-tests/insertion-ownership"
-          if cc -std=c17 -Werror=incompatible-pointer-types -Iapp/core -c tests/reject_word_as_permutation.c -o "$RUNNER_TEMP/young-tests/reject.o" > "$RUNNER_TEMP/young-tests/reject.log" 2>&1; then exit 1; fi
-          grep -q 'incompatible pointer type' "$RUNNER_TEMP/young-tests/reject.log"
-          if cc -std=c17 -Werror=incompatible-pointer-types -Iapp/core -c tests/reject_filling_as_slide.c -o "$RUNNER_TEMP/young-tests/reject-slide.o" > "$RUNNER_TEMP/young-tests/reject-slide.log" 2>&1; then exit 1; fi
-          grep -q 'incompatible pointer type' "$RUNNER_TEMP/young-tests/reject-slide.log"
-          cc -std=c17 -O2 -Wall -Wextra -Werror -Iapp/core -Iapp/ui -Iapp/console -Iapp/render tests/operation_correspondence.c app/core/*.c app/ui/controls.c app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c -lm -o "$RUNNER_TEMP/young-tests/correspondence"
-          "$RUNNER_TEMP/young-tests/correspondence" types/YoungTableaux/Types.idr types/YoungTableaux/Operations.idric
-          sed 's/InputFor RSKPermutation = Permutation/InputFor RSKPermutation = Word/' types/YoungTableaux/Types.idr > "$RUNNER_TEMP/young-tests/drift.idr"
-          if "$RUNNER_TEMP/young-tests/correspondence" "$RUNNER_TEMP/young-tests/drift.idr" types/YoungTableaux/Operations.idric > "$RUNNER_TEMP/young-tests/drift.log" 2>&1; then exit 1; fi
-          grep -q 'operation correspondence failed' "$RUNNER_TEMP/young-tests/drift.log"
-          sed 's/-- SPEC RSKPermutation|Permutation|PermutationRSKResult/-- SPEC RSKPermutation|Word|PermutationRSKResult/' types/YoungTableaux/Operations.idric > "$RUNNER_TEMP/young-tests/drift.idric"
-          if "$RUNNER_TEMP/young-tests/correspondence" types/YoungTableaux/Types.idr "$RUNNER_TEMP/young-tests/drift.idric" > "$RUNNER_TEMP/young-tests/edric-drift.log" 2>&1; then exit 1; fi
-          grep -q 'Edriç correspondence failed: RSKPermutation' "$RUNNER_TEMP/young-tests/edric-drift.log"
-
-          cc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow \
-            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
-            tests/consolidation_tests.c app/core/*.c app/ui/controls.c \
-            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
-            -lm -o "$RUNNER_TEMP/young-tests/consolidation"
-          "$RUNNER_TEMP/young-tests/consolidation" | tee "$RUNNER_TEMP/young-tests/consolidation.txt"
-          cc -std=c17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
-            -Wall -Wextra -Werror -Wpedantic -Wshadow \
-            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
-            tests/consolidation_tests.c app/core/*.c app/ui/controls.c \
-            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
-            -lm -o "$RUNNER_TEMP/young-tests/consolidation-sanitized"
-          "$RUNNER_TEMP/young-tests/consolidation-sanitized" | tee "$RUNNER_TEMP/young-tests/sanitizers.txt"
-          cc -std=c17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
-            -Iapp/core -Iapp/ui -Iapp/console -Iapp/render \
-            tests/host_tests.c app/core/*.c app/ui/controls.c \
-            app/console/console.c app/console/nearby.c app/render/raster.c app/render/paint.c \
-            -lm -o "$RUNNER_TEMP/young-tests/host-sanitized"
-          "$RUNNER_TEMP/young-tests/host-sanitized"
-
-          cc -std=c17 -O2 third_party/lua/onelua.c -lm -o "$RUNNER_TEMP/young-tests/lua"
-          "$RUNNER_TEMP/young-tests/lua" tests/facts_test.lua | tee "$RUNNER_TEMP/young-tests/facts-tests.txt"
+          test "$(git -C third_party/lua rev-parse HEAD)" = 87306483cec50f8c750a22dda1d0742246fad756
 
       - name: Install pinned Android packages
         shell: bash
@@ -232,10 +304,7 @@ jobs:
 
           sha256sum "$out/young-tableaux-armeabi-v7a.apk" | tee "$out/apk.sha256"
           git rev-parse HEAD | tee "$out/source.txt"
-          cp "$RUNNER_TEMP/young-tests/host-tests.txt" "$out/host-tests.txt"
-          cp "$RUNNER_TEMP/young-tests/facts-tests.txt" "$out/facts-tests.txt"
-          cp "$RUNNER_TEMP/young-tests/consolidation.txt" "$out/consolidation.txt"
-          cp "$RUNNER_TEMP/young-tests/sanitizers.txt" "$out/sanitizers.txt"
+          cp -r "$project/admission-evidence" "$out/admission-evidence"
           git archive HEAD | gzip -n > "$out/source.tar.gz"
           tar -czf "$out/lua-source.tar.gz" --exclude=.git third_party/lua
 
@@ -371,7 +440,7 @@ jobs:
           git rev-parse HEAD | tee "$out/source.txt"
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: young-tableaux-apk
           path: |
@@ -381,10 +450,7 @@ jobs:
             build/abi.txt
             build/package.txt
             build/source.txt
-            build/host-tests.txt
-            build/facts-tests.txt
-            build/consolidation.txt
-            build/sanitizers.txt
+            build/admission-evidence/
             build/source.tar.gz
             build/lua-source.tar.gz
             build/c67/young-tableaux-arm64-v8a.apk

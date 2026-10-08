@@ -1,5 +1,10 @@
 # Functorial C repair / qualification — 2026-10-06
 
+The 2026-10-08 [modified Lua admission](modified-lua-admission.md) refreshes
+the existing embedded runtime and adds executable-bound host evidence. It does
+not upgrade this application's incomplete first-pass C or independent
+mathematical audit to ready.
+
 The ordinary registered operation surface is now executable through typed
 native boundaries. See [the consolidated contracts](consolidated-operations.md)
 for exact semantics, finite bounds, shared owners and checks. The correspondence

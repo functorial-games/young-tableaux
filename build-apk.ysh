@@ -22,8 +22,14 @@ test -f "$project/app/AndroidManifest.xml"
 test -f "$project/app/assets/facts.lua"
 test -f "$project/third_party/lua/onelua.c"
 var lua_head = $(git -C "$project/third_party/lua" rev-parse HEAD)
-if (lua_head !== 'dca7e57c16c524c8616144ed294fe598947a029f') {
+if (lua_head !== '87306483cec50f8c750a22dda1d0742246fad756') {
   echo "FAIL: symbolic Lua fork commit: $lua_head"
+  exit 2
+}
+var lua_tree = $(git -C "$project/third_party/lua" rev-parse 'HEAD^{tree}')
+var lua_status = $(git -C "$project/third_party/lua" status --porcelain)
+if (lua_tree !== '6b2968928611542c8f82448f49c32ea8bc98b559' or lua_status !== '') {
+  echo 'FAIL: modified or substituted Lua source tree'
   exit 2
 }
 test -f "$sdk/platforms/android-34/android.jar"

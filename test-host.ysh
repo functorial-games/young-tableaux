@@ -1,23 +1,28 @@
 # Grease: invoke with an absolute checkout path on the build host.
 set -eu -o pipefail
-if (len(ARGV) !== 2) {
-  echo 'usage: test-host.ysh PROJECT NDK (absolute paths)'
+if (len(ARGV) !== 3) {
+  echo 'usage: test-host.ysh PROJECT QUALIFIED_ICK_DRIVER ICK_LIBEXEC (absolute paths)'
   exit 2
 }
 var project = $1
-var ndk = $2
+var compiler = $2
+var support = $3
 if (not project.startsWith('/')) {
   echo 'FAIL: project path must be absolute'
   exit 2
 }
 mkdir -p "$project/build"
-var compiler = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
 test -x "$compiler"
+test -x "$support/cc1"
+test -x "$support/collect2"
+# The prerequisite runtime admission verifies these exact ICK executable bytes.
+# GCC-13 supplies only the hosted CRT, headers and link libraries.
+var producer_flags = ["-B$support/", '-B/usr/lib/gcc/x86_64-linux-gnu/13/', '-isystem', '/usr/lib/gcc/x86_64-linux-gnu/13/include', '-fno-use-linker-plugin']
 var core = []
 for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin', 'algebra', 'combinatorics']) {
   call core->append("$project/app/core/$unit.c")
 }
-"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/host-tests"
+"$compiler" @producer_flags -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/host-tests"
 "$project/build/host-tests"
 sed 's/tableau_check_kind(filling,TABLEAU_STANDARD,false/tableau_check_kind(filling,TABLEAU_SEMISTANDARD,false/' "$project/app/core/tableau.c" > "$project/build/relaxed-standard.c"
 var mutant_core = []
@@ -28,30 +33,30 @@ for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin'
     call mutant_core->append("$project/app/core/$unit.c")
   }
 }
-"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @mutant_core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/relaxed-standard-tests"
+"$compiler" @producer_flags -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @mutant_core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/relaxed-standard-tests"
 if "$project/build/relaxed-standard-tests" > "$project/build/relaxed-standard.log" 2>&1; then
   echo 'FAIL semistandard result passed standard result boundary'
   exit 1
 fi
 rg -q 'rsk_permutation_result.*YT_MALFORMED' "$project/build/relaxed-standard.log"
-"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/core" "$project/tests/insertion_ownership.c" @core -Wl,--wrap=tableau_row_insert_trace -o "$project/build/insertion-ownership"
+"$compiler" @producer_flags -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/core" "$project/tests/insertion_ownership.c" @core -Wl,--wrap=tableau_row_insert_trace -o "$project/build/insertion-ownership"
 "$project/build/insertion-ownership"
-if "$compiler" -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_word_as_permutation.c" -o "$project/build/reject-word.o" > "$project/build/reject-word.log" 2>&1; then
+if "$compiler" @producer_flags -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_word_as_permutation.c" -o "$project/build/reject-word.o" > "$project/build/reject-word.log" 2>&1; then
   echo 'FAIL word admitted as permutation'
   exit 1
 fi
-rg -q 'incompatible pointer types' "$project/build/reject-word.log"
-if "$compiler" -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_filling_as_slide.c" -o "$project/build/reject-filling.o" > "$project/build/reject-filling.log" 2>&1; then
+rg -q 'incompatible pointer type' "$project/build/reject-word.log"
+if "$compiler" @producer_flags -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_filling_as_slide.c" -o "$project/build/reject-filling.o" > "$project/build/reject-filling.log" 2>&1; then
   echo 'FAIL completed filling admitted as slide state'
   exit 1
 fi
-rg -q 'incompatible pointer types' "$project/build/reject-filling.log"
-if "$compiler" -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_word_result_as_permutation.c" -o "$project/build/reject-word-result.o" > "$project/build/reject-word-result.log" 2>&1; then
+rg -q 'incompatible pointer type' "$project/build/reject-filling.log"
+if "$compiler" @producer_flags -std=c17 -Werror=incompatible-pointer-types "-I$project/app/core" -c "$project/tests/reject_word_result_as_permutation.c" -o "$project/build/reject-word-result.o" > "$project/build/reject-word-result.log" 2>&1; then
   echo 'FAIL word result admitted as permutation result'
   exit 1
 fi
-rg -q 'incompatible pointer types' "$project/build/reject-word-result.log"
-"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/operation_correspondence.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/operation-correspondence"
+rg -q 'incompatible pointer type' "$project/build/reject-word-result.log"
+"$compiler" @producer_flags -std=c17 -O2 -Wall -Wextra -Werror "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/operation_correspondence.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/operation-correspondence"
 "$project/build/operation-correspondence" "$project/types/YoungTableaux/Types.idr" "$project/types/YoungTableaux/Operations.idric"
 sed 's/InputFor RSKPermutation = Permutation/InputFor RSKPermutation = Word/' "$project/types/YoungTableaux/Types.idr" > "$project/build/drifted-types.idr"
 if "$project/build/operation-correspondence" "$project/build/drifted-types.idr" "$project/types/YoungTableaux/Operations.idric" > "$project/build/drift.log" 2>&1; then
@@ -65,6 +70,10 @@ if "$project/build/operation-correspondence" "$project/types/YoungTableaux/Types
   exit 1
 fi
 rg -q 'Edriç correspondence failed: RSKPermutation' "$project/build/edric-drift.log"
-"$compiler" --target=x86_64-linux-gnu --sysroot=/ -rtlib=libgcc -unwindlib=libgcc -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/consolidation_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/consolidation-tests"
+"$compiler" @producer_flags -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/consolidation_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/consolidation-tests"
 "$project/build/consolidation-tests"
+for suite in (['consolidation_tests', 'host_tests']) {
+  "$compiler" @producer_flags -std=c17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/$suite.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/$suite-sanitized"
+  "$project/build/$suite-sanitized"
+}
 printf '\033[32mPASS host tests\033[0m\n'

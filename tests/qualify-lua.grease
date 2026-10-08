@@ -1,0 +1,78 @@
+#!/usr/bin/env grease
+# Consumer admission through the shared runtime owner; build host only.
+set -eu -o pipefail
+if (len(ARGV) !== 7) {
+  echo 'usage: qualify-lua.grease PROJECT FLEXIBLE_PIPES STOCK_SOURCE ICK_DRIVER ICK_LIBEXEC GREASE NEW_OUTPUT_DIRECTORY'
+  exit 2
+}
+var project = ARGV[0]
+var pipes = ARGV[1]
+var stock = ARGV[2]
+var compiler = ARGV[3]
+var support = ARGV[4]
+var grease = ARGV[5]
+var output = ARGV[6]
+for path in ([project, pipes, stock, compiler, support, grease, output]) {
+  if (not path.startsWith('/')) {
+    echo 'FAIL: qualification paths must be absolute'
+    exit 2
+  }
+}
+test ! -e "$output"
+mkdir -p "$output"
+var receipt = "$output/consumer.tsv"
+printf 'key\tvalue\nandroid_build\tNOT_RUN\nphysical_device\tNOT_RUN\nwhole_application\tBLOCKED; independent mathematical audit has ten failures\n' > "$receipt"
+proc blocked (code) {
+  printf 'status\tBLOCKED\nblocker\t%s\n' "$code" >> "$receipt"
+  echo "BLOCKED $code" >&2
+  exit 1
+}
+proc digest (name, path) {
+  var value = $(sha256sum "$path")
+  printf '%s\t%s\n' "$name" "$value" >> "$receipt"
+}
+var consumer_status = $(git -C "$project" status --porcelain --untracked-files=no)
+if ! test -z "$consumer_status" { blocked dirty_material_consumer_source }
+if ! git -C "$project" ls-files --error-unmatch tests/qualify-lua.grease tests/facts_test.lua test-host.ysh app/assets/facts.lua > "$output/material-source-paths.txt" { blocked untracked_material_consumer_source }
+var project_revision = $(git -C "$project" rev-parse HEAD)
+var pipes_revision = $(git -C "$pipes" rev-parse HEAD)
+printf 'project_revision\t%s\nflexible_pipes_revision\t%s\n' "$project_revision" "$pipes_revision" >> "$receipt"
+if ! test "$pipes_revision" = 5caaba31256bfb424638f8a3d4d554c56fa9a970 { blocked wrong_shared_gate_revision }
+var pipes_status = $(git -C "$pipes" status --porcelain)
+if ! test -z "$pipes_status" { blocked modified_shared_gate_checkout }
+digest consumer_program "$project/tests/qualify-lua.grease"
+digest shared_qualifier "$pipes/scripts/qualify-icky-lua.grease"
+digest shared_bridge "$pipes/tests/modified-lua/embed-probe.c"
+digest asset_source "$project/app/assets/facts.lua"
+digest test_source "$project/tests/facts_test.lua"
+var lua = "$project/third_party/lua"
+if ! "$grease" "$pipes/scripts/qualify-icky-lua.grease" "$lua" "$compiler" "$support" "$output/runtime" { blocked shared_runtime_gate_failed }
+if ! "$grease" "$pipes/tests/modified-lua/negative-controls.grease" "$lua" "$stock" "$compiler" "$support" "$grease" "$output/negative" { blocked shared_negative_gate_failed }
+var runtime_object = "$output/runtime/icky-lua.o"
+sha256sum "$runtime_object" > "$output/runtime-object.sha256"
+var flags = ["-B$support/", '-B/usr/lib/gcc/x86_64-linux-gnu/13/', '-isystem', '/usr/lib/gcc/x86_64-linux-gnu/13/include', '-fno-use-linker-plugin', '-std=c11', '-O2', "-I$lua"]
+cd "$project"
+for fixture in ([["$project/tests/facts_test.lua", 'facts-tests'], ["$project/app/assets/facts.lua", 'facts-asset']]) {
+  var source = fixture[0]
+  var name = fixture[1]
+  sha256sum -c "$output/runtime-object.sha256"
+  if ! "$compiler" @flags "-DFP_LUA_PROBE_SOURCE=\"$source\"" "$pipes/tests/modified-lua/embed-probe.c" "$runtime_object" -Wl,--unique=.rodata.fp_lua_probe -lm -ldl -o "$output/$name" > "$output/$name-build.stdout" 2> "$output/$name-build.stderr" { blocked consumer_bridge_build_failed }
+  sha256sum -c "$output/runtime-object.sha256"
+  if ! "$output/$name" > "$output/$name.stdout" 2> "$output/$name.stderr" { blocked consumer_raw_source_failed }
+  if ! objcopy --dump-section ".rodata.fp_lua_probe=$output/$name-embedded.lua" "$output/$name" { blocked consumer_source_inspection_failed }
+  if ! cmp "$source" "$output/$name-embedded.lua" { blocked consumer_source_bytes_changed }
+  readelf -d "$output/$name" > "$output/$name-libraries.txt"
+  if rg -iq 'NEEDED.*lua' "$output/$name-libraries.txt" { blocked unexpected_dynamic_lua_library }
+  digest "$name-executable" "$output/$name"
+  digest "$name-embedded-source" "$output/$name-embedded.lua"
+}
+if ! rg -qx 'PASS compact Schur explanation, Wegert preparation, layout, and direct shape editing' "$output/facts-tests.stdout" { blocked incomplete_consumer_assertions }
+# Link the same raw consumer fixture to the independently compiled stock object.
+if ! "$compiler" @flags "-DFP_LUA_PROBE_SOURCE=\"$project/tests/facts_test.lua\"" "$pipes/tests/modified-lua/embed-probe.c" "$output/negative/stock-lua.o" -Wl,--unique=.rodata.fp_lua_probe -lm -ldl -o "$output/stock-linked-facts" > "$output/stock-linked-build.stdout" 2> "$output/stock-linked-build.stderr" { blocked stock_control_build_failed }
+if "$output/stock-linked-facts" > "$output/stock-linked.stdout" 2> "$output/stock-linked.stderr" { blocked stock_linked_consumer_was_admitted }
+if ! rg -q 'unexpected symbol' "$output/stock-linked.stderr" { blocked stock_control_failed_for_unrelated_reason }
+digest runtime_object "$runtime_object"
+digest stock_object "$output/negative/stock-lua.o"
+digest stock_linked_executable "$output/stock-linked-facts"
+printf 'interpreter_and_embedded_runtime\tPASS; runtime/receipt.tsv\nshared_negative_controls\tPASS; negative/negative-controls.tsv\nraw_asset_bytes\tPASS\nraw_test_bytes\tPASS\nconsumer_assertions\tPASS\nstock_linked_consumer_rejected\tPASS\nstatus\tPASS\n' >> "$receipt"
+printf '\033[32mPASS Young Tableaux literal-source embedded Lua admission\033[0m\n'

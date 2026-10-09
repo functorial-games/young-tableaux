@@ -23,6 +23,8 @@ for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin'
   call core->append("$project/app/core/$unit.c")
 }
 "$compiler" @producer_flags -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/host_tests.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/host-tests"
+"$compiler" @producer_flags -std=c17 -O2 -Wall -Wextra -Werror -Wpedantic -Wshadow "-I$project/app/core" "-I$project/app/ui" "-I$project/app/console" "-I$project/app/render" "$project/tests/jeu_visual_contract.c" @core "$project/app/ui/controls.c" "$project/app/console/console.c" "$project/app/console/nearby.c" "$project/app/render/raster.c" "$project/app/render/paint.c" -lm -o "$project/build/jeu-visual-contract"
+"$project/build/jeu-visual-contract"
 "$project/build/host-tests"
 sed 's/tableau_check_kind(filling,TABLEAU_STANDARD,false/tableau_check_kind(filling,TABLEAU_SEMISTANDARD,false/' "$project/app/core/tableau.c" > "$project/build/relaxed-standard.c"
 var mutant_core = []

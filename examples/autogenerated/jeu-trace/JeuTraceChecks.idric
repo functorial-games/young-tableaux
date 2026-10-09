@@ -1,0 +1,68 @@
+module JeuTraceChecks
+
+import YoungTableaux.JeuTrace
+import System
+
+is_right : Nat → ForwardStep → Bool
+is_right value (MovedFromRight observed) = observed ≟ value
+is_right _ _ = False
+
+is_below : Nat → ForwardStep → Bool
+is_below value (MovedFromBelow observed) = observed ≟ value
+is_below _ _ = False
+
+is_finished : ForwardStep → Bool
+is_finished FinishedAtOuterCorner = True
+is_finished _ = False
+
+fixed_outer : ProjectionOrigin
+fixed_outer = ReferenceOuterHooks [3,2,1]
+
+jeu_outer : ProjectionOrigin
+jeu_outer = JeuOuterHooks [3,2,1]
+
+live_board : ProjectionOrigin
+live_board = JeuCellState (ActiveHole [3,2,1] [] (1,2)
+                         [(1,1,1),(1,3,3),(2,1,2),(2,2,5),(3,1,4)])
+
+preserves_hooks : ProjectionObligation → Bool
+preserves_hooks PreserveFixedHookImage = True
+preserves_hooks _ = False
+
+paints_hole : ProjectionObligation → Bool
+paints_hole PaintChangedHoleOrEntry = True
+paints_hole _ = False
+
+rebuilds_hooks : ProjectionObligation → Bool
+rebuilds_hooks RebuildPartitionHooks = True
+rebuilds_hooks _ = False
+
+checks : List (Text, Bool)
+checks =
+  [ ("no neighbors finishes", is_finished (choose_forward_neighbor Nothing Nothing))
+  , ("only right", is_right 3 (choose_forward_neighbor (Just 3) Nothing))
+  , ("only below", is_below 5 (choose_forward_neighbor Nothing (Just 5)))
+  , ("smaller right wins", is_right 1 (choose_forward_neighbor (Just 1) (Just 2)))
+  , ("smaller below wins", is_below 1 (choose_forward_neighbor (Just 3) (Just 1)))
+  , ("tie chooses below", is_below 2 (choose_forward_neighbor (Just 2) (Just 2)))
+  , ("next default move", is_right 3 (choose_forward_neighbor (Just 3) (Just 5)))
+  , ("fixed outer hook image", preserves_hooks
+        (required_projection_evidence fixed_outer HoleMovedWithinSameOuter))
+  , ("jeu outer plot stays fixed on an ordinary move", preserves_hooks
+        (required_projection_evidence jeu_outer HoleMovedWithinSameOuter))
+  , ("jeu outer plot recomputes on a removed corner", rebuilds_hooks
+        (required_projection_evidence jeu_outer OuterCornerRemoved))
+  , ("reference plot stays fixed on removed corner", preserves_hooks
+        (required_projection_evidence fixed_outer OuterCornerRemoved))
+  , ("hole update needs real pixels", paints_hole
+        (required_projection_evidence live_board HoleMovedWithinSameOuter))
+  , ("new outer partition recomputes hook data", rebuilds_hooks
+        (required_projection_evidence fixed_outer OuterPartitionEdited))
+  ]
+
+main : IO ()
+main = if all snd checks
+  then putStrLn "JDT_IDRIC_HOST PASS: 13 typed decision/provenance checks"
+  else do
+    printLn (map fst (filter (not . snd) checks))
+    exitFailure

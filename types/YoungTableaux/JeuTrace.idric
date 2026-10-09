@@ -1,0 +1,97 @@
+module YoungTableaux.JeuTrace
+
+%default total
+
+-- Independent, pure Idriç attempt at the first decision in forward jeu de
+-- taquin, not a translation of the mutable C tableau or an Android backend.
+-- The caller must establish an admissible semistandard skew filling, a valid
+-- active hole, and which right/below cells really belong to the skew shape.
+-- Maybe distinguishes a missing neighbor from a cell whose entry is zero.
+
+public export
+data ForwardStep
+  = FinishedAtOuterCorner
+  | MovedFromRight Nat
+  | MovedFromBelow Nat
+
+public export
+choose_forward_neighbor : Maybe Nat → Maybe Nat → ForwardStep
+choose_forward_neighbor Nothing Nothing = FinishedAtOuterCorner
+choose_forward_neighbor (Just right_value) Nothing =
+  MovedFromRight right_value
+choose_forward_neighbor Nothing (Just below_value) =
+  MovedFromBelow below_value
+choose_forward_neighbor (Just right_value) (Just below_value) =
+  if right_value < below_value
+     then MovedFromRight right_value
+     else MovedFromBelow below_value
+
+-- Crucial: right == below chooses BELOW so the resulting semistandard
+-- tableau retains weakly increasing rows and strictly increasing columns.
+-- A successful JDT step may move the hole without changing the outer shape.
+
+-- Distinguish a completed skew tableau from an in-flight hole. These are
+-- phase-tagged observations; no constructor claims a certified shape proof.
+public export
+data OrdinarySkewSnapshot
+  = OrdinarySkew (List Nat) (List Nat) (List (Nat, Nat, Nat))
+
+public export
+data ActiveHoleSnapshot
+  = ActiveHole (List Nat) (List Nat) (Nat, Nat)
+               (List (Nat, Nat, Nat))
+
+public export
+data StepObservation
+  = HoleMoved ActiveHoleSnapshot
+  | SlideFinished OrdinarySkewSnapshot
+  | StepRejected
+
+-- A Wegert rendering of s_lambda(1,z,z²,...) depends on the selected
+-- OUTER PARTITION (via n(lambda) and its hook multiset). It is not a
+-- function of the skew tableau entries or of the moving JDT hole.
+-- Keeping distinct projection origins prevents an animation or status
+-- string from masquerading as a changed complex-valued mathematical input.
+public export
+data ProjectionOrigin
+  = ReferenceOuterHooks (List Nat)
+  | JeuOuterHooks (List Nat)
+  | JeuCellState ActiveHoleSnapshot
+
+public export
+data ProjectionObligation
+  = PreserveFixedHookImage
+  | PaintChangedHoleOrEntry
+  | RebuildPartitionHooks
+  | InspectNewFrame
+
+public export
+data InputEvent
+  = HoleMovedWithinSameOuter
+  | OuterCornerRemoved
+  | OuterPartitionEdited
+
+public export
+required_projection_evidence : ProjectionOrigin → InputEvent → ProjectionObligation
+required_projection_evidence (ReferenceOuterHooks _) HoleMovedWithinSameOuter =
+  PreserveFixedHookImage
+required_projection_evidence (ReferenceOuterHooks _) OuterCornerRemoved =
+  PreserveFixedHookImage
+required_projection_evidence (ReferenceOuterHooks _) OuterPartitionEdited =
+  RebuildPartitionHooks
+required_projection_evidence (JeuOuterHooks _) HoleMovedWithinSameOuter =
+  PreserveFixedHookImage
+required_projection_evidence (JeuOuterHooks _) OuterCornerRemoved =
+  RebuildPartitionHooks
+required_projection_evidence (JeuOuterHooks _) OuterPartitionEdited =
+  InspectNewFrame
+required_projection_evidence (JeuCellState _) HoleMovedWithinSameOuter =
+  PaintChangedHoleOrEntry
+required_projection_evidence (JeuCellState _) OuterCornerRemoved =
+  PaintChangedHoleOrEntry
+required_projection_evidence (JeuCellState _) OuterPartitionEdited =
+  InspectNewFrame
+
+-- These obligations state expected provenance, not an assertion that every
+-- possible change of partition produces distinct sampled colors. Pixel change
+-- requires a nontrivial concrete witness, as checked in the real C painter.

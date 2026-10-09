@@ -1,7 +1,7 @@
 name: Independent mathematical audit
 on:
   pull_request:
-    branches: [main]
+    branches: [main, tables]
   workflow_dispatch:
 permissions:
   contents: read

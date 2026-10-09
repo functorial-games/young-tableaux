@@ -2,7 +2,7 @@
 
 Maintained C expressions now use `÷` directly. ICK `c61e448251744a2f40ad743ebef1a027bdcd2f9d` compiles the source without normalization, through `isomorphisms/ai-ci@4ea071a96239f3a29ca6d98454feb59947d87cfe`.
 
-There are 102 arithmetic glyph sites. Four compound assignments became explicit division of simple, stable, non-atomic local or structure lvalues; none repeats a side effect. All literal text and the separately qualified Lua gitlink remain unchanged.
+There are 107 arithmetic glyph sites, including five test expressions in `tests/nearby_tests.inc` that are compiled through the existing host suite. Four compound assignments became explicit division of simple, stable, non-atomic local or structure lvalues; none repeats a side effect. All literal text and the separately qualified Lua gitlink remain unchanged.
 
 Both existing Grease APK launchers and the workflow's packaging commands call `icky/Android.mk`. The fixed interface compiles all fifteen owned application C units with ICK, then NDK r27c assembles them and links them with the exact Lua runtime source and unchanged NativeActivity glue. API26, ARMv7 ARM/NEON and ARM64 payloads, Fortify2, stack protection, strict warning errors, link hardening, 16-KiB page alignment, package version and persistent signer are retained. Installed stages are restored under `.ick-stages/<abi>`, outside the packaging directory that the existing workflow recreates.
 

@@ -13,6 +13,12 @@ application directory without replacing the existing native implementation.
 
 ## What changes visibly
 
+The previous console source initialized `rsk_step` to `YT_DIM`, refreshed the
+completed trace, and allowed Next to increment only below `rsk_total`. Thus its
+initial Next action had no remaining insertion to perform. This is a source
+finding, distinct from a diagnosis of the particular APK installed on a phone.
+See the [starting console implementation](https://github.com/isomorphismes/young-tableaux/blob/7728a9c8518337a405e09b53b8f2372d35bc08c4/app/console/console.c).
+
 RSK starts before its first insertion. Next inserts one letter and repaints P,
 Q, the insertion path, the input position, and the sequence picture from the
 same model. Previous reconstructs the preceding prefix. Loading a new word,

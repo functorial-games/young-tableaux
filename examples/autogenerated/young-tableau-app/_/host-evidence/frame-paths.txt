@@ -1,0 +1,11 @@
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/initial.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/jeu-corner-removed.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/jeu-move-1.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/jeu-move-2.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/jeu-reset.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/laboratory-graph-page-1.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/laboratory-graph-page-2.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/laboratory-hook-product.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/reference-partition-changed.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/rsk-insertion-1.ppm
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames/rsk-insertion-2.ppm

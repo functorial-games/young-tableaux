@@ -1,0 +1,1 @@
+Discard the model-derived scene and paint the empty scene.

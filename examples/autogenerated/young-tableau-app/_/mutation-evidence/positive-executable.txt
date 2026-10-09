@@ -1,0 +1,3 @@
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/exec/young-idric: OK
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/exec/young-idric_app/young-idric.so: OK
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/exec/young-idric_app/libidris2_support.so: OK

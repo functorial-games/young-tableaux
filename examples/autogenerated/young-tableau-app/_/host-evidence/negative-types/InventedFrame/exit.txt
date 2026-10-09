@@ -1,0 +1,1 @@
+compiler_exit=nonzero; exact diagnostic and absent target TTC are required

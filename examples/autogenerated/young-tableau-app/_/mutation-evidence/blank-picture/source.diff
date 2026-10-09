@@ -1,0 +1,5 @@
+--- /workspace/scratch/df6a5bad82b3/idric-mutation-qualification-01/original-source/Young/Screen.idric	2026-10-09 09:46:15.967895769 -0400
++++ /workspace/scratch/df6a5bad82b3/idric-mutation-qualification-01/blank-picture/source/Young/Screen.idric	2026-10-09 09:46:15.995329319 -0400
+@@ -260 +260 @@
+-paint source = rasterize screen_width (content_height source) (scene source)
++paint source = rasterize screen_width (content_height source) []

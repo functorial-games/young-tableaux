@@ -1,0 +1,1 @@
+paint source = rasterize screen_width (content_height source) (scene source)

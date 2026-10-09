@@ -1,0 +1,5 @@
+--- /workspace/scratch/df6a5bad82b3/idric-mutation-qualification-01/original-source/Young/Model.idric	2026-10-09 09:46:15.967842921 -0400
++++ /workspace/scratch/df6a5bad82b3/idric-mutation-qualification-01/unchanged-model/source/Young/Model.idric	2026-10-09 09:46:33.679471561 -0400
+@@ -289 +289 @@
+-  Right ({ revision := S model.revision } changed)
++  Right model

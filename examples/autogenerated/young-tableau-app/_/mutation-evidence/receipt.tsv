@@ -1,0 +1,7 @@
+schema	young-idric-mutants-v1
+android_execution	NOT_RUN
+physical_device	NOT_RUN
+blank-picture	PASS; compiled mutant rejected by application assertion
+unchanged-model	PASS; compiled mutant rejected by application assertion
+maintained_source_unchanged	PASS
+status	PASS

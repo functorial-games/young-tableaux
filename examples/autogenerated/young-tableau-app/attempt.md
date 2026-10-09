@@ -1,6 +1,6 @@
 # Program attempt: Young Tableau in Idriç
 
-Status: `NOT_RUN`
+Status: `PARTIAL` — Idriç host implementation; complete Android application blocked.
 
 ## Purpose
 
@@ -51,12 +51,12 @@ inverse permutation RSK, hole movement/slide/rectification, promotion and
 evacuation, and the existing algebraic, graph, permutation and random surface.
 
 The application transition has the shape
-`apply_action : Action → Model → Either Text Model`.
+`apply_action : user_action → Model → Either Text Model`.
 Painting has the source-indexed shape
 `paint : (source : Model) → Frame source`.
 Frame construction belongs to the painter; consumers receive only its
 read-only pixels and source identity. A presentation acknowledgment must refer
-to the actual pending source revision and surface generation.
+to the complete pending source model, actual window identity, and surface generation.
 
 ### Actions and effects
 
@@ -90,14 +90,47 @@ No RefC, generated C, Java, Gradle, or hand-written replacement is admitted.
 
 Source: the `.idric` modules in this directory. Build machinery lives under `_/`.
 
-Revision and compiler: see the final evidence record.
+Application source:
+locally qualified commit `1e8e17def5f8cf7f4c7c489b4ba4866ddae6fe7a`, published
+through the connected GitHub app as
+[`1f691ba9b91e2f485a4c4b6feb0f35c857cca843`](https://github.com/isomorphismes/young-tableaux/commit/1f691ba9b91e2f485a4c4b6feb0f35c857cca843)
+on the new `Idriç` branch. Both source commits have the exact same Git tree;
+the qualification's source hashes remain unchanged.
+Compiler:
+`dilapidated-shed/Idric@ff4d852862a3942592f8ade9afde8d409d9803be`.
+Host backend: the existing Chez 10.4.1 installation.
 
-Command: to be recorded after the first actual run.
+The reproducible entry point is `_/qualify-host.grease`, invoked by the actual
+Grease executable with four absolute arguments: the Young repository, the
+Idriç repository, the Chez executable, and a new output directory. The exact
+executed compiler and application commands are retained with the verification
+receipts. [README.md](README.md) gives the portable invocation and
+[commands.md](commands.md) gives all 44 executable operation examples.
 
 ## Result or failure
 
-No result yet. Type checking, host execution, pixels, target lowering, packaging,
-and physical behavior will be reported independently.
+The 44-operation registry now has typed requests, dependent result types, real
+Idriç mathematical implementations, and projections of the returned data.
+Application actions install those results into one model. RSK begins at zero
+insertions; jeu actions preserve their intermediate entries and active hole.
+Both the main diagrams and the bounded, complete laboratory result pages are
+painted from that model.
+
+The host sink writes the production painter's actual PPM pixels, reads back the
+file, compares it byte-for-byte, and acknowledges only a matching frame. Checks
+follow pointer input through the reducer into cropped tableau pixels; they also
+exercise failed posts, stale source and window identities, lifecycle changes,
+random-state advancement, invalid input, and result paging. Compile-negative
+fixtures try to relabel a stale frame and construct an arbitrary frame. Runtime
+mutants remove painting or prevent model updates and must fail their specific
+behavioral checks. The exact counts, outcomes, manifests, and limitations are
+in [verification.md](verification.md).
+
+Android target probes emitted real DEX and ARM positive controls before reaching
+explicit refusals for the required recursive/storage or integer-result forms.
+There is no complete Idriç Android artifact, ART execution, native-window post,
+or physical-device observation from this attempt. The existing C application
+has not been substituted for those missing stages.
 
 ## Fallback
 
@@ -105,14 +138,25 @@ None.
 
 ## Idriç language work exposed
 
-First blocking capability: to be established by a real compilation attempt.
+First observed DEX blocker: lowering an ordinary checked recursive helper with
+runtime inputs. The current implementation prints
+`Unsupported checked named call in DEX checked slice` and emits no target for
+that probe. A separate dynamic array/IO probe is refused by the exported ABI.
+The independently maintained native ARM branch emits a Float32 control but
+refuses the whole-number result needed by the model. See
+[native-boundary.md](native-boundary.md) for pins, controls, and diagnostics.
 
-Smallest plausible language change: to be determined from that failure.
+Smallest next DEX capability: preserve and lower the checked recursive call or
+its equivalent loop, then execute the input-dependent probe on ART. For native
+ARM, preserve whole-number results through its existing ABI. These first fixes
+still leave dynamic tableau storage, Android events, and real window effects
+to implement and verify; they do not by themselves complete the application.
 
 Acceptance test: the same maintained tableau program must pass through the
 target backend and turn real actions into successfully posted frames.
 
 ## Evidence boundary
 
-No phone behavior or completed whole-application replacement is claimed by
-the presence of this attempt record.
+The branch is a working host rewrite attempt with an explicit Android boundary.
+No phone behavior or completed native replacement follows from host arithmetic,
+bitmap output, source-indexed types, or emitted positive-control target bytes.

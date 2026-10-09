@@ -1,0 +1,20 @@
+PASS	partitions, tableaux, RSK and jeu de taquin	57
+PASS	Littlewood–Richardson	7
+PASS	ordinary characters	113
+PASS	five exact symmetric bases	108
+PASS	plethysm	5
+PASS	numeric keyboard grammar	16
+PASS	Young graph	64
+PASS	subsequences and reduced words	463
+PASS	strong Bruhat order	577
+PASS	SplitMix64 and random objects	517
+PASS	strict input grammar	11
+PASS	typed laboratory operations and result projections	142
+PASS	all laboratory commands and stateful sequences	194
+YOUNG_IDRIC_FAIL	RSK input-to-pixels changes P pane
+YOUNG_IDRIC_FAIL	RSK input-to-pixels changes Q pane
+YOUNG_IDRIC_FAIL	jeu input-to-pixels changes actual board
+YOUNG_IDRIC_FAIL	second jeu input changes actual board again
+YOUNG_IDRIC_FAIL	finishing jeu changes its own outer-shape plot
+YOUNG_IDRIC_FAIL	changing result data changes actual result-pane pixels
+YOUNG_IDRIC_FAIL	result next changes actual diagram pixels below the page label

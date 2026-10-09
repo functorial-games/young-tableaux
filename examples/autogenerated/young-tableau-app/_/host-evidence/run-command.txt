@@ -1,0 +1,3 @@
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/exec/young-idric
+--self-test
+/workspace/scratch/df6a5bad82b3/idric-host-qualification-01/frames

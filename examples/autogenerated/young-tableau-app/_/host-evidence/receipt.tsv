@@ -1,0 +1,15 @@
+schema	young-idric-host-v1
+android_lowering	NOT_RUN
+android_presentation	NOT_RUN
+physical_device	NOT_RUN
+fallback	none
+application_base	1e8e17def5f8cf7f4c7c489b4ba4866ddae6fe7a
+compiler_source	ff4d852862a3942592f8ade9afde8d409d9803be
+host_backend	chez
+source_compilation	PASS
+negative_type_StaleFrame	PASS; intended constraint refused
+negative_type_InventedFrame	PASS; intended constraint refused
+host_assertions	PASS
+host_pixel_files	PASS
+source_stable_during_run	PASS
+status	PASS

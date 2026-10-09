@@ -1,0 +1,2 @@
+10002074cfae31a15e6f136cd191b6abe9f8d58efcec438d21145e72802b2819  /workspace/scratch/fd7b61cd742b/Idric/_/build/exec/idris2_app/idris2.so
+e5b4ad73ddbdfc5c6d19201e22cddeec5730ea6e164c8145f944d1c317b7cb1b  /workspace/scratch/fd7b61cd742b/Idric/_/build/exec/idris2_app/libidris2_support.so

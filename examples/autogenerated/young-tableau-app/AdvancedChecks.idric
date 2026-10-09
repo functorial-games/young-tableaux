@@ -1,0 +1,397 @@
+module AdvancedChecks
+
+import Data.List
+import Data.Maybe
+import Data.Text
+import System
+import Young.Core
+import Young.Advanced
+
+-- Independent anchors and cross-characterizations accompany the port. These
+-- checks execute Idriç mathematics on the host; they claim no Android pixels.
+expect : Text → Bool → Either Text Number
+expect name condition = if condition then Right 1 else Left name
+
+numbers : Number → List Number
+numbers Z = []
+numbers (S size) = numbers size ++ [S size]
+
+shape : List Number → Partition
+shape = MkPartition
+
+same_shape : Partition → Partition → Bool
+same_shape first second = first.rows ≟ second.rows
+
+same_function : SymmetricFunction → SymmetricFunction → Bool
+same_function first second = first.basis ≟ second.basis &&
+  all (\term ⇒ term.coefficient ≟ symmetric_coefficient second term.index) first.terms &&
+  all (\term ⇒ term.coefficient ≟ symmetric_coefficient first term.index) second.terms
+
+term : List Number → Integer → Integer → SymmetricTerm
+term index numerator denominator = MkSymmetricTerm (shape index) (MkRational numerator denominator)
+
+function : SymmetricBasis → List SymmetricTerm → SymmetricFunction
+function = MkSymmetricFunction
+
+failed : Either Text result → Bool
+failed (Left _) = True
+failed (Right _) = False
+
+lr_checks : Either Text Number
+lr_checks = do
+  coefficient ← littlewood_richardson_coefficient (shape [2,1]) (shape [2,1]) (shape [3,2,1])
+  first ← expect "LR c[2,1;2,1;3,2,1] = 2" (coefficient ≟ 2)
+  tableaux ← littlewood_richardson_tableaux (shape [2,1]) (shape [2,1]) (shape [3,2,1])
+  second ← expect "The coefficient has two distinct visible LR fillings"
+    (sort (map (\tableau ⇒ tableau.rows) tableaux) ≟ sort [[[1],[1],[2]], [[1],[2],[1]]])
+  product ← schur_product (shape [2,1]) (shape [2,1])
+  third ← expect "The classical seven-shape Schur square, including multiplicity two"
+    (same_function product (function Schur
+      [term [4,2] 1 1, term [4,1,1] 1 1, term [3,3] 1 1, term [3,2,1] 2 1,
+       term [3,1,1,1] 1 1, term [2,2,2] 1 1, term [2,2,1,1] 1 1]))
+  empty ← littlewood_richardson_tableaux (shape [2,1]) (shape []) (shape [2,1])
+  fourth ← expect "Empty LR content has one empty skew filling"
+    (length empty ≟ 1 && map (\tableau ⇒ tableau.rows) empty ≟ [[[],[]]])
+  impossible_coefficient ← littlewood_richardson_coefficient (shape [3]) (shape [1]) (shape [2,2])
+  fifth ← expect "An impossible LR containment has coefficient zero" (impossible_coefficient ≟ 0)
+  sixth ← expect "Malformed LR partition is an error"
+    (failed (littlewood_richardson_coefficient (shape [1,2]) (shape []) (shape [1,2])))
+  seventh ← expect "Degree overflow is an error rather than a partial Schur product"
+    (failed (schur_product (shape [5]) (shape [4])))
+  Right (first + second + third + fourth + fifth + sixth + seventh)
+
+factorial : Number → Integer
+factorial Z = 1
+factorial (S value) = cast (S value) * factorial value
+
+cycle_class_size : Partition → Integer
+cycle_class_size cycles = div (factorial (partition_size cycles))
+  (product (map cast cycles.rows) * product
+    (map (\part ⇒ factorial (length (filter (≟ part) cycles.rows))) (nub cycles.rows)))
+
+check_character_pair : List Partition → Partition → Partition → Either Text Number
+check_character_pair cycles first second = do
+  terms ← traverse inner_product_term cycles
+  expect "Distinct irreducible character rows are orthogonal"
+    (sum terms ≟ if same_shape first second then factorial (partition_size first) else 0)
+  where
+    inner_product_term : Partition → Either Text Integer
+    inner_product_term cycle = do
+      left ← character_cycle_type first cycle
+      right ← character_cycle_type second cycle
+      Right (cycle_class_size cycle * left * right)
+
+character_degree_checks : Number → Either Text Number
+character_degree_checks degree = do
+  partitions ← enumerate_partitions degree
+  rows ← traverse (\first ⇒ traverse (check_character_pair partitions first) partitions) partitions
+  dimensions ← traverse dimension partitions
+  Right (sum (concat rows) + sum dimensions)
+  where
+    dimension : Partition → Either Text Number
+    dimension index = do
+      value ← character_cycle_type index (shape (replicate degree 1))
+      expect "Identity character agrees with independent hook formula" (value ≟ standard_count index)
+
+character_checks : Either Text Number
+character_checks = do
+  let indices = [shape [3], shape [2,1], shape [1,1,1]]
+  rows ← traverse (\index ⇒ traverse (character_cycle_type index) indices) indices
+  anchor ← expect "S3 character table in cycle order (3),(2,1),(1,1,1)"
+    (rows ≟ [[1,1,1],[-1,0,2],[1,-1,1]])
+  square ← character_cycle_type (shape [2,2]) (shape [4])
+  rim ← expect "A 2-by-2 square cannot be a rim hook" (square ≟ 0)
+  cycle ← permutation_cycle_type [2,1,4,5,3]
+  cycle_check ← expect "Permutation cycles of lengths two and three" (cycle.rows ≟ [3,2])
+  value ← character_value (shape [2,1]) [2,3,1]
+  permutation_check ← expect "Character accepts a one-line permutation" (value ≟ -1)
+  checks ← traverse character_degree_checks (0 :: numbers 5)
+  bad ← expect "Mismatched character sizes are rejected"
+    (failed (character_cycle_type (shape [2]) (shape [3])))
+  Right (anchor + rim + cycle_check + permutation_check + sum checks + bad)
+
+basis_roundtrip : Partition → SymmetricBasis → Either Text Number
+basis_roundtrip index basis = do
+  original ← symmetric_singleton Schur index
+  converted ← change_basis original basis
+  returned ← change_basis converted Schur
+  expect "An exact basis round trip returns the original Schur function"
+    (same_function returned original)
+
+basis_degree_checks : Number → Either Text Number
+basis_degree_checks degree = do
+  indices ← enumerate_partitions degree
+  checks ← traverse (\index ⇒ traverse (basis_roundtrip index)
+                        [Schur, PowerSum, Monomial, Complete, Elementary]) indices
+  Right (sum (concat checks))
+
+algebra_checks : Either Text Number
+algebra_checks = do
+  schur_two ← to_power_sum (function Schur [term [2] 1 1])
+  first ← expect "s[2] = (p[2] + p[1,1])/2"
+    (same_function schur_two (function PowerSum [term [2] 1 2, term [1,1] 1 2]))
+  exterior_two ← to_power_sum (function Elementary [term [2] 1 1])
+  second ← expect "e[2] = (p[1,1] - p[2])/2"
+    (same_function exterior_two (function PowerSum [term [2] (-1) 2, term [1,1] 1 2]))
+  monomial_two_one ← to_power_sum (function Monomial [term [2,1] 1 1])
+  third ← expect "m[2,1] = p[2,1] - p[3]"
+    (same_function monomial_two_one (function PowerSum [term [2,1] 1 1, term [3] (-1) 1]))
+  monomial_three_ones ← to_power_sum (function Monomial [term [1,1,1] 1 1])
+  fourth ← expect "Set-partition Mobius coefficients for three equal parts"
+    (same_function monomial_three_ones
+      (function PowerSum [term [1,1,1] 1 6, term [2,1] (-1) 2, term [3] 1 3]))
+  schur_value ← specialize (function Schur [term [2,1] 1 1]) [1,2]
+  homogeneous_value ← specialize (function Complete [term [2] 1 1]) [1,2]
+  elementary_value ← specialize (function Elementary [term [2] 1 1]) [1,2]
+  fifth ← expect "Finite alphabet [1,2] has s[2,1]=6, h[2]=7, e[2]=2"
+    ([schur_value, homogeneous_value, elementary_value] ≟
+      [MkRational 6 1, MkRational 7 1, MkRational 2 1])
+  constant ← specialize (function Schur [term [] 7 3]) []
+  positive_degree ← specialize (function Schur [term [2] 1 1]) []
+  sixth ← expect "An empty alphabet preserves constants and kills positive degree"
+    (constant ≟ MkRational 7 3 && positive_degree ≟ MkRational 0 1)
+  exact ← specialize (function PowerSum [term [8] 1 1]) [1000000]
+  seventh ← expect "Specialization remains exact beyond signed 64-bit arithmetic"
+    (exact ≟ MkRational 1000000000000000000000000000000000000000000000000 1)
+  roundtrips ← traverse basis_degree_checks (0 :: numbers 5)
+  boundary_roundtrips ← traverse (basis_roundtrip (shape [4,3,1]))
+    [Schur, PowerSum, Monomial, Complete, Elementary]
+  malformed ← expect "Zero denominators cannot enter a symmetric function"
+    (failed (to_power_sum (function Schur [term [1] 1 0])))
+  Right (first + second + third + fourth + fifth + sixth + seventh +
+         sum roundtrips + sum boundary_roundtrips + malformed)
+
+plethysm_checks : Either Text Number
+plethysm_checks = do
+  symmetric_square ← plethysm (function Schur [term [2] 1 1]) (function Schur [term [2] 1 1])
+  first ← expect "s[2] composed with s[2] = s[4] + s[2,2]"
+    (same_function symmetric_square (function Schur [term [4] 1 1, term [2,2] 1 1]))
+  exterior_square ← plethysm (function Schur [term [2] 1 1]) (function Schur [term [1,1] 1 1])
+  second ← expect "s[2] composed with s[1,1] = s[2,2] + s[1,1,1,1]"
+    (same_function exterior_square (function Schur [term [2,2] 1 1, term [1,1,1,1] 1 1]))
+  inhomogeneous ← plethysm (function PowerSum [term [2] 1 1])
+                          (function PowerSum [term [1] 2 1, term [] 3 1])
+  returned ← to_power_sum inhomogeneous
+  third ← expect "Plethysm keeps rational coefficients fixed under power substitution"
+    (same_function returned (function PowerSum [term [2] 2 1, term [] 3 1]))
+  outer_constant ← plethysm (function Schur [term [] 5 2]) (function Schur [])
+  fourth ← expect "An outer constant survives a zero inner function"
+    (same_function outer_constant (function Schur [term [] 5 2]))
+  fifth ← expect "Plethysm reports degree overflow"
+    (failed (plethysm (function Schur [term [3] 1 1]) (function Schur [term [3] 1 1])))
+  Right (first + second + third + fourth + fifth)
+
+parsing_checks : Either Text Number
+parsing_checks = do
+  parsed ← symmetric_parse "1;1,2;2;1,2;1,1"
+  first ← expect "Numeric keyboard grammar preserves exact half coefficients"
+    (same_function parsed (function PowerSum [term [2] 1 2, term [1,1] 1 2]))
+  zero ← symmetric_parse "0"
+  second ← expect "A basis code alone means the zero sum" (null zero.terms)
+  constant ← symmetric_parse "0;−2,3;[]"
+  third ← expect "Unicode minus and the empty partition are accepted"
+    (same_function constant (function Schur [term [] (-2) 3]))
+  rendered ← symmetric_text parsed
+  fourth ← expect "Rendered exact function contains its visible coefficient and index"
+    (rendered ≟ "1÷2 × p[2] + 1÷2 × p[1,1]")
+  negative_text ← symmetric_text (function PowerSum [term [2] (-1) 2, term [1,1] 1 2])
+  fifth ← expect "Negative displayed coefficients use mathematical minus"
+    (negative_text ≟ "−1÷2 × p[2] + 1÷2 × p[1,1]")
+  bad ← traverse (\input ⇒ expect ("Invalid function text rejected: " ++ input)
+                               (failed (symmetric_parse input)))
+    ["", "5", "0;", "0;1", "0;1;2;", "0;1,0;2", "0;1;1,2",
+     "0;1x;2", "0;1;0", "0;1;9", "0;1,2,3;2"]
+  Right (first + second + third + fourth + fifth + sum bad)
+
+is_saturated_path : Partition → Partition → List Partition → Bool
+is_saturated_path start finish [] = False
+is_saturated_path start finish (first :: rest) = same_shape start first && walk first rest
+  where
+    walk : Partition → List Partition → Bool
+    walk previous [] = same_shape previous finish
+    walk previous (next :: remaining) =
+      partition_size next ≟ S (partition_size previous) &&
+      all (\cell ⇒ elem cell (partition_cells next)) (partition_cells previous) &&
+      walk next remaining
+
+graph_degree_checks : Number → Either Text Number
+graph_degree_checks degree = do
+  indices ← enumerate_partitions degree
+  checks ← traverse graph_shape indices
+  Right (sum checks)
+  where
+    graph_shape : Partition → Either Text Number
+    graph_shape index = do
+      paths ← young_graph_paths (shape []) index
+      count_check ← expect "Empty-to-shape path count agrees with independent hook formula"
+        (cast (length paths) ≟ standard_count index)
+      adjacency_check ← expect "Every enumerated path retains both endpoints and adds one cell"
+        (all (is_saturated_path (shape []) index) paths)
+      Right (count_check + adjacency_check)
+
+graph_checks : Either Text Number
+graph_checks = do
+  upward ← branch_up (shape [2,1])
+  downward ← branch_down (shape [2,1])
+  first ← expect "Young graph neighbors of [2,1]"
+    (map (\index ⇒ index.rows) upward ≟ [[3,1],[2,2],[2,1,1]] &&
+     map (\index ⇒ index.rows) downward ≟ [[1,1],[2]])
+  singleton ← young_graph_paths (shape [2,1]) (shape [2,1])
+  second ← expect "Equal graph endpoints give the zero-edge singleton path"
+    (map (map (\index ⇒ index.rows)) singleton ≟ [[[2,1]]])
+  checks ← traverse graph_degree_checks (0 :: numbers 6)
+  bad ← expect "Uncontained graph endpoints are rejected"
+    (failed (young_graph_paths (shape [3]) (shape [2,2])))
+  limit ← expect "A path enumeration exceeding its result cap is rejected"
+    (failed (young_graph_paths (shape []) (shape [4,3,2])))
+  Right (first + second + sum checks + bad + limit)
+
+-- Exhaustive subsets supply a different subsequence oracle from the dynamic
+-- algorithm. Adjacent-word reconstruction and inversion counts are separate
+-- characterizations of a reduced word.
+subsets : List item → List (List item)
+subsets [] = [[]]
+subsets (first :: rest) = let smaller = subsets rest in smaller ++ map (first ::) smaller
+
+place_letter : item → List item → List (List item)
+place_letter value [] = [[value]]
+place_letter value (first :: rest) =
+  (value :: first :: rest) :: map (first ::) (place_letter value rest)
+
+all_permutations : List item → List (List item)
+all_permutations [] = [[]]
+all_permutations (value :: rest) = concatMap (place_letter value) (all_permutations rest)
+
+strictly_ordered : (Integer → Integer → Bool) → List Integer → Bool
+strictly_ordered relation [] = True
+strictly_ordered relation [_] = True
+strictly_ordered relation (first :: second :: rest) =
+  relation first second && strictly_ordered relation (second :: rest)
+
+bruteforce_length : (Integer → Integer → Bool) → List Integer → Number
+bruteforce_length relation permutation =
+  foldl max 0 (map length (filter (strictly_ordered relation) (subsets permutation)))
+
+inversion_count : List Integer → Number
+inversion_count [] = 0
+inversion_count (first :: rest) = length (filter (< first) rest) + inversion_count rest
+
+swap_adjacent : Number → List Integer → List Integer
+swap_adjacent Z values = values
+swap_adjacent (S position) [] = []
+swap_adjacent (S Z) [value] = [value]
+swap_adjacent (S Z) (first :: second :: rest) = second :: first :: rest
+swap_adjacent (S (S position)) (first :: rest) = first :: swap_adjacent (S position) rest
+
+apply_word : Number → List Number → List Integer
+apply_word size word = foldl (\permutation, generator ⇒ swap_adjacent generator permutation)
+                            (map cast (numbers size)) word
+
+permutation_check : List Integer → Either Text Number
+permutation_check permutation = do
+  increasing ← permutation_lis permutation
+  decreasing ← permutation_lds permutation
+  first ← expect "LIS matches exhaustive subsequences and is itself a subsequence"
+    (length increasing ≟ bruteforce_length (<) permutation && elem increasing (subsets permutation) &&
+     strictly_ordered (<) increasing)
+  second ← expect "LDS matches exhaustive subsequences and is itself a subsequence"
+    (length decreasing ≟ bruteforce_length (>) permutation && elem decreasing (subsets permutation) &&
+     strictly_ordered (>) decreasing)
+  word ← coxeter_reduced_word permutation
+  third ← expect "Adjacent generators reconstruct the permutation with inversion-minimal length"
+    (apply_word (length permutation) word ≟ permutation && length word ≟ inversion_count permutation)
+  Right (first + second + third)
+
+permutation_checks : Either Text Number
+permutation_checks = do
+  checks ← traverse (\size ⇒ traverse permutation_check (all_permutations (map cast (numbers size))))
+                      (0 :: numbers 5)
+  bad ← expect "Duplicate letters are rejected by subsequence and Coxeter operations"
+    (failed (permutation_lis [1,1]) && failed (coxeter_reduced_word [2,2]))
+  Right (sum (concat checks) + bad)
+
+bruhat_checks : Either Text Number
+bruhat_checks = do
+  let group = all_permutations [1,2,3,4]
+  checks ← traverse (check_upper group) group
+  bad ← expect "Different symmetric groups are rejected by Bruhat comparison"
+    (failed (bruhat_leq [1] [1,2]))
+  Right (sum (concat checks) + bad)
+  where
+    check_upper : List (List Integer) → List Integer → Either Text (List Number)
+    check_upper group upper = do
+      word ← coxeter_reduced_word upper
+      let below_by_subwords = nub (map (apply_word 4) (subsets word))
+      traverse (\lower ⇒ do
+        ordered ← bruhat_leq lower upper
+        expect "Strong Bruhat rank criterion agrees with the reduced-subword criterion in S4"
+          (ordered ≟ elem lower below_by_subwords)) group
+
+check_random_seed : Number → Either Text Number
+check_random_seed seed = do
+  stream ← make_rng (cast seed)
+  (permutation, next) ← random_permutation 5 stream
+  first ← expect "Fisher–Yates produces each required letter exactly once"
+    (sort permutation ≟ [1,2,3,4,5] && not (next.state ≟ stream.state))
+  (tableau, after) ← random_standard_tableau (shape [3,2]) stream
+  second ← expect "Weighted corner generation has the requested standard shape"
+    ((tableau_shape tableau).rows ≟ [3,2])
+  third ← expect "Weighted corner labels use exactly 1 through 5"
+    (sort (concat tableau.rows) ≟ [1,2,3,4,5] && not (after.state ≟ stream.state))
+  (plancherel, last) ← sample_plancherel 5 stream
+  fourth ← expect "Plancherel sample is exactly the same stream's permutation RSK shape"
+    (case rsk_permutation permutation of
+       Left _ ⇒ False
+       Right pair ⇒ same_shape plancherel (tableau_shape pair.insertion) && last.state ≟ next.state)
+  Right (first + second + third + fourth)
+
+random_checks : Either Text Number
+random_checks = do
+  stream ← make_rng 0
+  let (first_value, after_first) = rng_next stream
+  let (second_value, after_second) = rng_next after_first
+  first ← expect "SplitMix64 seed-zero published first two words"
+    (first_value ≟ 16294208416658607535 && second_value ≟ 7960286522194355700)
+  checks ← traverse check_random_seed (0 :: numbers 127)
+  tableaux ← traverse (\seed ⇒ do
+    state ← make_rng (cast seed)
+    (tableau, next) ← random_standard_tableau (shape [2,1]) state
+    Right tableau.rows) (0 :: numbers 63)
+  support ← expect "Uniform SYT sampling reaches both tableaux of shape [2,1]"
+    (sort (nub tableaux) ≟ sort [[[1,2],[3]], [[1,3],[2]]])
+  empty ← random_permutation 0 stream
+  no_draw ← expect "An empty permutation consumes no random word"
+    (fst empty ≟ [] && (snd empty).state ≟ stream.state)
+  (bounded, new_state) ← draw_below 1 stream
+  singleton ← expect "A bound of one returns zero and advances the stream"
+    (bounded ≟ 0 && not (new_state.state ≟ stream.state))
+  bad ← expect "Out-of-domain random requests fail explicitly"
+    (failed (make_rng (-1)) && failed (make_rng 18446744073709551616) &&
+     failed (random_permutation 65 stream) && failed (draw_below 0 stream) &&
+     failed (draw_below 18446744073709551617 stream))
+  Right (first + sum checks + support + no_draw + singleton + bad)
+
+run_groups : Number → List (Text, Either Text Number) → IO ()
+run_groups completed [] = putStrLn ("PASS\tadvanced mathematical assertions\t" ++ show completed)
+run_groups completed ((name, checks) :: rest) = case checks of
+  Left reason ⇒ do
+    putStrLn ("FAIL\t" ++ name ++ "\t" ++ reason)
+    exitWith (ExitFailure 1)
+  Right count ⇒ do
+    putStrLn ("PASS\t" ++ name ++ "\t" ++ show count)
+    run_groups (completed + count) rest
+
+public export
+check_groups : List (Text, Either Text Number)
+check_groups = [("Littlewood–Richardson", lr_checks),
+   ("ordinary characters", character_checks),
+   ("five exact symmetric bases", algebra_checks),
+   ("plethysm", plethysm_checks),
+   ("numeric keyboard grammar", parsing_checks),
+   ("Young graph", graph_checks),
+   ("subsequences and reduced words", permutation_checks),
+   ("strong Bruhat order", bruhat_checks),
+   ("SplitMix64 and random objects", random_checks)]
+
+main : IO ()
+main = run_groups 0 check_groups

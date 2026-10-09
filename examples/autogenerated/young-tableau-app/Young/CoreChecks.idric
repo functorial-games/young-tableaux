@@ -1,0 +1,242 @@
+module Young.CoreChecks
+
+import Young.Core
+import Data.List
+import Data.Maybe
+import Data.Text
+import System
+
+accepts : (result_type → Bool) → Either Text result_type → Bool
+accepts check (Right result) = check result
+accepts _ (Left _) = False
+
+rejects : Either Text result_type → Bool
+rejects (Left _) = True
+rejects (Right _) = False
+
+one_through : Number → List Number
+one_through Z = []
+one_through (S count) = one_through count ++ [S count]
+
+partition : Partition
+partition = MkPartition [3, 2, 1]
+
+fixture_tableau : Tableau
+fixture_tableau = MkTableau [[1, 2], [3, 4]]
+
+fixture_skew : SkewTableau
+fixture_skew = MkSkewTableau (MkPartition [3, 2, 1]) (MkPartition [1])
+                           [[1, 3], [2, 5], [4]]
+
+fixture_jeu : Either Text JeuState
+fixture_jeu = make_jeu fixture_skew
+
+begun : Either Text JeuState
+begun = fixture_jeu >>= (\state ⇒ jeu_begin state (MkCell 1 1))
+
+first_move : Either Text JeuState
+first_move = begun >>= jeu_step
+
+second_move : Either Text JeuState
+second_move = first_move >>= jeu_step
+
+finished : Either Text JeuState
+finished = second_move >>= jeu_step
+
+tie_move : Either Text JeuState
+tie_move = do
+  filling ← make_skew (MkPartition [2, 2]) (MkPartition [1]) [[2], [2, 3]]
+  state ← make_jeu filling
+  started ← jeu_begin state (MkCell 1 1)
+  jeu_step started
+
+insert_everywhere : entry_type → List entry_type → List (List entry_type)
+insert_everywhere item [] = [[item]]
+insert_everywhere item (first :: rest) =
+  (item :: first :: rest) :: map (first ::) (insert_everywhere item rest)
+
+all_orders : List entry_type → List (List entry_type)
+all_orders [] = [[]]
+all_orders (first :: rest) = concatMap (insert_everywhere first) (all_orders rest)
+
+permutations_five : List (List Integer)
+permutations_five = all_orders [1, 2, 3, 4, 5]
+
+permutation_roundtrip : List Integer → Bool
+permutation_roundtrip input = accepts verify (rsk_permutation input)
+  where
+    verify : RSKResult → Bool
+    verify result =
+      standard result.insertion && standard result.recording &&
+      accepts (≟ input) (inverse_permutation_rsk result.insertion result.recording)
+
+words_of_length : Number → List (List Integer)
+words_of_length Z = [[]]
+words_of_length (S size) =
+  concatMap (\letter ⇒ map (letter ::) (words_of_length size)) [1, 2, 3]
+
+word_insertions_reverse : List Integer → Bool
+word_insertions_reverse input = accepts verify (rsk_word input)
+  where
+    verify : RSKResult → Bool
+    verify result = semistandard result.insertion && standard result.recording &&
+      all (\letter ⇒ accepts (undo result.insertion letter) (insert result.insertion letter)) [1, 2, 3]
+      where
+        undo : Tableau → Integer → InsertionResult → Bool
+        undo before letter after =
+          accepts (\(restored, outgoing) ⇒ restored.rows ≟ before.rows && outgoing ≟ letter)
+                  (reverse_insert after.tableau after.new_cell)
+
+partitions_bounded : Number → Number → Number → List Partition
+partitions_bounded _ Z _ = [MkPartition []]
+partitions_bounded Z (S remaining) ceiling = []
+partitions_bounded (S slots) (S remaining) ceiling =
+  concatMap extend (one_through (min (S remaining) ceiling))
+  where
+    extend : Number → List Partition
+    extend width = map (\tail ⇒ MkPartition (width :: tail.rows))
+                      (partitions_bounded slots (minus (S remaining) width) width)
+
+partitions_through_seven : List Partition
+partitions_through_seven = concatMap (\size ⇒ partitions_bounded size size size)
+                                  (0 :: one_through 7)
+
+corner_count : Number → Partition → Integer
+corner_count Z shape = if null shape.rows then 1 else 0
+corner_count (S remaining) shape =
+  if null shape.rows then 1 else
+  sum (map (\corner ⇒ either (const 0) (corner_count remaining) (remove_cell shape corner))
+           (removable_cells shape))
+
+corner_formula_agrees : Partition → Bool
+corner_formula_agrees shape =
+  valid_partition shape && (conjugate (conjugate shape)).rows ≟ shape.rows &&
+  standard_count shape ≟ corner_count (partition_size shape) shape
+
+rectification_matches_row_word : SkewTableau → Bool
+rectification_matches_row_word filling =
+  accepts (\state ⇒ accepts (\word_result ⇒ state.filling.rows ≟ word_result.insertion.rows)
+                              (rsk_word (concat (reverse filling.rows))))
+          (make_jeu filling >>= rectify)
+
+evacuation_involution : List Integer → Bool
+evacuation_involution input = accepts verify (rsk_permutation input)
+  where
+    verify : RSKResult → Bool
+    verify result =
+      accepts (\first ⇒ standard first &&
+               (tableau_shape first).rows ≟ (tableau_shape result.insertion).rows &&
+               accepts (\second ⇒ second.rows ≟ result.insertion.rows) (evacuation first))
+              (evacuation result.insertion)
+
+promotion_preserves_standard_shape : List Integer → Bool
+promotion_preserves_standard_shape input = accepts verify (rsk_permutation input)
+  where
+    verify : RSKResult → Bool
+    verify result =
+      accepts (\promoted ⇒ standard promoted &&
+               (tableau_shape promoted).rows ≟ (tableau_shape result.insertion).rows)
+              (promotion result.insertion)
+
+public export
+checks : List (Text, Bool)
+checks =
+  [ ("partition empty", accepts (\shape ⇒ null shape.rows) (make_partition []))
+  , ("partition rejects zero row", rejects (make_partition [3, 0]))
+  , ("partition rejects increasing rows", rejects (make_partition [2, 3]))
+  , ("partition one-based cells", partition_cells (MkPartition [2, 1]) ≟
+       [MkCell 1 1, MkCell 1 2, MkCell 2 1])
+  , ("partition conjugation", (conjugate (MkPartition [4, 2, 1])).rows ≟ [3, 2, 1, 1])
+  , ("partition removable corners", removable_cells partition ≟
+       [MkCell 1 3, MkCell 2 2, MkCell 3 1])
+  , ("partition addable corners", addable_cells partition ≟
+       [MkCell 1 4, MkCell 2 3, MkCell 3 2, MkCell 4 1])
+  , ("partition add then remove", accepts (\shape ⇒ shape.rows ≟ partition.rows)
+       (add_cell partition (MkCell 2 3) >>= (\grown ⇒ remove_cell grown (MkCell 2 3))))
+  , ("partition rejects noncorner removal", rejects (remove_cell partition (MkCell 1 2)))
+  , ("hook at origin", hook_length partition (MkCell 1 1) ≟ Just 5)
+  , ("hook product", hook_product partition ≟ 45)
+  , ("hook count [3,2,1]", standard_count partition ≟ 16)
+  , ("hook formula against independent corner recurrence through seven cells",
+       all corner_formula_agrees partitions_through_seven)
+  , ("tableau rejects nonpartition shape", rejects (make_tableau [[1], [2, 3]]))
+  , ("tableau arbitrary signed filling remains inspectable", accepts (const True) (make_tableau [[0, -1]]))
+  , ("semistandard rejects nonpositive entry", not (semistandard (MkTableau [[0]])))
+  , ("semistandard admits repeated row entries", semistandard (MkTableau [[1, 1], [2]]))
+  , ("semistandard rejects equal column entries", not (semistandard (MkTableau [[1], [1]])))
+  , ("standard alphabet", standard fixture_tableau && not (standard (MkTableau [[1, 3], [4, 5]])))
+  , ("standardization repeated letters left to right", accepts (\result ⇒ result.rows ≟ [[1, 2, 5], [3, 4]])
+       (standardize (MkTableau [[1, 1, 3], [2, 3]])))
+  , ("transpose twice", accepts (\result ⇒ result.rows ≟ [[1, 2, 3], [4]])
+       (transpose_tableau (MkTableau [[1, 2, 3], [4]]) >>= transpose_tableau))
+  , ("insertion rejects invalid source", rejects (insert (MkTableau [[2], [1]]) 3))
+  , ("insertion rejects zero", rejects (insert (MkTableau []) 0))
+  , ("RSK known P and Q", accepts (\result ⇒
+       result.insertion.rows ≟ [[1, 2], [3, 4]] && result.recording.rows ≟ [[1, 3], [2, 4]])
+       (rsk_permutation [3, 1, 4, 2]))
+  , ("RSK last bump path and input", accepts (\result ⇒
+       result.path ≟ [MkCell 1 2, MkCell 2 2] && result.inserted ≟ 2 && result.step ≟ 4)
+       (rsk_word [3, 1, 4, 2]))
+  , ("RSK empty prefix", accepts (\result ⇒ null result.insertion.rows && result.step ≟ 0) (rsk_word []))
+  , ("RSK repeated word", accepts (\result ⇒ result.insertion.rows ≟ [[1, 2], [2]] &&
+       result.recording.rows ≟ [[1, 3], [2]]) (rsk_word [2, 1, 2]))
+  , ("RSK rejects repeated permutation", rejects (rsk_permutation [1, 1]))
+  , ("RSK positive ordered biword", accepts (\result ⇒
+       result.insertion.rows ≟ [[1, 1], [2]] && result.recording.rows ≟ [[1, 1], [2]])
+       (rsk_biword [(1, 1), (1, 2), (2, 1)]))
+  , ("RSK rejects unordered biword", rejects (rsk_biword [(1, 2), (1, 1)]))
+  , ("RSK matrix uses multiplicities", accepts (\result ⇒
+       result.insertion.rows ≟ [[1, 1], [2]] && result.recording.rows ≟ [[1, 1], [2]])
+       (rsk_matrix [[1, 1], [1, 0]]))
+  , ("RSK rejects ragged matrix", rejects (rsk_matrix [[1], [0, 1]]))
+  , ("all 120 permutation RSK inverses", length permutations_five ≟ 120 &&
+       all permutation_roundtrip permutations_five)
+  , ("all 81 four-letter words: three insert/reverse choices", all word_insertions_reverse (words_of_length 4))
+  , ("inverse RSK rejects mismatched shapes", rejects
+       (inverse_permutation_rsk (MkTableau [[1, 2]]) (MkTableau [[1], [2]])))
+  , ("skew rejects inner outside outer", rejects (make_skew (MkPartition [2]) (MkPartition [3]) [[]]))
+  , ("skew rejects wrong visible count", rejects (make_skew (MkPartition [2]) (MkPartition [1]) [[1, 2]]))
+  , ("skew valid standard fixture", skew_standard fixture_skew)
+  , ("jeu begin exposes explicit hole", accepts (\state ⇒ state.hole ≟ Just (MkCell 1 1) &&
+       state.filling.inner.rows ≟ [] && jeu_get state (MkCell 1 1) ≟ Nothing) begun)
+  , ("jeu first step moves entry and hole", accepts (\state ⇒ state.hole ≟ Just (MkCell 1 2) &&
+       jeu_get state (MkCell 1 1) ≟ Just 1 && jeu_get state (MkCell 1 2) ≟ Nothing) first_move)
+  , ("jeu ordinary step preserves outer shape", accepts (\state ⇒ state.filling.outer.rows ≟ [3, 2, 1]) first_move)
+  , ("jeu second step changes hole again", accepts (\state ⇒ state.hole ≟ Just (MkCell 1 3) &&
+       jeu_get state (MkCell 1 2) ≟ Just 3) second_move)
+  , ("jeu completion removes outer corner", accepts (\state ⇒ state.hole ≟ Nothing &&
+       state.filling.outer.rows ≟ [2, 2, 1] && skew_standard state.filling) finished)
+  , ("jeu equal neighbors choose below", accepts (\state ⇒ state.hole ≟ Just (MkCell 2 1) &&
+       jeu_get state (MkCell 1 1) ≟ Just 2) tie_move)
+  , ("jeu completed step rejected", rejects (fixture_jeu >>= jeu_step))
+  , ("jeu begin twice rejected", rejects (begun >>= (\state ⇒ jeu_begin state (MkCell 1 1))))
+  , ("jeu malformed active shape rejected", rejects (jeu_step
+       (MkJeuState (MkSkewTableau (MkPartition [2]) (MkPartition []) [[0]]) (Just (MkCell 1 1)))))
+  , ("jeu rectification matches independent row word", rectification_matches_row_word fixture_skew)
+  , ("jeu tie fixture rectifies to row insertion", rectification_matches_row_word
+       (MkSkewTableau (MkPartition [2, 2]) (MkPartition [1]) [[2], [2, 3]]))
+  , ("jeu multiple inner corners rectify to row insertion", rectification_matches_row_word
+       (MkSkewTableau (MkPartition [4, 3, 2]) (MkPartition [2, 1]) [[1, 2], [2, 3], [3, 4]]))
+  , ("jeu top inner corner and bottom inner corner agree", let
+       filling = MkSkewTableau (MkPartition [4, 3, 2]) (MkPartition [2, 1]) [[1, 2], [2, 3], [3, 4]]
+       via_top = make_jeu filling >>= (\state ⇒ jeu_slide state (MkCell 1 2)) >>= rectify
+       via_bottom = make_jeu filling >>= (\state ⇒ jeu_slide state (MkCell 2 1)) >>= rectify
+       in accepts (\top ⇒ accepts (\bottom ⇒ top.filling.rows ≟ bottom.filling.rows) via_bottom) via_top)
+  , ("jeu rectification resumes an active slide", accepts (\state ⇒ state.hole ≟ Nothing &&
+       state.filling.rows ≟ [[1, 3], [2, 5], [4]]) (first_move >>= rectify))
+  , ("promotion known rectangle", accepts (\result ⇒ result.rows ≟ [[1, 3], [2, 4]])
+       (promotion fixture_tableau))
+  , ("promotion preserves all 120 standard input shapes", all promotion_preserves_standard_shape permutations_five)
+  , ("evacuation involution across all 120 permutations", all evacuation_involution permutations_five)
+  , ("promotion rejects semistandard repetitions", rejects (promotion (MkTableau [[1, 1]])))
+  , ("evacuation empty", accepts (\result ⇒ null result.rows) (evacuation (MkTableau [])))
+  ]
+
+main : IO ()
+main = do
+  let failures = map fst (filter (not . snd) checks)
+  if null failures
+     then putStrLn ("CORE_IDRIC_HOST PASS: " ++ show (length checks) ++ " checks")
+     else do
+       traverse_ putStrLn failures
+       exitFailure

@@ -1,0 +1,8 @@
+module NativePositiveControl
+
+%export "dex:next_frame_value"
+next_frame_value : Int32 → Int32 → Int32
+next_frame_value previous_value increment = previous_value + increment
+
+main : IO ()
+main = pure ()

@@ -1,0 +1,19 @@
+module NativeRecursiveModel
+
+-- The checker does not prove decreasing Int32 recursion. Positive remaining
+-- steps decrease to zero; nonpositive counts preserve the current value.
+covering
+advance_value : Int32 → Int32 → Int32
+advance_value remaining_steps current_value =
+  if remaining_steps <= 0
+    then current_value
+    else advance_value (remaining_steps - 1) (current_value + 1)
+
+%export "dex:advance_frame_value"
+covering
+advance_frame_value : Int32 → Int32 → Int32
+advance_frame_value step_count previous_value =
+  advance_value step_count previous_value
+
+main : IO ()
+main = pure ()

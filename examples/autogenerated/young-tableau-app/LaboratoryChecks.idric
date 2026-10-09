@@ -1,0 +1,322 @@
+module LaboratoryChecks
+
+import Data.List
+import Data.Text
+import System
+import Young.Core
+import Young.Advanced
+import Young.Laboratory
+
+-- Every legacy registry entry is executed with a concrete request, checked
+-- against a known mathematical result, and projected into inspectable data.
+-- Inventory equality by itself would not establish any of these actions.
+expected_registry : List Text
+expected_registry =
+  ["DisplayPartition", "ConjugatePartition", "ListCells", "DisplayTableau",
+   "ValidateTableau", "StandardizeTableau", "InsertLetter", "ReverseInsert",
+   "TransposeTableau", "ComputeHookLengths", "ComputeHookProduct", "CountStandardTableaux",
+   "FindCorners", "FindAddableCells", "FindRemovableCells", "AddCell", "RemoveCell",
+   "RSKPermutation", "RSKWord", "RSKBiword", "RSKMatrix", "InverseRSK",
+   "JeuDeTaquinSlide", "Rectify", "Promote", "Evacuate",
+   "LittlewoodRichardsonCoefficient", "EnumerateLRTableaux", "MultiplySchurFunctions",
+   "CharacterValue", "RepresentationDimension", "ChangeBasis", "Specialize", "Plethysm",
+   "BranchUp", "BranchDown", "EnumerateYoungGraphPaths", "GenerateRandomPermutation",
+   "GenerateRandomStandardTableau", "SamplePlancherelPartition",
+   "ComputeLongestIncreasingSubsequence", "ComputeLongestDecreasingSubsequence",
+   "CoxeterReducedWord", "BruhatRelations"]
+
+coordinates : List Cell → List (Number, Number)
+coordinates = map (\cell ⇒ (cell.row, cell.column))
+
+same_skew : SkewTableau → SkewTableau → Bool
+same_skew first second = first.outer.rows ≟ second.outer.rows &&
+  first.inner.rows ≟ second.inner.rows && first.rows ≟ second.rows
+
+same_skews : List SkewTableau → List SkewTableau → Bool
+same_skews [] [] = True
+same_skews (first :: rest) (second :: others) = same_skew first second && same_skews rest others
+same_skews _ _ = False
+
+same_functions : SymmetricFunction → SymmetricFunction → Bool
+same_functions first second = first.basis ≟ second.basis &&
+  all (\term ⇒ term.coefficient ≟ symmetric_coefficient second term.index) first.terms &&
+  all (\term ⇒ term.coefficient ≟ symmetric_coefficient first term.index) second.terms
+
+term : List Number → Integer → Integer → SymmetricTerm
+term index numerator denominator = MkSymmetricTerm (MkPartition index) (MkRational numerator denominator)
+
+expected_slide : SkewTableau → Bool
+expected_slide result = result.outer.rows ≟ [2,2,1] && result.inner.rows ≟ [] &&
+  result.rows ≟ [[1,3],[2,5],[4]]
+
+-- These expectations describe the concrete catalogue, independently of the
+-- dispatch implementation. They retain paths, ejected entries and RNG state.
+sample_result : (request : operation) → OutputFor request → Bool
+sample_result (display_partition _) result = result.rows ≟ [3,2]
+sample_result (conjugate_partition _) result = result.rows ≟ [2,2,1]
+sample_result (list_cells _) result = coordinates result ≟ [(1,1),(1,2),(1,3),(2,1),(2,2)]
+sample_result (display_tableau _) result = result.rows ≟ [[1,2,4],[3,5]]
+sample_result (validate_tableau _ _ _) result = result
+sample_result (standardize_tableau _) result = result.rows ≟ [[1,2,5],[3,4]]
+sample_result (insert_letter _ _) result = result.tableau.rows ≟ [[1,2],[2,3],[4]] &&
+  result.inserted ≟ 2 && result.new_cell ≟ MkCell 3 1 &&
+  coordinates result.path ≟ [(1,2),(2,2),(3,1)]
+sample_result (reverse_insertion _ _) (tableau, value) = tableau.rows ≟ [[1,4],[3]] && value ≟ 2
+sample_result (transpose_filling _) result = result.rows ≟ [[1,3],[2,5],[4]]
+sample_result (compute_hook_lengths _) result =
+  map (\(cell, length) ⇒ ((cell.row,cell.column),length)) result ≟
+    [((1,1),4),((1,2),3),((1,3),1),((2,1),2),((2,2),1)]
+sample_result (compute_hook_product _) result = result ≟ 24
+sample_result (count_standard_tableaux _) result = result ≟ 5
+sample_result (find_corners _) result = coordinates result ≟ [(1,3),(2,2)]
+sample_result (find_addable_cells _) result = coordinates result ≟ [(1,4),(2,3),(3,1)]
+sample_result (find_removable_cells _) result = coordinates result ≟ [(1,3),(2,2)]
+sample_result (add_partition_cell _ _) result = result.rows ≟ [3,2,1]
+sample_result (remove_partition_cell _ _) result = result.rows ≟ [2,2]
+sample_result (rsk_from_permutation _) result = result.insertion.rows ≟ [[1,2],[3,4]] &&
+  result.recording.rows ≟ [[1,3],[2,4]] && result.step ≟ 4
+sample_result (rsk_from_word _) result = result.insertion.rows ≟ [[1,2],[2]] &&
+  result.recording.rows ≟ [[1,3],[2]] && result.step ≟ 3
+sample_result (rsk_from_biword _) result = result.insertion.rows ≟ [[1,2],[2]] &&
+  result.recording.rows ≟ [[1,1],[2]] && result.step ≟ 3
+sample_result (rsk_from_matrix _) result = result.insertion.rows ≟ [[1,2],[2]] &&
+  result.recording.rows ≟ [[1,1],[2]] && result.step ≟ 3
+sample_result (inverse_rsk _ _) result = result ≟ [3,1,4,2]
+sample_result (jeu_de_taquin_slide _ _) result = expected_slide result
+sample_result (rectify_tableau _) result = expected_slide result
+sample_result (promote_tableau _) result = result.rows ≟ [[1,3],[2,4]]
+sample_result (evacuate_tableau _) result = result.rows ≟ [[1,2],[3,4]]
+sample_result (lr_coefficient _ _ _) result = result ≟ 2
+sample_result (enumerate_lr_tableaux _ _ _) result =
+  sort (map (\filling ⇒ filling.rows) result) ≟ sort [[[1],[1],[2]],[[1],[2],[1]]]
+sample_result (multiply_schur_functions _ _) result = same_functions result
+  (MkSymmetricFunction Schur [term [2] 1 1, term [1,1] 1 1])
+sample_result (symmetric_character_value _ _) result = result ≟ -1
+sample_result (representation_dimension _) result = result ≟ 5
+sample_result (change_symmetric_basis _ _) result = same_functions result
+  (MkSymmetricFunction PowerSum [term [2] 1 2,term [1,1] 1 2])
+sample_result (specialize_symmetric_function _ _) result = result ≟ MkRational 6 1
+sample_result (compose_symmetric_functions _ _) result = same_functions result
+  (MkSymmetricFunction Schur [term [4] 1 1,term [2,2] 1 1])
+sample_result (branch_partition_up _) result = map (\shape ⇒ shape.rows) result ≟ [[4,2],[3,3],[3,2,1]]
+sample_result (branch_partition_down _) result = map (\shape ⇒ shape.rows) result ≟ [[2,2],[3,1]]
+sample_result (enumerate_young_graph_paths _ _) result =
+  map (map (\shape ⇒ shape.rows)) result ≟
+    [[[],[1],[2],[2,1]],[[],[1],[1,1],[2,1]]]
+sample_result (generate_random_permutation _ _) (permutation, stream) =
+  permutation ≟ [3,2,1,4] && the Integer (cast stream.state) ≟ 15755400384260043839
+sample_result (generate_random_standard_tableau _ _) (tableau, stream) =
+  tableau.rows ≟ [[1,2],[3]] && the Integer (cast stream.state) ≟ 15755400384260043839
+sample_result (sample_plancherel_partition _ _) (shape, stream) =
+  shape.rows ≟ [2,1,1] && the Integer (cast stream.state) ≟ 15755400384260043839
+sample_result (longest_increasing_subsequence _) result = result ≟ [3,4]
+sample_result (longest_decreasing_subsequence _) result = result ≟ [3,1]
+sample_result (coxeter_word _) result = result ≟ [2,3,1]
+sample_result (bruhat_relation _ _) result = result
+
+partition_present : Partition → LaboratoryView → Bool
+partition_present result view = map (\shape ⇒ shape.rows) view.partitions ≟ [result.rows]
+
+tableau_present : Tableau → LaboratoryView → Bool
+tableau_present result view = map (\tableau ⇒ tableau.rows) view.tableaux ≟ [result.rows]
+
+integer_present : Integer → LaboratoryView → Bool
+integer_present result view = view.lines ≟ [show result]
+
+cells_present : List Cell → LaboratoryView → Bool
+cells_present result view = drop 1 view.lines ≟
+  map (\cell ⇒ "(" ++ show cell.row ++ "," ++ show cell.column ++ ")") result
+
+sequence_present : List Integer → LaboratoryView → Bool
+sequence_present result view = elem (show result) view.lines
+
+rsk_present : RSKResult → LaboratoryView → Bool
+rsk_present result view = map (\tableau ⇒ tableau.rows) view.tableaux ≟
+  [result.insertion.rows,result.recording.rows]
+
+function_present : SymmetricFunction → LaboratoryView → Bool
+function_present result view =
+  map (\shape ⇒ shape.rows) view.partitions ≟ map (\term ⇒ term.index.rows) result.terms &&
+  case symmetric_text result of
+    Left _ ⇒ False
+    Right text ⇒ elem text view.lines
+
+stream_present : RNGState → LaboratoryView → Bool
+stream_present stream view =
+  elem ("Next SplitMix64 state: " ++ show (the Integer (cast stream.state))) view.lines
+
+result_present : (request : operation) → OutputFor request → LaboratoryView → Bool
+result_present (display_partition _) result view = partition_present result view
+result_present (conjugate_partition _) result view = partition_present result view
+result_present (list_cells _) result view = cells_present result view
+result_present (display_tableau _) result view = tableau_present result view
+result_present (validate_tableau _ _ _) result view =
+  elem ("Property holds: " ++ show result) view.lines
+result_present (standardize_tableau _) result view = tableau_present result view
+result_present (insert_letter _ _) result view = tableau_present result.tableau view &&
+  elem ("Inserted: " ++ show result.inserted) view.lines
+result_present (reverse_insertion _ _) (tableau,value) view = tableau_present tableau view &&
+  elem ("Ejected: " ++ show value) view.lines
+result_present (transpose_filling _) result view = tableau_present result view
+result_present (compute_hook_lengths _) result view =
+  map (\tableau ⇒ concat tableau.rows) view.tableaux ≟ [map (\(_,length) ⇒ cast length) result]
+result_present (compute_hook_product _) result view = integer_present result view
+result_present (count_standard_tableaux _) result view = integer_present result view
+result_present (find_corners _) result view = cells_present result view
+result_present (find_addable_cells _) result view = cells_present result view
+result_present (find_removable_cells _) result view = cells_present result view
+result_present (add_partition_cell _ _) result view = partition_present result view
+result_present (remove_partition_cell _ _) result view = partition_present result view
+result_present (rsk_from_permutation _) result view = rsk_present result view
+result_present (rsk_from_word _) result view = rsk_present result view
+result_present (rsk_from_biword _) result view = rsk_present result view
+result_present (rsk_from_matrix _) result view = rsk_present result view
+result_present (inverse_rsk _ _) result view = sequence_present result view
+result_present (jeu_de_taquin_slide _ _) result view = same_skews [result] view.skews
+result_present (rectify_tableau _) result view = same_skews [result] view.skews
+result_present (promote_tableau _) result view = tableau_present result view
+result_present (evacuate_tableau _) result view = tableau_present result view
+result_present (lr_coefficient _ _ _) result view = integer_present result view
+result_present (enumerate_lr_tableaux _ _ _) result view = same_skews result view.skews
+result_present (multiply_schur_functions _ _) result view = function_present result view
+result_present (symmetric_character_value _ _) result view = integer_present result view
+result_present (representation_dimension _) result view = integer_present result view
+result_present (change_symmetric_basis _ _) result view = function_present result view
+result_present (specialize_symmetric_function _ _) result view = elem (rational_text result) view.lines
+result_present (compose_symmetric_functions _ _) result view = function_present result view
+result_present (branch_partition_up _) result view =
+  map (\shape ⇒ shape.rows) view.partitions ≟ map (\shape ⇒ shape.rows) result
+result_present (branch_partition_down _) result view =
+  map (\shape ⇒ shape.rows) view.partitions ≟ map (\shape ⇒ shape.rows) result
+result_present (enumerate_young_graph_paths _ _) result view =
+  map (\shape ⇒ shape.rows) view.partitions ≟ concatMap (map (\shape ⇒ shape.rows)) result
+result_present (generate_random_permutation _ _) (permutation,stream) view =
+  sequence_present permutation view && stream_present stream view
+result_present (generate_random_standard_tableau _ _) (tableau,stream) view =
+  tableau_present tableau view && stream_present stream view
+result_present (sample_plancherel_partition _ _) (shape,stream) view =
+  partition_present shape view && stream_present stream view
+result_present (longest_increasing_subsequence _) result view = sequence_present result view
+result_present (longest_decreasing_subsequence _) result view = sequence_present result view
+result_present (coxeter_word _) result view = elem (show result) view.lines
+result_present (bruhat_relation _ _) result view = elem ("First ≤ second: " ++ show result) view.lines
+
+execute_sample : operation → Bool
+execute_sample request = case evaluate request of
+  Left _ ⇒ False
+  Right result ⇒ sample_result request result
+
+project_sample : operation → Bool
+project_sample request = case evaluate request of
+  Left _ ⇒ False
+  Right result ⇒
+    let view = project request result in
+    not (view.title ≟ "") && result_present request result view
+
+rejects : operation → Bool
+rejects request = case inspect_operation request of
+  Left _ ⇒ True
+  Right _ ⇒ False
+
+property_is : Bool → operation → Bool
+property_is expected request = case inspect_operation request of
+  Left _ ⇒ False
+  Right view ⇒ elem ("Property holds: " ++ show expected) view.lines
+
+square : Tableau
+square = MkTableau [[1,2],[3,4]]
+
+bad_function : SymmetricFunction
+bad_function = MkSymmetricFunction Schur [term [1] 1 0]
+
+stream : RNGState
+stream = MkRNGState 0
+
+error_requests : List (Text, operation)
+error_requests =
+  [("malformed partition", display_partition (MkPartition [1,2])),
+   ("display shape width", display_partition (MkPartition [65])),
+   ("ragged nonpartition tableau", display_tableau (MkTableau [[1],[2,3]])),
+   ("invalid validation shape", validate_tableau arbitrary_filling increasing_entries (MkTableau [[],[1]])),
+   ("nonsemistandard standardization", standardize_tableau (MkTableau [[2,1]])),
+   ("nonpositive inserted letter", insert_letter square 0),
+   ("insertion exceeds display width", insert_letter (MkTableau [replicate 64 1]) 1),
+   ("reverse insertion at a noncorner", reverse_insertion square (MkCell 1 1)),
+   ("transpose malformed shape", transpose_filling (MkTableau [[1],[2,3]])),
+   ("hook invalid shape", compute_hook_lengths (MkPartition [0])),
+   ("hook product invalid shape", compute_hook_product (MkPartition [0])),
+   ("count invalid shape", count_standard_tableaux (MkPartition [0])),
+   ("add invalid corner", add_partition_cell (MkPartition [3,2]) (MkCell 1 2)),
+   ("remove missing corner", remove_partition_cell (MkPartition [3,2]) (MkCell 3 1)),
+   ("duplicate permutation", rsk_from_permutation [1,1]),
+   ("nonpositive word", rsk_from_word [1,0]),
+   ("word input bound", rsk_from_word (replicate 65 1)),
+   ("unordered biword", rsk_from_biword [(2,1),(1,2)]),
+   ("ragged matrix", rsk_from_matrix [[1],[1,2]]),
+   ("inverse unequal shapes", inverse_rsk square (MkTableau [[1,2,3,4]])),
+   ("jeu invalid inner corner", jeu_de_taquin_slide
+       (MkSkewTableau (MkPartition [2,1]) (MkPartition [1]) [[1],[2]]) (MkCell 1 2)),
+   ("invalid skew containment", rectify_tableau
+       (MkSkewTableau (MkPartition [1]) (MkPartition [2]) [[]])),
+   ("promotion nonstandard", promote_tableau (MkTableau [[1,1]])),
+   ("evacuation nonstandard", evacuate_tableau (MkTableau [[1,1]])),
+   ("LR malformed partition", lr_coefficient (MkPartition [1,2]) (MkPartition []) (MkPartition [3])),
+   ("Schur degree bound", multiply_schur_functions (MkPartition [5]) (MkPartition [4])),
+   ("character unequal size", symmetric_character_value (MkPartition [2,1]) [1,2]),
+   ("dimension invalid shape", representation_dimension (MkPartition [0])),
+   ("basis zero denominator", change_symmetric_basis bad_function PowerSum),
+   ("specialization alphabet bound", specialize_symmetric_function
+       (MkSymmetricFunction Schur [term [1] 1 1]) (replicate 65 1)),
+   ("plethysm degree bound", compose_symmetric_functions
+       (MkSymmetricFunction Schur [term [3] 1 1]) (MkSymmetricFunction Schur [term [3] 1 1])),
+   ("branch invalid shape", branch_partition_up (MkPartition [1,2])),
+   ("branch output bound", branch_partition_up (MkPartition [64])),
+   ("path invalid containment", enumerate_young_graph_paths (MkPartition [3]) (MkPartition [2,2])),
+   ("random permutation bound", generate_random_permutation 65 stream),
+   ("random tableau invalid shape", generate_random_standard_tableau (MkPartition [1,2]) stream),
+   ("Plancherel input bound", sample_plancherel_partition 65 stream),
+   ("LIS duplicate labels", longest_increasing_subsequence [1,1]),
+   ("LDS duplicate labels", longest_decreasing_subsequence [1,1]),
+   ("Coxeter generator bound", coxeter_word (reverse (map cast [1 .. 64]))),
+   ("Bruhat unequal sizes", bruhat_relation [1] [1,2])]
+
+public export
+checks : List (Text, Bool)
+checks =
+  [("all 44 legacy registry symbols in order", map registry_symbol sample_requests ≟ expected_registry)] ++
+  map (\request ⇒ ("evaluate " ++ registry_symbol request, execute_sample request)) sample_requests ++
+  map (\request ⇒ ("project actual " ++ registry_symbol request, project_sample request)) sample_requests ++
+  [("arbitrary filling accepts unordered signed entries", property_is True
+      (validate_tableau arbitrary_filling increasing_entries (MkTableau [[9,-2],[0]]))),
+   ("row standard accepts unordered columns", property_is True
+      (validate_tableau row_standard_filling increasing_entries (MkTableau [[2,4],[1,3]]))),
+   ("column standard accepts unordered rows", property_is True
+      (validate_tableau column_standard_filling increasing_entries (MkTableau [[2,1],[4,3]]))),
+   ("standard checks columns as well as rows", property_is False
+      (validate_tableau standard_filling increasing_entries (MkTableau [[2,4],[1,3]]))),
+   ("semistandard accepts repeated row labels", property_is True
+      (validate_tableau semistandard_filling increasing_entries (MkTableau [[1,1],[2,3]]))),
+   ("semistandard rejects repeated column labels", property_is False
+      (validate_tableau semistandard_filling increasing_entries (MkTableau [[1,2],[1,3]]))),
+   ("decreasing standard tableau", property_is True
+      (validate_tableau standard_filling decreasing_entries (MkTableau [[4,3],[2,1]]))),
+   ("decreasing row standard tableau", property_is True
+      (validate_tableau row_standard_filling decreasing_entries (MkTableau [[3,1],[4,2]]))),
+   ("decreasing column standard tableau", property_is True
+      (validate_tableau column_standard_filling decreasing_entries (MkTableau [[3,4],[1,2]]))),
+   ("decreasing semistandard tableau", property_is True
+      (validate_tableau semistandard_filling decreasing_entries (MkTableau [[3,3],[2,1]]))),
+   ("projection uses returned partition rather than request input",
+      map (\shape ⇒ shape.rows)
+        (project (conjugate_partition (MkPartition [3,2])) (MkPartition [1])).partitions ≟ [[1]]),
+   ("invalid property is a displayed False result", property_is False
+      (validate_tableau standard_filling increasing_entries (MkTableau [[1,1]])))] ++
+  map (\(name, request) ⇒ ("reject " ++ name, rejects request)) error_requests
+
+main : IO ()
+main = do
+  let failures = map fst (filter (not . snd) checks)
+  if null failures then putStrLn ("PASS\tlaboratory assertions\t" ++ show (length checks))
+     else do
+       traverse_ (\name ⇒ putStrLn ("FAIL\t" ++ name)) failures
+       exitWith (ExitFailure 1)

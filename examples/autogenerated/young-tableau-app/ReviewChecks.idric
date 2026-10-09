@@ -1,0 +1,332 @@
+module ReviewChecks
+
+import Data.List
+import Data.Maybe
+import Data.Text
+import System
+import Young.Advanced
+import Young.Core
+import Young.Inspection
+import Young.Laboratory
+import Young.Model
+import Young.Plots
+import Young.Presentation
+import Young.Raster
+import Young.Screen
+
+-- Independent regression witnesses for bugs found during review: degenerate
+-- spans, clipped rows, stale frames sharing revision numbers, distinct windows,
+-- and down/up interleavings. No native window is exercised by this executable.
+accepts : (result_type → Bool) → Either Text result_type → Bool
+accepts check (Right result) = check result
+accepts _ (Left _) = False
+
+dimensions_match : Raster → Bool
+dimensions_match picture = length picture.pixel_rows ≟ picture.height &&
+                          all (\row ⇒ length row ≟ picture.width) picture.pixel_rows
+
+within : Rectangle → Rectangle → Bool
+within area rectangle =
+  rectangle.left >= area.left && rectangle.top >= area.top &&
+  rectangle.left + rectangle.width <= area.left + area.width &&
+  rectangle.top + rectangle.height <= area.top + area.height
+
+pixel_near : Pixel → Pixel → Bool
+pixel_near left right =
+  abs (the Integer (cast left.red) - cast right.red) <= 1 &&
+  abs (the Integer (cast left.green) - cast right.green) <= 1 &&
+  abs (the Integer (cast left.blue) - cast right.blue) <= 1
+
+public export
+raster_review_checks : List (Text, Bool)
+raster_review_checks =
+  let empty_height = rasterize 5 0 []
+      empty_width = rasterize 0 4 []
+      source = rasterize 4 3 [Fill 1 1 8 8 accent]
+      lower_right = region 3 2 8 9 source
+      outside_right = region 7 1 5 9 source
+      outside_bottom = region 1 8 9 4 source
+      ragged = region 0 0 4 2 (Picture 4 2 [[accent, accent], [foreground]])
+      pane = Fill 5 7 5 3 panel_color
+      odd_plot = draw_wegert pane (MkPartition [1])
+      constant_plot = draw_wegert (Fill 0 0 5 5 panel_color) (MkPartition [])
+      tiny_pane = Fill 9 11 1 1 panel_color
+   in [ ("raster zero height has no rows", empty_height.height ≟ 0 &&
+           null empty_height.pixel_rows && dimensions_match empty_height)
+      , ("raster zero width keeps exact empty rows", empty_width.width ≟ 0 &&
+           length empty_width.pixel_rows ≟ 4 && dimensions_match empty_width)
+      , ("raster large rectangle is clipped to canvas", dimensions_match source &&
+           source.pixel_rows ≟ [[background, background, background, background],
+                                [background, accent, accent, accent],
+                                [background, accent, accent, accent]])
+      , ("crop returns actual lower-right dimensions", lower_right.width ≟ 1 &&
+           lower_right.height ≟ 1 && lower_right.pixel_rows ≟ [[accent]])
+      , ("crop outside right remains rectangular", outside_right.width ≟ 0 &&
+           outside_right.height ≟ 2 && dimensions_match outside_right)
+      , ("crop outside bottom has no rows", outside_bottom.height ≟ 0 &&
+           null outside_bottom.pixel_rows && dimensions_match outside_bottom)
+      , ("crop public ragged fixture never fabricates pixels", ragged.width ≟ 1 &&
+           ragged.height ≟ 2 && ragged.pixel_rows ≟ [[accent], [foreground]])
+      , ("clip rectangle intersects all four boundaries", case clip_rectangle pane (Fill 3 6 9 8 accent) of
+           Nothing ⇒ False
+           Just clipped ⇒ clipped.left ≟ 5 && clipped.top ≟ 7 &&
+             clipped.width ≟ 5 && clipped.height ≟ 3)
+      , ("disjoint rectangles are omitted", null (clip_rectangles pane [Fill 0 0 2 2 accent]))
+      , ("outline stays inside tiny pane", all (within tiny_pane) (outline tiny_pane 8 accent))
+      , ("zero-size outline is empty", null (outline (Fill 5 7 0 3 panel_color) 2 accent))
+      , ("odd Wegert tile edges cover exact area", length odd_plot ≟ 6 &&
+           all (within pane) odd_plot && sum (map (\tile ⇒ tile.width * tile.height) odd_plot) ≟ 15)
+      , ("zero-width Wegert emits no pixels", null (draw_wegert (Fill 5 7 0 3 panel_color) (MkPartition [1])))
+      , ("zero-height Wegert emits no pixels", null (draw_wegert (Fill 5 7 3 0 panel_color) (MkPartition [1])))
+      , ("one-pixel Wegert tile stays inside pane", all (within tiny_pane) (draw_wegert tiny_pane (MkPartition [1])))
+      , ("empty partition specializes to canonical color of one", all
+           (\tile ⇒ pixel_near tile.color (RGB 212 141 155)) constant_plot)
+      , ("sequence points stay inside tiny pane", all (within tiny_pane)
+           (draw_sequence tiny_pane [1, 3, 2] 2))
+      , ("zero-width sequence emits no pixels", null
+           (draw_sequence (Fill 0 0 0 5 panel_color) [1, 2] 1))
+      ]
+
+click_at : Number → Number → Controller → Either Text Controller
+click_at horizontal vertical display = do
+  pressed ← receive_pointer (pointer_down 7 horizontal vertical) display
+  receive_pointer (pointer_up 7 horizontal vertical) pressed
+
+inspection_matches : LaboratoryView → LaboratoryView → Bool
+inspection_matches expected actual =
+  actual.title ≟ expected.title && actual.lines ≟ expected.lines &&
+  map (\tableau ⇒ tableau.rows) actual.tableaux ≟ map (\tableau ⇒ tableau.rows) expected.tableaux &&
+  map (\shape ⇒ shape.rows) actual.partitions ≟ map (\shape ⇒ shape.rows) expected.partitions &&
+  map (\skew ⇒ (skew.outer.rows, skew.inner.rows, skew.rows)) actual.skews ≟
+    map (\skew ⇒ (skew.outer.rows, skew.inner.rows, skew.rows)) expected.skews
+
+laboratory_dispatch_check : Model → operation → (Text, Bool)
+laboratory_dispatch_check start request =
+  ("laboratory action stores evaluated result: " ++ registry_symbol request,
+   accepts (\expected ⇒ accepts (\after ⇒ after.revision ≟ S start.revision &&
+              maybe False (inspection_matches expected) after.inspection)
+            (apply_action (run_operation request) start))
+           (inspect_operation request))
+
+same_diagram : result_diagram → result_diagram → Bool
+same_diagram (partition_diagram left) (partition_diagram right) = left.rows ≟ right.rows
+same_diagram (tableau_diagram left) (tableau_diagram right) = left.rows ≟ right.rows
+same_diagram (skew_diagram left) (skew_diagram right) =
+  left.outer.rows ≟ right.outer.rows && left.inner.rows ≟ right.inner.rows && left.rows ≟ right.rows
+same_diagram _ _ = False
+
+same_diagrams : List result_diagram → List result_diagram → Bool
+same_diagrams left right = length left ≟ length right && all id (zipWith same_diagram left right)
+
+-- Keep the dependent page-navigation fixture inside its own Either. A reducer
+-- that discards all changes must still reach the earlier independent failure
+-- reports, even though its report was never installed for result_next.
+pagination_review_checks : Model → Either Text (List (Text, Bool))
+pagination_review_checks start = do
+  let request = enumerate_young_graph_paths (MkPartition []) (MkPartition [3, 2])
+  expected ← inspect_operation request
+  first ← apply_action (run_operation request) start
+  next ← apply_action result_next first
+  restored ← apply_action result_previous next
+  let pages = map (\page ⇒ inspection_page_at page expected)
+                  (pixel_indices (inspection_page_count expected))
+      joined_text = concatMap (\page ⇒ page.text_rows) pages
+      joined_diagrams = concatMap (\page ⇒ page.diagrams) pages
+      diagram_area = Fill 24 1135 146 106 panel_color
+      content_area = Fill 24 1020 312 222 panel_color
+      first_frame = paint first
+      next_frame = paint next
+      restored_frame = paint restored
+      first_diagram = crop_frame diagram_area first_frame
+      next_diagram = crop_frame diagram_area next_frame
+      first_display = window_created (Window 1) (controller_for first)
+      different_page_same_revision = { inspection_page := 1 } first
+      changed_display = window_created (Window 1) (controller_for different_page_same_revision)
+      long_text = pack (replicate 155 'λ') ++ " z"
+      wrapped = wrap_result_text long_text
+  offer ← maybe (Left "Review could not prepare the first result page.") Right
+                (prepare_frame first_display)
+  Right
+    [ ("result pagination bounds every page", inspection_page_count expected > 1 &&
+         all (\page ⇒ length page.text_rows <= 10 && length page.diagrams <= 2) pages)
+    , ("result pagination preserves every wrapped text row", joined_text ≟ inspection_lines expected)
+    , ("result pagination preserves every diagram in order", same_diagrams joined_diagrams (inspection_diagrams expected))
+    , ("result wrapping preserves long Unicode text exactly", concat wrapped ≟ long_text &&
+         map (length . unpack) wrapped ≟ [78, 78, 1])
+    , ("result page actions update index and revision", first.inspection_page ≟ 0 &&
+         next.inspection_page ≟ 1 && restored.inspection_page ≟ 0 &&
+         next.revision ≟ S first.revision && restored.revision ≟ S next.revision)
+    , ("result next changes actual diagram pixels below the page label", changed_pixels first_diagram next_diagram > 0)
+    , ("result previous restores content pixels", changed_pixels
+         (crop_frame content_area first_frame) (crop_frame content_area restored_frame) ≟ 0)
+    , ("same revision with different result page cannot acknowledge", needs_frame
+         (acknowledge (current_model first_display) offer posted changed_display))
+    , ("result frames have bounded and consistent dimensions", (frame_pixels first_frame).height ≟ 1296 &&
+         (frame_pixels next_frame).height ≟ 1296 && dimensions_match (frame_pixels first_frame) &&
+         dimensions_match (frame_pixels next_frame))
+    ]
+
+-- A click in each button's interior uses the same down/up path expected of
+-- the actual platform adapter, then paints the resulting authoritative Model.
+public export
+presentation_review_checks : Either Text (List (Text, Bool))
+presentation_review_checks = do
+  start ← initial_model
+  let initial_display = window_created (Window 1) (controller_for start)
+  after_rsk ← click_at 200 320 initial_display
+  after_jeu ← click_at 120 515 initial_display
+  after_jeu_second ← click_at 120 515 after_jeu
+  after_jeu_finished ← click_at 120 515 after_jeu_second
+  pressed ← receive_pointer (pointer_down 7 200 320) initial_display
+  completed_between ← process_action rsk_last pressed
+  released_after_change ← receive_pointer (pointer_up 7 200 320) completed_between
+  canceled ← receive_pointer pointer_cancel pressed >>= receive_pointer (pointer_up 7 200 320)
+  moved_out ← receive_pointer (pointer_move 7 0 0) pressed >>= receive_pointer (pointer_up 7 200 320)
+  wrong_pointer ← receive_pointer (pointer_up 8 200 320) pressed
+  wrong_then_right ← receive_pointer (pointer_up 7 200 320) wrong_pointer
+  invalid_corner ← process_action (select_corner (MkCell 99 99)) initial_display
+  disabled_corner_click ← click_at 120 515 invalid_corner
+  -- A direct public-constructor fixture keeps an active hole while supplying
+  -- the wrong row length. The enabled action must report its checked error
+  -- and release the pointer, without changing the malformed mathematical data.
+  let malformed_active = MkJeuState
+        (MkSkewTableau (MkPartition [2]) (MkPartition []) [[0]]) (Just (MkCell 1 1))
+      malformed_model = { jeu := malformed_active } start
+      malformed_display = window_created (Window 1) (controller_for malformed_model)
+  failed_click ← click_at 120 515 malformed_display
+  recovered_click ← click_at 200 320 failed_click
+  hook_large ← apply_action (run_operation (compute_hook_product (MkPartition [3, 2, 1]))) start
+  hook_small ← apply_action (run_operation (compute_hook_product (MkPartition [2, 1]))) start
+  changed_generator ← make_rng 1
+  let next_model = current_model after_rsk
+      jeu_model = current_model after_jeu
+      jeu_second_model = current_model after_jeu_second
+      jeu_finished_model = current_model after_jeu_finished
+      original_frame = paint start
+      next_frame = paint next_model
+      jeu_frame = paint jeu_model
+      jeu_second_frame = paint jeu_second_model
+      jeu_finished_frame = paint jeu_finished_model
+      insertion_change = changed_pixels (crop_frame rsk_insertion_area original_frame)
+                                        (crop_frame rsk_insertion_area next_frame)
+      recording_change = changed_pixels (crop_frame rsk_recording_area original_frame)
+                                        (crop_frame rsk_recording_area next_frame)
+      jeu_change = changed_pixels (crop_frame jeu_board_area original_frame)
+                                  (crop_frame jeu_board_area jeu_frame)
+      jeu_second_change = changed_pixels (crop_frame jeu_board_area jeu_frame)
+                                         (crop_frame jeu_board_area jeu_second_frame)
+      fixed_changes = changed_pixels (crop_frame reference_plot_area original_frame)
+                                     (crop_frame reference_plot_area jeu_finished_frame)
+      unchanged_outer_plot = changed_pixels (crop_frame jeu_plot_area original_frame)
+                                           (crop_frame jeu_plot_area jeu_frame)
+      changed_outer_plot = changed_pixels (crop_frame jeu_plot_area original_frame)
+                                         (crop_frame jeu_plot_area jeu_finished_frame)
+      other_model = { reference_partition := MkPartition [2, 2] } start
+      same_numbers_other_model = window_created (Window 1) (controller_for other_model)
+      same_model_other_window = window_created (Window 2) (controller_for start)
+      recreated = window_created (Window 1) (window_lost initial_display)
+      oversized_tableau = MkTableau [replicate 180 1]
+      emitted = draw_tableau rsk_insertion_area oversized_tableau []
+      result_area = Fill 12 940 336 300 panel_color
+      hook_large_frame = paint hook_large
+      hook_small_frame = paint hook_small
+      hook_large_pixels = crop_frame result_area hook_large_frame
+      hook_small_pixels = crop_frame result_area hook_small_frame
+      hook_large_display = window_created (Window 1) (controller_for hook_large)
+      hook_small_display = window_created (Window 1) (controller_for hook_small)
+      rng_only_changed = { random_state := changed_generator } hook_large
+      rng_other_display = window_created (Window 1) (controller_for rng_only_changed)
+  offer ← maybe (Left "Review could not prepare the initial pending frame.") Right
+                (prepare_frame initial_display)
+  hook_offer ← maybe (Left "Review could not prepare the laboratory result frame.") Right
+                     (prepare_frame hook_large_display)
+  Right $
+    [ ("pointer click advances the authoritative RSK model", next_model.rsk.step ≟ 1 &&
+         next_model.revision ≟ S start.revision && next_model.rsk.insertion.rows ≟ [[3]])
+    , ("RSK input-to-pixels changes P pane", insertion_change > 0)
+    , ("RSK input-to-pixels changes Q pane", recording_change > 0)
+    , ("jeu input-to-pixels changes actual board", jeu_change > 0 &&
+         jeu_model.jeu.hole ≟ Just (MkCell 1 2))
+    , ("second jeu input changes actual board again", jeu_second_change > 0 &&
+         jeu_second_model.jeu.hole ≟ Just (MkCell 1 3))
+    , ("ordinary jeu move preserves own fixed outer plot", unchanged_outer_plot ≟ 0)
+    , ("finishing jeu changes its own outer-shape plot", changed_outer_plot > 0 &&
+         jeu_finished_model.jeu.hole ≟ Nothing)
+    , ("independent reference plot stays fixed", fixed_changes ≟ 0)
+    , ("full frame dimensions match actual rows", dimensions_match (frame_pixels original_frame))
+    , ("direct oversized tableau remains clipped to its pane", all (within rsk_insertion_area) emitted)
+    , ("failed post leaves frame pending", needs_frame
+         (acknowledge (current_model initial_display) offer post_failed initial_display))
+    , ("failed lock leaves frame pending", needs_frame
+         (acknowledge (current_model initial_display) offer lock_failed initial_display))
+    , ("successful post acknowledges exact source", not (needs_frame
+         (acknowledge (current_model initial_display) offer posted initial_display)))
+    , ("old revision cannot acknowledge a newer model", needs_frame
+         (acknowledge (current_model initial_display) offer posted after_rsk))
+    , ("same revision with different math cannot acknowledge", needs_frame
+         (acknowledge (current_model initial_display) offer posted same_numbers_other_model))
+    , ("same generation on different window cannot acknowledge", needs_frame
+         (acknowledge (current_model initial_display) offer posted same_model_other_window))
+    , ("old offer cannot acknowledge recreated window", needs_frame
+         (acknowledge (current_model initial_display) offer posted recreated))
+    , ("window loss retains mathematical state", same_model start
+         (current_model (window_lost initial_display)) && not (needs_frame (window_lost initial_display)))
+    , ("new window requests current state", needs_frame recreated)
+    , ("model change cancels old press", (current_model released_after_change).rsk.step ≟ 4 &&
+         (current_model released_after_change).revision ≟ (current_model completed_between).revision)
+    , ("pointer cancellation cancels click", (current_model canceled).rsk.step ≟ 0)
+    , ("drag outside cancels click", (current_model moved_out).rsk.step ≟ 0)
+    , ("another pointer cannot release active click", (current_model wrong_pointer).rsk.step ≟ 0 &&
+         (current_model wrong_then_right).rsk.step ≟ 1)
+    , ("RSK initial Start and Prev are disabled", isNothing (action_at start 30 320) &&
+         isNothing (action_at start 120 320))
+    , ("RSK completed End and Next are disabled", isNothing (action_at (current_model completed_between) 200 320) &&
+         isNothing (action_at (current_model completed_between) 280 320))
+    , ("completed jeu Step and Slide are disabled", isNothing (action_at jeu_finished_model 120 515) &&
+         isNothing (action_at jeu_finished_model 200 515))
+    , ("rectified jeu disables Rectify", isNothing (action_at jeu_finished_model 280 515))
+    , ("Reset is enabled only after a jeu change", isNothing (action_at start 30 515) &&
+         isJust (action_at jeu_finished_model 30 515))
+    , ("invalid inner corner click is visibly disabled and preserves state",
+         isNothing (action_at (current_model invalid_corner) 120 515) &&
+         same_model (current_model disabled_corner_click) (current_model invalid_corner) &&
+         isNothing (last_message disabled_corner_click))
+    , ("rejected pointer action records error without math change", isJust (last_message failed_click) &&
+         same_model (current_model failed_click) (current_model malformed_display))
+    , ("rejected pointer action releases press for next click", (current_model recovered_click).rsk.step ≟ 1)
+    , ("all 44 laboratory families are exercised exactly once", length sample_requests ≟ 44 &&
+         length (nub (map registry_symbol sample_requests)) ≟ 44)
+    , ("hook result pane contains independently known values", maybe False
+         (\view ⇒ view.title ≟ "Hook product" && view.lines ≟ ["45"]) hook_large.inspection &&
+         maybe False (\view ⇒ view.title ≟ "Hook product" && view.lines ≟ ["3"]) hook_small.inspection)
+    , ("different scalar results use equally sized nonempty result panes", hook_large_pixels.height > 0 &&
+         hook_large_pixels.width ≟ hook_small_pixels.width &&
+         hook_large_pixels.height ≟ hook_small_pixels.height &&
+         dimensions_match hook_large_pixels && dimensions_match hook_small_pixels)
+    , ("changing result data changes actual result-pane pixels", changed_pixels hook_large_pixels hook_small_pixels > 0)
+    , ("scalar inspection changes preserve unrelated upper panes", changed_pixels
+         (crop_frame (Fill 0 0 screen_width 940 background) hook_large_frame)
+         (crop_frame (Fill 0 0 screen_width 940 background) hook_small_frame) ≟ 0)
+    , ("same revision with different inspection cannot acknowledge", hook_large.revision ≟ hook_small.revision &&
+         needs_frame (acknowledge (current_model hook_large_display) hook_offer posted hook_small_display))
+    , ("same revision with different random state cannot acknowledge", hook_large.revision ≟ rng_only_changed.revision &&
+         needs_frame (acknowledge (current_model hook_large_display) hook_offer posted rng_other_display))
+    ] ++ map (laboratory_dispatch_check start) sample_requests ++
+         either (\reason ⇒ [("result pagination setup: " ++ reason, False)]) id
+                (pagination_review_checks start)
+
+report : List (Text, Bool) → IO ()
+report checks = do
+  let failures = map fst (filter (not . snd) checks)
+  if null failures
+     then putStrLn ("REVIEW_IDRIC_HOST PASS: " ++ show (length checks) ++ " checks")
+     else do
+       traverse_ putStrLn failures
+       exitFailure
+
+main : IO ()
+main = case presentation_review_checks of
+  Left reason ⇒ do
+    putStrLn reason
+    exitFailure
+  Right checks ⇒ report (raster_review_checks ++ checks)

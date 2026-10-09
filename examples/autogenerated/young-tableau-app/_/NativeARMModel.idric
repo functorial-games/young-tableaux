@@ -1,0 +1,10 @@
+module NativeARMModel
+
+-- Tableau entries and revision counts need whole-number results. This probes
+-- that result boundary before requesting heap storage or platform effects.
+%export "arm-thumb:next_frame_value"
+next_frame_value : Int32 → Int32 → Int32
+next_frame_value previous_value increment = previous_value + increment
+
+main : IO ()
+main = pure ()

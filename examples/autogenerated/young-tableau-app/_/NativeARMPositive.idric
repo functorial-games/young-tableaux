@@ -1,0 +1,12 @@
+module NativeARMPositive
+
+import RendererPrimitives
+
+-- A deliberately Float32 scalar control inside the native backend's ABI.
+%export "arm-thumb:mix_frame_samples"
+mix_frame_samples : Float32 → Float32 → Float32
+mix_frame_samples first_sample second_sample =
+  float32_add first_sample second_sample
+
+main : IO ()
+main = pure ()

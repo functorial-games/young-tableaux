@@ -1,0 +1,216 @@
+module Young.Commands
+
+import Data.List
+import Data.Text
+import Young.Core
+import Young.Advanced
+import Young.Laboratory
+import Young.Model
+import Young.TextInput
+
+-- Scientific command names are the exact legacy operation symbols. Space
+-- separates arguments; commas separate entries and semicolons separate rows.
+-- Each parser branch has one exact arity. The mathematical owner then checks
+-- its domain, and the ordinary action path advances one authoritative model.
+read_scalar : Text → Either Text Integer
+read_scalar text = do
+  values ← read_word text
+  case values of
+    [value] ⇒ Right value
+    _ ⇒ Left "Expected exactly one integer argument"
+
+as_size : Integer → Either Text Number
+as_size value =
+  if value < 0 then Left "A size or multiplicity cannot be negative"
+  else Right (cast value)
+
+read_size : Text → Either Text Number
+read_size text = read_scalar text >>= as_size
+
+read_cell : Text → Either Text Cell
+read_cell text = do
+  values ← read_word text
+  case values of
+    [row,column] ⇒
+      if row <= 0 || column <= 0 then Left "A cell needs positive row,column coordinates"
+      else Right (MkCell (cast row) (cast column))
+    _ ⇒ Left "A cell argument is exactly row,column"
+
+read_tableau : Text → Either Text Tableau
+read_tableau text = read_rows text >>= make_tableau
+
+read_skew : Text → Text → Text → Either Text SkewTableau
+read_skew outer_text inner_text rows_text = do
+  outer ← read_partition outer_text
+  inner ← read_partition inner_text
+  rows ← read_rows rows_text
+  make_skew outer inner rows
+
+read_matrix : Text → Either Text (List (List Number))
+read_matrix text = read_rows text >>= traverse (traverse as_size)
+
+read_biword : Text → Text → Either Text (List (Integer,Integer))
+read_biword upper_text lower_text = do
+  upper ← read_word upper_text
+  lower ← read_word lower_text
+  if length upper ≟ length lower then Right (zip upper lower)
+     else Left "The two biword rows need equal lengths"
+
+read_basis : Text → Either Text SymmetricBasis
+read_basis text = do
+  value ← read_scalar text
+  case value of
+    0 ⇒ Right Schur
+    1 ⇒ Right PowerSum
+    2 ⇒ Right Monomial
+    3 ⇒ Right Complete
+    4 ⇒ Right Elementary
+    _ ⇒ Left "Basis code is 0 Schur, 1 power-sum, 2 monomial, 3 complete or 4 elementary"
+
+read_rule : Text → Either Text filling_rule
+read_rule text = do
+  value ← read_scalar text
+  case value of
+    0 ⇒ Right arbitrary_filling
+    1 ⇒ Right row_standard_filling
+    2 ⇒ Right column_standard_filling
+    3 ⇒ Right standard_filling
+    4 ⇒ Right semistandard_filling
+    _ ⇒ Left "Filling rule is 0 arbitrary, 1 row-standard, 2 column-standard, 3 standard or 4 semistandard"
+
+read_order : Text → Either Text entry_order
+read_order text = do
+  value ← read_scalar text
+  case value of
+    0 ⇒ Right increasing_entries
+    1 ⇒ Right decreasing_entries
+    _ ⇒ Left "Entry order is 0 increasing or 1 decreasing"
+
+partition_action : (Partition → operation) → Text → Either Text user_action
+partition_action request_for text = map (run_operation . request_for) (read_partition text)
+
+tableau_action : (Tableau → operation) → Text → Either Text user_action
+tableau_action request_for text = map (run_operation . request_for) (read_tableau text)
+
+word_action : (List Integer → operation) → Text → Either Text user_action
+word_action request_for text = map (run_operation . request_for) (read_word text)
+
+partition_cell_action : (Partition → Cell → operation) → Text → Text → Either Text user_action
+partition_cell_action request_for shape_text cell_text = do
+  shape ← read_partition shape_text
+  cell ← read_cell cell_text
+  Right (run_operation (request_for shape cell))
+
+three_partition_action : (Partition → Partition → Partition → operation) →
+                         Text → Text → Text → Either Text user_action
+three_partition_action request_for inner_text content_text outer_text = do
+  inner ← read_partition inner_text
+  content ← read_partition content_text
+  outer ← read_partition outer_text
+  Right (run_operation (request_for inner content outer))
+
+two_partition_action : (Partition → Partition → operation) →
+                       Text → Text → Either Text user_action
+two_partition_action request_for first_text second_text = do
+  first ← read_partition first_text
+  second ← read_partition second_text
+  Right (run_operation (request_for first second))
+
+public export
+read_command : Text → Either Text user_action
+read_command command = case words command of
+  ["DisplayPartition", text] ⇒ partition_action display_partition text
+  ["ConjugatePartition", text] ⇒ partition_action conjugate_partition text
+  ["ListCells", text] ⇒ partition_action list_cells text
+  ["DisplayTableau", text] ⇒ tableau_action display_tableau text
+  ["ValidateTableau", rule_text, order_text, rows_text] ⇒ do
+    rule ← read_rule rule_text
+    order ← read_order order_text
+    tableau ← read_tableau rows_text
+    Right (run_operation (validate_tableau rule order tableau))
+  ["StandardizeTableau", text] ⇒ tableau_action standardize_tableau text
+  ["InsertLetter", rows_text, letter_text] ⇒ do
+    tableau ← read_tableau rows_text
+    letter ← read_scalar letter_text
+    Right (run_operation (insert_letter tableau letter))
+  ["ReverseInsert", rows_text, cell_text] ⇒ do
+    tableau ← read_tableau rows_text
+    cell ← read_cell cell_text
+    Right (run_operation (reverse_insertion tableau cell))
+  ["TransposeTableau", text] ⇒ tableau_action transpose_filling text
+  ["ComputeHookLengths", text] ⇒ partition_action compute_hook_lengths text
+  ["ComputeHookProduct", text] ⇒ partition_action compute_hook_product text
+  ["CountStandardTableaux", text] ⇒ partition_action count_standard_tableaux text
+  ["FindCorners", text] ⇒ partition_action find_corners text
+  ["FindAddableCells", text] ⇒ partition_action find_addable_cells text
+  ["FindRemovableCells", text] ⇒ partition_action find_removable_cells text
+  ["AddCell", shape_text, cell_text] ⇒ partition_cell_action add_partition_cell shape_text cell_text
+  ["RemoveCell", shape_text, cell_text] ⇒ partition_cell_action remove_partition_cell shape_text cell_text
+  ["RSKPermutation", text] ⇒ word_action rsk_from_permutation text
+  ["RSKWord", text] ⇒ word_action rsk_from_word text
+  ["RSKBiword", upper_text, lower_text] ⇒ do
+    pairs ← read_biword upper_text lower_text
+    Right (run_operation (rsk_from_biword pairs))
+  ["RSKMatrix", text] ⇒ do
+    matrix ← read_matrix text
+    Right (run_operation (rsk_from_matrix matrix))
+  ["InverseRSK", insertion_text, recording_text] ⇒ do
+    insertion ← read_tableau insertion_text
+    recording ← read_tableau recording_text
+    Right (run_operation (inverse_rsk insertion recording))
+  ["JeuDeTaquinSlide", outer_text, inner_text, rows_text, cell_text] ⇒ do
+    skew ← read_skew outer_text inner_text rows_text
+    cell ← read_cell cell_text
+    Right (run_operation (jeu_de_taquin_slide skew cell))
+  ["Rectify", outer_text, inner_text, rows_text] ⇒ do
+    skew ← read_skew outer_text inner_text rows_text
+    Right (run_operation (rectify_tableau skew))
+  ["Promote", text] ⇒ tableau_action promote_tableau text
+  ["Evacuate", text] ⇒ tableau_action evacuate_tableau text
+  ["LittlewoodRichardsonCoefficient", inner_text, content_text, outer_text] ⇒
+    three_partition_action lr_coefficient inner_text content_text outer_text
+  ["EnumerateLRTableaux", inner_text, content_text, outer_text] ⇒
+    three_partition_action enumerate_lr_tableaux inner_text content_text outer_text
+  ["MultiplySchurFunctions", first_text, second_text] ⇒
+    two_partition_action multiply_schur_functions first_text second_text
+  ["CharacterValue", shape_text, permutation_text] ⇒ do
+    shape ← read_partition shape_text
+    permutation ← read_word permutation_text
+    Right (run_operation (symmetric_character_value shape permutation))
+  ["RepresentationDimension", text] ⇒ partition_action representation_dimension text
+  ["ChangeBasis", function_text, basis_text] ⇒ do
+    function ← symmetric_parse function_text
+    basis ← read_basis basis_text
+    Right (run_operation (change_symmetric_basis function basis))
+  ["Specialize", function_text, alphabet_text] ⇒ do
+    function ← symmetric_parse function_text
+    alphabet ← read_word alphabet_text
+    Right (run_operation (specialize_symmetric_function function alphabet))
+  ["Plethysm", outer_text, inner_text] ⇒ do
+    outer ← symmetric_parse outer_text
+    inner ← symmetric_parse inner_text
+    Right (run_operation (compose_symmetric_functions outer inner))
+  ["BranchUp", text] ⇒ partition_action branch_partition_up text
+  ["BranchDown", text] ⇒ partition_action branch_partition_down text
+  ["EnumerateYoungGraphPaths", start_text, finish_text] ⇒
+    two_partition_action enumerate_young_graph_paths start_text finish_text
+  ["GenerateRandomPermutation", text] ⇒ map roll_permutation (read_size text)
+  ["GenerateRandomStandardTableau", text] ⇒ map roll_standard_tableau (read_partition text)
+  ["SamplePlancherelPartition", text] ⇒ map roll_plancherel (read_size text)
+  ["ComputeLongestIncreasingSubsequence", text] ⇒ word_action longest_increasing_subsequence text
+  ["ComputeLongestDecreasingSubsequence", text] ⇒ word_action longest_decreasing_subsequence text
+  ["CoxeterReducedWord", text] ⇒ word_action coxeter_word text
+  ["BruhatRelations", first_text, second_text] ⇒ do
+    first ← read_word first_text
+    second ← read_word second_text
+    Right (run_operation (bruhat_relation first second))
+  ["seed", text] ⇒ map seed_random (read_scalar text)
+  ["result-prev"] ⇒ Right result_previous
+  ["result-next"] ⇒ Right result_next
+  _ ⇒ read_action command
+
+public export
+apply_command : Text → Model → Either Text Model
+apply_command command model = do
+  action ← read_command command
+  apply_action action model

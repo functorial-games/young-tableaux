@@ -1,0 +1,164 @@
+module Young.Presentation
+
+import Data.List
+import Young.Model
+import Young.Raster
+import Young.Screen
+
+-- A platform adapter supplies the actual window identity. A generation number
+-- alone can collide between two display owners; it cannot identify a window.
+public export
+record WindowIdentity where
+  constructor Window
+  token : Number
+
+public export
+Eq WindowIdentity where
+  left ≟ right = left.token ≟ right.token
+
+-- The display owner retains mathematics across lost windows. A successful
+-- model operation never pretends that a frame has already reached a surface.
+record DisplayState where
+  constructor LiveDisplay
+  model : Model
+  generation : Number
+  available : Bool
+  window : Maybe WindowIdentity
+  presented_revision : Maybe Number
+  presented_generation : Maybe Number
+  pressed : Maybe (Number, Button)
+  message : Maybe Text
+
+export
+Controller : Type
+Controller = DisplayState
+
+export
+controller_for : Model → Controller
+controller_for model = LiveDisplay model 0 False Nothing Nothing Nothing Nothing Nothing
+
+export
+current_model : Controller → Model
+current_model display = display.model
+
+export
+surface_generation : Controller → Number
+surface_generation display = display.generation
+
+export
+window_created : WindowIdentity → Controller → Controller
+window_created identity display =
+  { generation := S display.generation, available := True,
+    window := Just identity, presented_generation := Nothing, pressed := Nothing } display
+
+export
+window_lost : Controller → Controller
+window_lost display =
+  { available := False, window := Nothing, pressed := Nothing } display
+
+export
+needs_frame : Controller → Bool
+needs_frame display = display.available &&
+  not (display.presented_revision ≟ Just display.model.revision &&
+       display.presented_generation ≟ Just display.generation)
+
+export
+process_action : user_action → Controller → Either Text Controller
+process_action action display = do
+  next ← apply_action action display.model
+  Right ({ model := next, pressed := Nothing, message := Nothing } display)
+
+export
+last_message : Controller → Maybe Text
+last_message display = display.message
+
+record SurfaceFrame (source : Model) where
+  constructor Pending
+  generation : Number
+  window : WindowIdentity
+  pixels : Frame source
+
+export
+Offer : Model → Type
+Offer source = SurfaceFrame source
+
+export
+prepare_frame : (display : Controller) → Maybe (Offer (current_model display))
+prepare_frame display =
+  case display.window of
+    Nothing ⇒ Nothing
+    Just identity ⇒ if needs_frame display
+      then Just (Pending display.generation identity (paint display.model))
+      else Nothing
+
+export
+offered_frame : Offer source → Frame source
+offered_frame offer = offer.pixels
+
+public export
+choice post_result one_of
+  posted
+  surface_missing
+  lock_failed
+  post_failed
+
+export
+acknowledge : (source : Model) → Offer source → post_result → Controller → Controller
+acknowledge source offer posted current =
+  if current.available && offer.generation ≟ current.generation &&
+     current.window ≟ Just offer.window && same_model source current.model
+     then { presented_revision := Just source.revision,
+            presented_generation := Just offer.generation } current
+     else current
+acknowledge _ _ _ current = current
+
+-- This callback boundary is the one a real window adapter must implement.
+-- The host qualification uses an identified image-file sink and test doubles;
+-- neither is reported as a native-window or physical-device presentation.
+export
+present_once : Controller → ((source : Model) → Frame source → IO post_result) → IO Controller
+present_once display post_frame =
+  case prepare_frame display of
+    Nothing ⇒ pure display
+    Just offer ⇒ do
+      result ← post_frame display.model (offered_frame offer)
+      pure (acknowledge display.model offer result display)
+
+public export
+choice pointer_event one_of
+  pointer_down Number Number Number
+  pointer_move Number Number Number
+  pointer_up Number Number Number
+  pointer_cancel
+
+find_button : Number → Number → Model → Maybe Button
+find_button horizontal vertical model =
+  find (\button ⇒ button.enabled && hit_rectangle button.area horizontal vertical) (buttons model)
+
+export
+receive_pointer : pointer_event → Controller → Either Text Controller
+receive_pointer pointer_cancel display = Right ({ pressed := Nothing } display)
+receive_pointer (pointer_down pointer horizontal vertical) display =
+  if not display.available then Right display
+  else case display.pressed of
+    Just _ ⇒ Right display
+    Nothing ⇒ Right ({ pressed := map (\button ⇒ (pointer, button))
+                            (find_button horizontal vertical display.model) } display)
+receive_pointer (pointer_move pointer horizontal vertical) display =
+  case display.pressed of
+    Nothing ⇒ Right display
+    Just (active, button) ⇒
+      if pointer ≟ active && not (hit_rectangle button.area horizontal vertical)
+        then Right ({ pressed := Nothing } display)
+        else Right display
+receive_pointer (pointer_up pointer horizontal vertical) display =
+  case display.pressed of
+    Nothing ⇒ Right display
+    Just (active, button) ⇒
+      if not (pointer ≟ active) then Right display
+      else let released = { pressed := Nothing } display
+            in if display.available && hit_rectangle button.area horizontal vertical
+                 then case process_action button.action released of
+                   Right next ⇒ Right next
+                   Left reason ⇒ Right ({ message := Just reason } released)
+                 else Right released

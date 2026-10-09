@@ -1,0 +1,10 @@
+module Tests.Negative.InventedFrame
+
+import Young.Model
+import Young.Raster
+import Young.Screen
+
+-- Pixel buffers enter the abstract frame family through paint, which derives
+-- them from the indexed model. Arbitrary pixels cannot bypass that owner.
+invent_picture : (source : Model) → Raster → Frame source
+invent_picture source unrelated_pixels = unrelated_pixels

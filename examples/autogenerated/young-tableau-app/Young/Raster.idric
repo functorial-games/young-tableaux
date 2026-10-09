@@ -1,0 +1,256 @@
+module Young.Raster
+
+import Data.List
+import Data.Text
+
+-- Rectangles and glyphs are the picture vocabulary. Pixel rows are exposed
+-- only below that vocabulary, for a window adapter or a lossless image writer.
+public export
+record Pixel where
+  constructor RGB
+  red : Number
+  green : Number
+  blue : Number
+
+public export
+Eq Pixel where
+  left ≟ right = left.red ≟ right.red && left.green ≟ right.green && left.blue ≟ right.blue
+
+public export
+record Rectangle where
+  constructor Fill
+  left : Number
+  top : Number
+  width : Number
+  height : Number
+  color : Pixel
+
+public export
+record Raster where
+  constructor Picture
+  width : Number
+  height : Number
+  pixel_rows : List (List Pixel)
+
+public export
+background : Pixel
+background = RGB 20 27 36
+
+public export
+foreground : Pixel
+foreground = RGB 238 235 222
+
+public export
+tile_color : Pixel
+tile_color = RGB 111 174 204
+
+public export
+accent : Pixel
+accent = RGB 244 185 91
+
+public export
+hole_color : Pixel
+hole_color = RGB 231 116 103
+
+public export
+muted : Pixel
+muted = RGB 126 147 158
+
+public export
+panel_color : Pixel
+panel_color = RGB 31 43 54
+
+inside : Number → Number → Rectangle → Bool
+inside horizontal vertical rectangle =
+  horizontal >= rectangle.left && horizontal < rectangle.left + rectangle.width &&
+  vertical >= rectangle.top && vertical < rectangle.top + rectangle.height
+
+public export
+hit_rectangle : Rectangle → Number → Number → Bool
+hit_rectangle rectangle horizontal vertical = inside horizontal vertical rectangle
+
+public export
+clip_rectangle : Rectangle → Rectangle → Maybe Rectangle
+clip_rectangle area rectangle =
+  let left = max area.left rectangle.left
+      top = max area.top rectangle.top
+      right = min (area.left + area.width) (rectangle.left + rectangle.width)
+      bottom = min (area.top + area.height) (rectangle.top + rectangle.height)
+   in if right <= left || bottom <= top then Nothing
+      else Just (Fill left top (minus right left) (minus bottom top) rectangle.color)
+
+public export
+clip_rectangles : Rectangle → List Rectangle → List Rectangle
+clip_rectangles area rectangles = mapMaybe (clip_rectangle area) rectangles
+
+pixel_indices_from : Number → Number → List Number
+pixel_indices_from _ Z = []
+pixel_indices_from first (S count) = first :: pixel_indices_from (S first) count
+
+public export
+pixel_indices : Number → List Number
+pixel_indices = pixel_indices_from 0
+
+paint_row : Number → Number → List Pixel → Rectangle → List Pixel
+paint_row canvas_width vertical old_row rectangle =
+  if vertical < rectangle.top || vertical >= rectangle.top + rectangle.height ||
+     rectangle.left >= canvas_width
+     then old_row
+     else let visible_width = min rectangle.width (minus canvas_width rectangle.left)
+           in take rectangle.left old_row ++ replicate visible_width rectangle.color ++
+              drop (rectangle.left + visible_width) old_row
+
+public export
+rasterize : Number → Number → List Rectangle → Raster
+rasterize canvas_width canvas_height rectangles =
+  Picture canvas_width canvas_height
+    (map draw_row (pixel_indices canvas_height))
+  where
+    draw_row : Number → List Pixel
+    draw_row vertical = foldl (paint_row canvas_width vertical)
+                              (replicate canvas_width background) rectangles
+
+-- A compact deterministic bitmap font keeps host and target pixels identical.
+-- Unavailable glyphs have a visible question mark; they never vanish silently.
+glyph : Char → List Text
+glyph '0' = ["111", "101", "101", "101", "111"]
+glyph '1' = ["010", "110", "010", "010", "111"]
+glyph '2' = ["111", "001", "111", "100", "111"]
+glyph '3' = ["111", "001", "111", "001", "111"]
+glyph '4' = ["101", "101", "111", "001", "001"]
+glyph '5' = ["111", "100", "111", "001", "111"]
+glyph '6' = ["111", "100", "111", "101", "111"]
+glyph '7' = ["111", "001", "010", "010", "010"]
+glyph '8' = ["111", "101", "111", "101", "111"]
+glyph '9' = ["111", "101", "111", "001", "111"]
+glyph 'A' = ["010", "101", "111", "101", "101"]
+glyph 'B' = ["110", "101", "110", "101", "110"]
+glyph 'C' = ["111", "100", "100", "100", "111"]
+glyph 'D' = ["110", "101", "101", "101", "110"]
+glyph 'E' = ["111", "100", "110", "100", "111"]
+glyph 'F' = ["111", "100", "110", "100", "100"]
+glyph 'G' = ["111", "100", "101", "101", "111"]
+glyph 'H' = ["101", "101", "111", "101", "101"]
+glyph 'I' = ["111", "010", "010", "010", "111"]
+glyph 'J' = ["001", "001", "001", "101", "111"]
+glyph 'K' = ["101", "101", "110", "101", "101"]
+glyph 'L' = ["100", "100", "100", "100", "111"]
+glyph 'M' = ["101", "111", "111", "101", "101"]
+glyph 'N' = ["110", "101", "101", "101", "101"]
+glyph 'O' = ["111", "101", "101", "101", "111"]
+glyph 'P' = ["111", "101", "111", "100", "100"]
+glyph 'Q' = ["111", "101", "101", "111", "001"]
+glyph 'R' = ["110", "101", "110", "101", "101"]
+glyph 'S' = ["111", "100", "111", "001", "111"]
+glyph 'T' = ["111", "010", "010", "010", "010"]
+glyph 'U' = ["101", "101", "101", "101", "111"]
+glyph 'V' = ["101", "101", "101", "101", "010"]
+glyph 'W' = ["101", "101", "111", "111", "101"]
+glyph 'X' = ["101", "101", "010", "101", "101"]
+glyph 'Y' = ["101", "101", "010", "010", "010"]
+glyph 'Z' = ["111", "001", "010", "100", "111"]
+glyph '-' = ["000", "000", "111", "000", "000"]
+glyph '+' = ["000", "010", "111", "010", "000"]
+glyph '/' = ["001", "001", "010", "100", "100"]
+glyph '(' = ["010", "100", "100", "100", "010"]
+glyph ')' = ["010", "001", "001", "001", "010"]
+glyph '[' = ["110", "100", "100", "100", "110"]
+glyph ']' = ["011", "001", "001", "001", "011"]
+glyph ',' = ["000", "000", "000", "010", "100"]
+glyph '.' = ["000", "000", "000", "000", "010"]
+glyph ':' = ["000", "010", "000", "010", "000"]
+glyph ';' = ["000", "010", "000", "010", "100"]
+glyph '=' = ["000", "111", "000", "111", "000"]
+glyph '→' = ["000", "010", "111", "010", "000"]
+glyph '≤' = ["001", "010", "100", "011", "111"]
+glyph '>' = ["100", "010", "001", "010", "100"]
+glyph '<' = ["001", "010", "100", "010", "001"]
+glyph '*' = ["000", "101", "010", "101", "000"]
+glyph '^' = ["010", "101", "000", "000", "000"]
+glyph '_' = ["000", "000", "000", "000", "111"]
+glyph ' ' = ["000", "000", "000", "000", "000"]
+glyph _ = ["111", "001", "010", "000", "010"]
+
+glyph_row : Number → Number → Number → Pixel → List Char → List Rectangle
+glyph_row _ _ _ _ [] = []
+glyph_row horizontal vertical scale color (point :: rest) =
+  (if point ≟ '1' then [Fill horizontal vertical scale scale color] else []) ++
+    glyph_row (horizontal + scale) vertical scale color rest
+
+glyph_rows : Number → Number → Number → Pixel → List Text → List Rectangle
+glyph_rows _ _ _ _ [] = []
+glyph_rows horizontal vertical scale color (row :: rest) =
+  glyph_row horizontal vertical scale color (unpack row) ++
+    glyph_rows horizontal (vertical + scale) scale color rest
+
+draw_characters : Number → Number → Number → Pixel → List Char → List Rectangle
+draw_characters _ _ _ _ [] = []
+draw_characters horizontal vertical scale color (character :: rest) =
+  glyph_rows horizontal vertical scale color (glyph (toUpper character)) ++
+    draw_characters (horizontal + 4 * scale) vertical scale color rest
+
+public export
+draw_text : Number → Number → Number → Pixel → Text → List Rectangle
+draw_text horizontal vertical scale color text =
+  draw_characters horizontal vertical scale color (unpack text)
+
+public export
+text_width : Number → Text → Number
+text_width scale text = length (unpack text) * 4 * scale
+
+public export
+outline : Rectangle → Number → Pixel → List Rectangle
+outline rectangle thickness color =
+  if rectangle.width ≟ 0 || rectangle.height ≟ 0 || thickness ≟ 0 then []
+  else let horizontal_thickness = min thickness rectangle.height
+           vertical_thickness = min thickness rectangle.width
+        in [ Fill rectangle.left rectangle.top rectangle.width horizontal_thickness color
+           , Fill rectangle.left (rectangle.top + minus rectangle.height horizontal_thickness)
+                  rectangle.width horizontal_thickness color
+           , Fill rectangle.left rectangle.top vertical_thickness rectangle.height color
+           , Fill (rectangle.left + minus rectangle.width vertical_thickness) rectangle.top
+                  vertical_thickness rectangle.height color
+           ]
+
+pixel_text : Pixel → Text
+pixel_text pixel = show pixel.red ++ " " ++ show pixel.green ++ " " ++ show pixel.blue
+
+row_text : List Pixel → Text
+row_text row = unwords (map pixel_text row) ++ "\n"
+
+public export
+portable_pixmap : Raster → Text
+portable_pixmap picture =
+  "P3\n" ++ show picture.width ++ " " ++ show picture.height ++ "\n255\n" ++
+  concat (map row_text picture.pixel_rows)
+
+row_changes : List Pixel → List Pixel → Number
+row_changes [] [] = 0
+row_changes [] right = length right
+row_changes left [] = length left
+row_changes (left :: left_rest) (right :: right_rest) =
+  (if left ≟ right then 0 else 1) + row_changes left_rest right_rest
+
+rows_changed : List (List Pixel) → List (List Pixel) → Number
+rows_changed [] [] = 0
+rows_changed [] right = sum (map length right)
+rows_changed left [] = sum (map length left)
+rows_changed (left :: left_rest) (right :: right_rest) =
+  row_changes left right + rows_changed left_rest right_rest
+
+public export
+changed_pixels : Raster → Raster → Number
+changed_pixels left right = rows_changed left.pixel_rows right.pixel_rows
+
+public export
+region : Number → Number → Number → Number → Raster → Raster
+region horizontal vertical width height picture =
+  let rows = take (min height (minus picture.height vertical))
+                  (drop vertical picture.pixel_rows)
+      requested_width = min width (minus picture.width horizontal)
+      -- Raster is inspectable, so a caller can also supply malformed ragged
+      -- data. Keep only the common available rectangle; never invent pixels.
+      clipped_width = foldl min requested_width
+                            (map (\row ⇒ minus (length row) horizontal) rows)
+   in Picture clipped_width (length rows)
+              (map (take clipped_width . drop horizontal) rows)

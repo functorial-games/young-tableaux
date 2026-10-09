@@ -1,0 +1,58 @@
+module Young.Inspection
+
+import Data.List
+import Data.Text
+import Young.Core
+import Young.Laboratory
+
+-- A large result remains complete in LaboratoryView. The bounded window shows
+-- ten text rows and two diagrams per page instead of allocating a giant frame.
+public export
+choice result_diagram one_of
+  partition_diagram Partition
+  tableau_diagram Tableau
+  skew_diagram SkewTableau
+
+public export
+record InspectionPage where
+  constructor ResultPage
+  text_rows : List Text
+  diagrams : List result_diagram
+
+wrap_characters : Number → List Char → List Char → List Text
+wrap_characters column reversed [] =
+  if null reversed then [] else [pack (reverse reversed)]
+wrap_characters column reversed (character :: remaining) =
+  if column ≟ 78
+    then pack (reverse reversed) :: wrap_characters 1 [character] remaining
+    else wrap_characters (S column) (character :: reversed) remaining
+
+public export
+wrap_result_text : Text → List Text
+wrap_result_text text =
+  if null (unpack text) then [""] else wrap_characters 0 [] (unpack text)
+
+public export
+inspection_lines : LaboratoryView → List Text
+inspection_lines view = concatMap wrap_result_text view.lines
+
+public export
+inspection_diagrams : LaboratoryView → List result_diagram
+inspection_diagrams view =
+  map tableau_diagram view.tableaux ++ map partition_diagram view.partitions ++
+  map skew_diagram view.skews
+
+pages_for : Number → Number → Number
+pages_for size count = cast (div (the Integer (cast (count + minus size 1))) (cast size))
+
+public export
+inspection_page_count : LaboratoryView → Number
+inspection_page_count view =
+  max 1 (max (pages_for 10 (length (inspection_lines view)))
+             (pages_for 2 (length (inspection_diagrams view))))
+
+public export
+inspection_page_at : Number → LaboratoryView → InspectionPage
+inspection_page_at page view =
+  ResultPage (take 10 (drop (page * 10) (inspection_lines view)))
+             (take 2 (drop (page * 2) (inspection_diagrams view)))

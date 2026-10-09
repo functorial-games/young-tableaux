@@ -1,0 +1,159 @@
+module Young.Plots
+
+import Data.List
+import Data.Maybe
+import Young.Core
+import Young.Raster
+
+-- The exact tableau mathematics remains Integer/Number. This image sampler
+-- deliberately uses the host's binary64 elementary functions; it does not
+-- claim a Float16, Float32, shader, or Android execution path.
+Sample : Type
+Sample = Double
+
+tau : Sample
+tau = 6.28318530717958647692
+
+log_ten : Sample
+log_ten = 2.30258509299404568402
+
+-- A collapsed pixel span uses one as its layout denominator. This does not
+-- change mathematical division: it is only the degenerate chart geometry.
+divide_span : Number → Number → Number
+divide_span numerator denominator =
+  cast (div (the Integer (cast numerator)) (cast (max 1 denominator)))
+
+angle_of : Sample → Sample → Sample
+angle_of real imaginary =
+  if real > 0 then atan (imaginary / real)
+  else if real < 0
+    then atan (imaginary / real) + (if imaginary < 0 then negate (tau / 2) else tau / 2)
+    else if imaginary > 0 then tau / 4
+    else if imaginary < 0 then negate (tau / 4)
+    else 0
+
+complex_power : Number → (Sample, Sample) → (Sample, Sample)
+complex_power Z _ = (1, 0)
+complex_power (S remaining) (real, imaginary) =
+  let (power_real, power_imaginary) = complex_power remaining (real, imaginary)
+   in (power_real * real - power_imaginary * imaginary,
+       power_real * imaginary + power_imaginary * real)
+
+partition_exponent : Partition → Number
+partition_exponent partition = sum (zipWith (*) [0 .. length partition.rows] partition.rows)
+
+hook_list : Partition → List Number
+hook_list partition = mapMaybe (hook_length partition) (partition_cells partition)
+
+subtract_hook : Sample → Sample → Bool → (Sample, Sample) →
+                Maybe (Sample, Sample) → Number → Maybe (Sample, Sample)
+subtract_hook _ _ _ _ Nothing _ = Nothing
+subtract_hook argument log_radius outside source (Just (phase, log_modulus)) hook =
+  let (power_real, power_imaginary) = complex_power hook source
+      delta_real = 1 - power_real
+      delta_imaginary = negate power_imaginary
+      square_radius = delta_real * delta_real + delta_imaginary * delta_imaginary
+   in if square_radius <= 0 then Nothing
+      else let factor_phase = angle_of delta_real delta_imaginary +
+                              (if outside then tau / 2 + cast hook * argument else 0)
+               factor_log = log (sqrt square_radius) +
+                            (if outside then cast hook * log_radius else 0)
+            in Just (phase - factor_phase, log_modulus - factor_log)
+
+-- Principal specialization z^n(lambda) / product_cells(1-z^hook).
+-- Outside the unit circle, use reciprocal powers to avoid exponential growth.
+phase_and_log : Partition → Sample → Sample → Maybe (Sample, Sample)
+phase_and_log partition real imaginary =
+  let square_radius = real * real + imaginary * imaginary
+      radius = sqrt square_radius
+      exponent = partition_exponent partition
+      argument = angle_of real imaginary
+      log_radius = log (max 1.0e-300 radius)
+      outside = radius > 1
+      source = if outside then (real / square_radius, negate imaginary / square_radius)
+                          else (real, imaginary)
+      initial = Just (cast exponent * argument, cast exponent * log_radius)
+   in if radius ≟ 0 && exponent > 0 then Nothing
+      else foldl (subtract_hook argument log_radius outside source) initial (hook_list partition)
+
+fraction : Sample → Sample
+fraction value = value - floor value
+
+clamp : Sample → Sample
+clamp value = max 0 (min 1 value)
+
+srgb : Sample → Sample
+srgb linear =
+  let value = max 0 linear
+   in if value <= 0.0031308
+         then 12.92 * value
+         else 1.055 * pow value (1 / 2.4) - 0.055
+
+channel : Sample → Number
+channel value = cast (the Integer (cast (floor (255 * clamp value + 0.5))))
+
+wegert_color : Sample → Sample → Pixel
+wegert_color phase log_modulus =
+  let hue_degrees = 360 * fraction (phase / tau)
+      band = fraction (log_modulus / log_ten)
+      lightness = 66 + 4 * band + 3 * fraction (hue_degrees / 100)
+      hue = hue_degrees * tau / 360
+      u_star = 45 * cos hue
+      v_star = 45 * sin hue
+      luminance = if lightness > 8 then pow ((lightness + 16) / 116) 3
+                                 else lightness / 903.2962962962963
+      white_u = 0.19783982482140777
+      white_v = 0.46833630293240974
+      u_prime = u_star / (13 * lightness) + white_u
+      v_prime = v_star / (13 * lightness) + white_v
+      tristimulus_x = 9 * luminance * u_prime / (4 * v_prime)
+      tristimulus_z = luminance * (12 - 3 * u_prime - 20 * v_prime) / (4 * v_prime)
+   in RGB (channel (srgb (3.2404542 * tristimulus_x - 1.5371385 * luminance - 0.4985314 * tristimulus_z)))
+          (channel (srgb (negate (0.9692660 * tristimulus_x) + 1.8760108 * luminance + 0.0415560 * tristimulus_z)))
+          (channel (srgb (0.0556434 * tristimulus_x - 0.2040259 * luminance + 1.0572252 * tristimulus_z)))
+
+public export
+draw_wegert : Rectangle → Partition → List Rectangle
+draw_wegert area partition =
+  if area.width ≟ 0 || area.height ≟ 0 then []
+  else concatMap draw_row (pixel_indices (divide_span (S area.height) 2))
+  where
+    draw_sample : Number → Number → Rectangle
+    draw_sample vertical horizontal =
+      let real = if area.width <= 1 then 0 else
+                 1.6 * (2 * cast (2 * horizontal) / cast (minus area.width 1) - 1)
+          imaginary = if area.height <= 1 then 0 else
+                      1.6 * (1 - 2 * cast (2 * vertical) / cast (minus area.height 1))
+          color = case phase_and_log partition real imaginary of
+                    Just (phase, log_modulus) ⇒ wegert_color phase log_modulus
+                    Nothing ⇒ background
+       in Fill (area.left + 2 * horizontal) (area.top + 2 * vertical)
+               (min 2 (minus area.width (2 * horizontal)))
+               (min 2 (minus area.height (2 * vertical))) color
+    draw_row : Number → List Rectangle
+    draw_row vertical = map (draw_sample vertical) (pixel_indices (divide_span (S area.width) 2))
+
+public export
+draw_sequence : Rectangle → List Integer → Number → List Rectangle
+draw_sequence area [] _ = []
+draw_sequence area values inserted_count =
+  if area.width ≟ 0 || area.height ≟ 0 then []
+  else let low = foldl min (fromMaybe 0 (head' values)) values
+           high = foldl max low values
+           spread = max 1 (high - low)
+           chart_width = minus area.width 8
+           chart_height = minus area.height 8
+           positions = zip [0 .. length values] values
+        in clip_rectangles area $
+           [ Fill area.left (area.top + chart_height) area.width 1 muted
+           , Fill area.left area.top 1 area.height muted
+           ] ++ map (point low spread chart_width chart_height) positions
+  where
+    point : Integer → Integer → Number → Number → (Number, Integer) → Rectangle
+    point low spread chart_width chart_height (index, value) =
+      let horizontal = if length values <= 1 then divide_span chart_width 2
+                       else divide_span (index * chart_width) (minus (length values) 1)
+          elevation : Number = cast (div ((value - low) * cast chart_height) spread)
+          color = if S index ≟ inserted_count then foreground
+                  else if index < inserted_count then accent else muted
+       in Fill (area.left + horizontal) (area.top + minus chart_height elevation) 4 4 color

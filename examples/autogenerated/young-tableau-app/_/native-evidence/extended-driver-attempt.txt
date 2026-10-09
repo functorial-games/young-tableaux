@@ -1,0 +1,15 @@
+Current android-NDK extension-driver attempt
+source_revision=7ea62a3e3cd19f2ab04a27f72ace1ae9e8b1fe66
+compiler_revision=ff4d852862a3942592f8ade9afde8d409d9803be
+command=env IDRIS2_PREFIX=/workspace/scratch/fd7b61cd742b/Idric/_/bootstrap-build IDRIS2_PATH=/workspace/scratch/fd7b61cd742b/Idric/_/build/ttc:/workspace/scratch/fd7b61cd742b/Idric/_/bootstrap-build/idris2-0.8.0/base-0.8.0:/workspace/scratch/fd7b61cd742b/Idric/_/bootstrap-build/idris2-0.8.0/prelude-0.8.0:/workspace/scratch/fd7b61cd742b/Idric/_/bootstrap-build/idris2-0.8.0/network-0.8.0:/workspace/scratch/fd7b61cd742b/Idric/_/bootstrap-build/idris2-0.8.0/linear-0.8.0 IDRIS2_CG=chez CHEZ=/workspace/scratch/fd7b61cd742b/Idric/_/.tools/bin/scheme /workspace/scratch/fd7b61cd742b/Idric/_/build/exec/idris2 --source-dir /workspace/scratch/a85ebfb45f70/ib-quick-settings-runtime/vendor/android-NDK/dex/idric/src --build-dir /workspace/scratch/df6a5bad82b3/idric-dex-probe-build --output-dir /workspace/scratch/df6a5bad82b3/idric-dex-probe-build/exec --no-color --exec main /workspace/scratch/a85ebfb45f70/ib-quick-settings-runtime/vendor/android-NDK/dex/idric/src/Backend/DEX/Main.idr
+output=Killed
+observed_exit=0
+generated_source=/workspace/scratch/df6a5bad82b3/idric-dex-probe-build/exec/_tmpchez_app/_tmpchez.ss
+generated_source_bytes=9703205
+generated_source_sha256=0d6d1d51d14986b66c6a287cd2c32c4d7419320888ccdbd3385c5f24ee5feb25
+documented_lower_optimization_command=env IDRIS2_PREFIX=/workspace/scratch/fd7b61cd742b/Idric/_/bootstrap-build LD_LIBRARY_PATH=/workspace/scratch/df6a5bad82b3/idric-dex-probe-build/exec/_tmpchez_app /workspace/scratch/fd7b61cd742b/Idric/_/.tools/bin/scheme --optimize-level 0 --program /workspace/scratch/df6a5bad82b3/idric-dex-probe-build/exec/_tmpchez_app/_tmpchez.ss --version
+observed_exit=137
+cgroup_memory_max=8589934592
+cgroup_oom_kill_observed_after_attempt=6
+status=BLOCKED: process termination consistent with observed memory pressure. No 7ea62a3 DEX lowering or target result is claimed. Retrying a full driver was stopped; independently available current-main and native-arm drivers supplied the actual backend observations in probes.txt.
+

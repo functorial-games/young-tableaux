@@ -1,0 +1,9 @@
+class LIdric/Generated;
+
+method next_frame_value
+source: NativePositiveControl.next_frame_value
+parameters: [Int32, Int32]
+result: Int32
+registers: 3
+  add-int v0, v1, v2
+  return v0

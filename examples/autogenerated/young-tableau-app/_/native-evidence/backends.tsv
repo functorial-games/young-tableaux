@@ -1,0 +1,5 @@
+lane	repository	head	compiler	observation
+dex	fuego-ironworks/idric-arm-thumb	044877107e179df2ab3c8420867d71faff254f9f	ff4d852862a3942592f8ade9afde8d409d9803be	positive emitted and parsed; recursive helper and array/IO ABI refused
+native-arm	fuego-ironworks/idric-arm-thumb	0ccef59e21415585c265b79360164f7351baa1c5	081b9cde0591154839fb5d80d76e5570e0436300	Float32 assembly emitted; whole-number result ABI refused
+extended-dex	isomorphisms/android-NDK	7ea62a3e3cd19f2ab04a27f72ace1ae9e8b1fe66	ff4d852862a3942592f8ade9afde8d409d9803be	modules checked and driver source generated; driver process killed before target probe
+

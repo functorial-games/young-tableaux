@@ -1,0 +1,14 @@
+module NativeArrayBoundary
+
+-- This is an Android storage boundary, not the semantic tableau type.
+data PixelStorage : Type where [external]
+
+%foreign "dex:static:Ljava/util/Arrays;:fill:([II)V"
+fill_pixels : PixelStorage → Int32 → PrimIO ()
+
+%export "dex:fill_frame"
+fill_frame : PixelStorage → Int32 → IO ()
+fill_frame storage color = primIO (fill_pixels storage color)
+
+main : IO ()
+main = pure ()

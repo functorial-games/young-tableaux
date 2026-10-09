@@ -1,0 +1,236 @@
+module CommandsChecks
+
+import Data.List
+import Data.Text
+import System
+import Young.Core
+import Young.Advanced
+import Young.Laboratory
+import Young.Inspection
+import Young.Model
+import Young.Commands
+
+-- Text fixtures are independent of the parser. Their typed counterparts are
+-- the mathematical catalogue already qualified by LaboratoryChecks.
+public export
+sample_commands : List Text
+sample_commands =
+  ["DisplayPartition 3,2",
+   "ConjugatePartition 3,2",
+   "ListCells 3,2",
+   "DisplayTableau 1,2,4;3,5",
+   "ValidateTableau 3 0 1,2,4;3,5",
+   "StandardizeTableau 1,1,3;2,3",
+   "InsertLetter 1,3;2,4 2",
+   "ReverseInsert 1,2;3,4 2,2",
+   "TransposeTableau 1,2,4;3,5",
+   "ComputeHookLengths 3,2",
+   "ComputeHookProduct 3,2",
+   "CountStandardTableaux 3,2",
+   "FindCorners 3,2",
+   "FindAddableCells 3,2",
+   "FindRemovableCells 3,2",
+   "AddCell 3,2 3,1",
+   "RemoveCell 3,2 1,3",
+   "RSKPermutation 3,1,4,2",
+   "RSKWord 2,1,2",
+   "RSKBiword 1,1,2 2,2,1",
+   "RSKMatrix 0,2;1,0",
+   "InverseRSK 1,2;3,4 1,3;2,4",
+   "JeuDeTaquinSlide 3,2,1 1 1,3;2,5;4 1,1",
+   "Rectify 3,2,1 1 1,3;2,5;4",
+   "Promote 1,2;3,4",
+   "Evacuate 1,2;3,4",
+   "LittlewoodRichardsonCoefficient 2,1 2,1 3,2,1",
+   "EnumerateLRTableaux 2,1 2,1 3,2,1",
+   "MultiplySchurFunctions 1 1",
+   "CharacterValue 2,1 2,3,1",
+   "RepresentationDimension 3,2",
+   "ChangeBasis 0;1;2 1",
+   "Specialize 0;1;2,1 1,2",
+   "Plethysm 0;1;2 0;1;2",
+   "BranchUp 3,2",
+   "BranchDown 3,2",
+   "EnumerateYoungGraphPaths [] 2,1",
+   "GenerateRandomPermutation 4",
+   "GenerateRandomStandardTableau 2,1",
+   "SamplePlancherelPartition 4",
+   "ComputeLongestIncreasingSubsequence 3,1,4,2",
+   "ComputeLongestDecreasingSubsequence 3,1,4,2",
+   "CoxeterReducedWord 3,1,4,2",
+   "BruhatRelations 1,2,3 3,2,1"]
+
+command_name : Text → Text
+command_name text = case words text of
+  [] ⇒ ""
+  first :: rest ⇒ first
+
+command_matches_request : Text → operation → Bool
+command_matches_request command request = case initial_model of
+  Left _ ⇒ False
+  Right before ⇒ case (apply_command command before, apply_action (run_operation request) before) of
+    (Right observed, Right expected) ⇒
+      same_model observed expected && observed.revision ≟ S before.revision &&
+      case observed.inspection of
+        Nothing ⇒ False
+        Just view ⇒ not (view.title ≟ "")
+    _ ⇒ False
+
+rejects_command : Text → Bool
+rejects_command command = case initial_model of
+  Left _ ⇒ False
+  Right model ⇒ case apply_command command model of
+    Left _ ⇒ True
+    Right _ ⇒ False
+
+without_last_argument : Text → Text
+without_last_argument command =
+  let fields = words command in unwords (take (minus (length fields) 1) fields)
+
+run_commands : List Text → Model → Either Text Model
+run_commands [] model = Right model
+run_commands (command :: remaining) model = do
+  next ← apply_command command model
+  run_commands remaining next
+
+basic_sequence : Bool
+basic_sequence = case initial_model >>= run_commands ["word 3,1,1","next","next","prev","end"] of
+  Left _ ⇒ False
+  Right model ⇒ model.revision ≟ 5 && model.rsk.step ≟ 3 &&
+    model.rsk.insertion.rows ≟ [[1,1],[3]] && model.rsk.recording.rows ≟ [[1,3],[2]]
+
+scientific_then_basic : Bool
+scientific_then_basic =
+  case initial_model >>= run_commands ["RSKWord 3,1,1","prev","next"] of
+    Left _ ⇒ False
+    Right model ⇒ model.revision ≟ 3 && model.rsk.step ≟ 3 &&
+      model.rsk.insertion.rows ≟ [[1,1],[3]] && model.rsk.recording.rows ≟ [[1,3],[2]]
+
+two_random_commands : Text → Bool
+two_random_commands command = case initial_model of
+  Left _ ⇒ False
+  Right before ⇒ case apply_command command before of
+    Left _ ⇒ False
+    Right first ⇒ case apply_command command first of
+      Left _ ⇒ False
+      Right second ⇒
+        the Integer (cast first.random_state.state) ≟ 15755400384260043839 &&
+        the Integer (cast second.random_state.state) ≟ 13064056694810536062 &&
+        first.revision ≟ 1 && second.revision ≟ 2
+
+seed_restarts_stream : Bool
+seed_restarts_stream = case initial_model of
+  Left _ ⇒ False
+  Right model ⇒ case run_commands ["seed 42","GenerateRandomPermutation 4"] model of
+    Left _ ⇒ False
+    Right first ⇒ case run_commands ["seed 42","GenerateRandomPermutation 4"] first of
+      Left _ ⇒ False
+      Right second ⇒ same_model ({ revision := 0 } first) ({ revision := 0 } second) &&
+        first.revision ≟ 2 && second.revision ≟ 4
+
+pagination_roundtrip : Bool
+pagination_roundtrip = case initial_model >>= apply_command "EnumerateYoungGraphPaths [] 3,2" of
+  Left _ ⇒ False
+  Right first ⇒ case apply_command "result-next" first of
+    Left _ ⇒ False
+    Right second ⇒ case apply_command "result-prev" second of
+      Left _ ⇒ False
+      Right returned ⇒ first.inspection_page ≟ 0 && second.inspection_page ≟ 1 &&
+        returned.inspection_page ≟ 0 &&
+        same_model ({ revision := 0 } first) ({ revision := 0 } returned) &&
+        case second.inspection of
+          Nothing ⇒ False
+          Just view ⇒ length view.partitions ≟ 30 &&
+            length (inspection_page_at second.inspection_page view).diagrams ≟ 2
+
+pagination_bounds : Bool
+pagination_bounds = case initial_model >>= apply_command "EnumerateYoungGraphPaths [] 3,2" of
+  Left _ ⇒ False
+  Right first ⇒ case apply_command "result-prev" first of
+    Right _ ⇒ False
+    Left _ ⇒ case run_commands (replicate 14 "result-next") first of
+      Left _ ⇒ False
+      Right last ⇒ last.inspection_page ≟ 14 &&
+        case apply_command "result-next" last of
+          Left _ ⇒ True
+          Right _ ⇒ False
+
+-- The command driver retains the prior model after Left. The next successful
+-- draw must have exactly the same state as the uninterrupted stream: no error
+-- path may consume a random word or advance a displayed model revision.
+failure_preserves_next_draw : Text → Bool
+failure_preserves_next_draw command = case initial_model of
+  Left _ ⇒ False
+  Right model ⇒ case run_commands ["seed 42","GenerateRandomPermutation 4"] model of
+    Left _ ⇒ False
+    Right before ⇒ case apply_command command before of
+      Right _ ⇒ False
+      Left _ ⇒ case apply_command "GenerateRandomPermutation 4" before of
+        Left _ ⇒ False
+        Right after ⇒ the Integer (cast after.random_state.state) ≟ 13064056694810536104 &&
+          before.revision ≟ 2 && after.revision ≟ 3
+
+view_has_line : Text → Text → Bool
+view_has_line command expected = case initial_model of
+  Left _ ⇒ False
+  Right before ⇒ case apply_command command before of
+    Left _ ⇒ False
+    Right model ⇒ case model.inspection of
+      Nothing ⇒ False
+      Just view ⇒ elem expected view.lines
+
+bad_commands : List Text
+bad_commands =
+  ["", "ComputeHookProducts 3,2", "ComputeHookProduct 1,2",
+   "ComputeHookProduct 3,,2", "ComputeHookProduct 3,2,", "ComputeHookProduct [3,2",
+   "ComputeHookProduct 3,2bad", "DisplayTableau 1;2,3",
+   "ValidateTableau 5 0 1", "ValidateTableau 3 2 1", "ValidateTableau 3 0,1 1",
+   "InsertLetter 1,2;3 2,3", "ReverseInsert 1,2;3 2", "ReverseInsert 1,2;3 0,1",
+   "AddCell 3,2 -1,1", "AddCell 3,2 1,4,5", "RSKPermutation 1,1",
+   "RSKBiword 1,2 1", "RSKBiword 2,1 1,2", "RSKMatrix 1,-1", "RSKMatrix 1;1,2",
+   "InverseRSK 1,2;3,4 1,2,3,4", "JeuDeTaquinSlide 2,1 1 1;2 1,2",
+   "LittlewoodRichardsonCoefficient 1 1 3 extra", "MultiplySchurFunctions 5 4",
+   "CharacterValue 2,1 1,2", "ChangeBasis 0;1;2 5", "ChangeBasis 0;1,0;2 1",
+   "Specialize 0;1;2 1,,2", "Plethysm 0;1;3 0;1;3",
+   "GenerateRandomPermutation -1", "GenerateRandomPermutation 65",
+   "GenerateRandomPermutation 1,2", "GenerateRandomStandardTableau 1,2",
+   "SamplePlancherelPartition 65", "BruhatRelations 1 1,2",
+   "seed -1", "seed 18446744073709551616", "seed 1,2", "seed",
+   "result-prev", "result-next", "result-prev extra", "result-next extra"]
+
+public export
+checks : List (Text, Bool)
+checks =
+  [("scientific command fixtures identify all 44 legacy requests",
+      map command_name sample_commands ≟ map registry_symbol sample_requests && length sample_commands ≟ 44)] ++
+  zipWith (\command, request ⇒
+    ("command evaluates and installs " ++ registry_symbol request, command_matches_request command request))
+    sample_commands sample_requests ++
+  map (\command ⇒ ("reject extra argument for " ++ command_name command, rejects_command (command ++ " extra")))
+      sample_commands ++
+  map (\command ⇒ ("reject missing argument for " ++ command_name command, rejects_command (without_last_argument command)))
+      sample_commands ++
+  [("basic actions preserve sequential RSK input and navigation", basic_sequence),
+   ("scientific RSK continues through basic navigation", scientific_then_basic),
+   ("repeated random permutation command advances the same stream", two_random_commands "GenerateRandomPermutation 4"),
+   ("repeated random tableau command advances the same stream", two_random_commands "GenerateRandomStandardTableau 2,1"),
+   ("setting the same seed restarts the same stream", seed_restarts_stream),
+   ("result pagination preserves the complete returned graph paths", pagination_roundtrip),
+   ("result pagination rejects both endpoint overflows", pagination_bounds),
+   ("explicit hook command displays the independently known hook product", view_has_line "ComputeHookProduct 3,2,1" "45"),
+   ("explicit LR command accepts three distinct partition arguments", view_has_line "LittlewoodRichardsonCoefficient 1 1 2" "1"),
+   ("negative integer alphabet has exact specialization", view_has_line "Specialize 1;1;3 -2,1" "−7"),
+   ("empty partition argument is preserved", view_has_line "CountStandardTableaux []" "1"),
+   ("decreasing validation codes are usable", view_has_line "ValidateTableau 3 1 4,3;2,1" "Property holds: True"),
+   ("false property remains a successful displayed result", view_has_line "ValidateTableau 3 0 1,1" "Property holds: False")]
+  ++ map (\command ⇒ ("invalid command rejected: " ++ command, rejects_command command)) bad_commands
+  ++ map (\command ⇒ ("failure preserves next random result: " ++ command, failure_preserves_next_draw command))
+    ["GenerateRandomPermutation 65", "seed -1", "RSKPermutation 1,1", "ChangeBasis 0;1,0;2 1"]
+
+main : IO ()
+main = do
+  let failures = map fst (filter (not . snd) checks)
+  if null failures then putStrLn ("PASS\tcommand assertions\t" ++ show (length checks))
+     else do
+       traverse_ (\name ⇒ putStrLn ("FAIL\t" ++ name)) failures
+       exitWith (ExitFailure 1)

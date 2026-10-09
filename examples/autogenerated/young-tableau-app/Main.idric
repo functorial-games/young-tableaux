@@ -1,0 +1,147 @@
+module Main
+
+import Data.List
+import Data.Text
+import Data.Fuel
+import System
+import System.File
+import Young.Core
+import Young.CoreChecks
+import Young.Model
+import Young.Laboratory
+import Young.Commands
+import Young.Presentation
+import Young.Raster
+import Young.Screen
+import Young.TextInput
+import AdvancedChecks
+import LaboratoryChecks
+import CommandsChecks
+import ReviewChecks
+
+-- Main says what this host program does. Model, mathematical algorithms,
+-- pictures and the eventual window boundary live in their own modules.
+failure : Text → IO result
+failure reason = do
+  putStrLn ("YOUNG_IDRIC_FAIL\t" ++ reason)
+  exitFailure
+
+require : Either Text result → IO result
+require (Right result) = pure result
+require (Left reason) = failure reason
+
+check_group : Text → List (Text, Bool) → IO Number
+check_group name checks = do
+  let failures = map fst (filter (not . snd) checks)
+  if null failures
+    then do
+      putStrLn ("PASS\t" ++ name ++ "\t" ++ show (length checks))
+      pure (length checks)
+    else do
+      traverse_ (\reason ⇒ putStrLn ("YOUNG_IDRIC_FAIL\t" ++ reason)) failures
+      exitFailure
+
+check_math_groups : List (Text, Either Text Number) → IO Number
+check_math_groups [] = pure 0
+check_math_groups ((name, checks) :: remaining) = do
+  count ← require checks
+  putStrLn ("PASS\t" ++ name ++ "\t" ++ show count)
+  following ← check_math_groups remaining
+  pure (count + following)
+
+-- This sink writes and reads back exactly the pixels supplied by the painter.
+-- Its acknowledgment means a verified host image file, never an Android post.
+save_picture : Text → (source : Model) → Frame source → IO post_result
+save_picture path source picture = do
+  let expected = frame_image picture
+  result ← writeFile path expected
+  case result of
+    Left reason ⇒ failure ("Could not write image: " ++ show reason)
+    Right () ⇒ do
+      -- PPM has three header lines and exactly the frame's pixel rows.
+      -- One extra read establishes EOF; an unbounded file read is unnecessary.
+      read_back ← readFilePage 0 (limit ((frame_pixels picture).height + 5)) path
+      case read_back of
+        Left reason ⇒ failure ("Could not read image back: " ++ show reason)
+        Right (complete, actual) ⇒ if complete && concat actual ≟ expected then pure posted
+                        else failure "The saved image differs from the source frame."
+
+save_model : Text → Model → IO ()
+save_model path model = do
+  let display = window_created (Window 1) (controller_for model)
+  presented ← present_once display (save_picture path)
+  if needs_frame presented
+    then failure "The host image sink did not acknowledge its exact source."
+    else putStrLn ("HOST_IMAGE_SINK_PASS\t" ++ path ++ "\t" ++ show model.revision)
+
+sample_frames : Model → Either Text (List (Text, Model))
+sample_frames initial = do
+  rsk_one ← apply_action rsk_next initial
+  rsk_two ← apply_action rsk_next rsk_one
+  jeu_one ← apply_action jeu_next rsk_two
+  jeu_two ← apply_action jeu_next jeu_one
+  jeu_finished ← apply_action jeu_next jeu_two
+  reference_changed ← apply_action (change_partition (MkPartition [2,1])) jeu_finished
+  reset ← apply_action jeu_reset reference_changed
+  hook_result ← apply_action (run_operation (compute_hook_product (MkPartition [3,2,1]))) reset
+  graph_first ← apply_action (run_operation
+    (enumerate_young_graph_paths (MkPartition []) (MkPartition [3,2]))) reset
+  graph_second ← apply_action result_next graph_first
+  Right [("initial", initial), ("rsk-insertion-1", rsk_one),
+         ("rsk-insertion-2", rsk_two), ("jeu-move-1", jeu_one),
+         ("jeu-move-2", jeu_two), ("jeu-corner-removed", jeu_finished),
+         ("reference-partition-changed", reference_changed), ("jeu-reset", reset),
+         ("laboratory-hook-product", hook_result), ("laboratory-graph-page-1", graph_first),
+         ("laboratory-graph-page-2", graph_second)]
+
+save_samples : Text → List (Text, Model) → IO ()
+save_samples directory [] = pure ()
+save_samples directory ((name, model) :: remaining) = do
+  save_model (directory ++ "/" ++ name ++ ".ppm") model
+  save_samples directory remaining
+
+self_test : Text → IO ()
+self_test output_directory = do
+  core_count ← check_group "partitions, tableaux, RSK and jeu de taquin" Young.CoreChecks.checks
+  algebra_count ← check_math_groups AdvancedChecks.check_groups
+  text_count ← check_group "strict input grammar" text_checks
+  laboratory_count ← check_group "typed laboratory operations and result projections" LaboratoryChecks.checks
+  command_count ← check_group "all laboratory commands and stateful sequences" CommandsChecks.checks
+  display_checks ← require presentation_review_checks
+  display_count ← check_group "actions, pixels and presentation" (raster_review_checks ++ display_checks)
+  initial ← require initial_model
+  examples ← require (sample_frames initial)
+  save_samples output_directory examples
+  putStrLn ("PASS\tcombined assertions\t" ++ show
+    (core_count + algebra_count + text_count + laboratory_count + command_count + display_count))
+  putStrLn "YOUNG_IDRIC_PASS"
+
+apply_commands : List Text → Model → Either Text Model
+apply_commands [] model = Right model
+apply_commands (command :: remaining) model = do
+  next ← apply_command command model
+  apply_commands remaining next
+
+render_commands : Text → List Text → IO ()
+render_commands output commands = do
+  initial ← require initial_model
+  final ← require (apply_commands commands initial)
+  save_model output final
+
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, "--self-test", directory] ⇒ self_test directory
+    _ :: "--render" :: output :: commands ⇒ render_commands output commands
+    _ ⇒ do
+      putStrLn "Young Tableau in Idriç — host mathematical and image execution"
+      putStrLn "--self-test EXISTING_OUTPUT_DIRECTORY"
+      putStrLn "--render OUTPUT.ppm [ACTION ...]"
+      putStrLn "Actions: next, prev, start, end, step, slide, rectify, reset."
+      putStrLn "Input actions are one argument each: word 3,1,2; permutation 3,1,2;"
+      putStrLn "biword 1,1,2 1,2,2; matrix 1,0;0,1; partition 3,2,1;"
+      putStrLn "tableau 1,2;3; skew 3,2,1 1 1,3;2,5;4; corner 1 1."
+      putStrLn "All 44 laboratory names are accepted, for example ComputeHookProduct 3,2,1."
+      putStrLn "Use result-next/result-prev for long results; seed INTEGER sets the random stream."
+      putStrLn "A completed native Android application is blocked at target lowering."

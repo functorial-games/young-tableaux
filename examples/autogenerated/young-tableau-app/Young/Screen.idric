@@ -1,0 +1,272 @@
+module Young.Screen
+
+import Data.List
+import Data.Maybe
+import Data.Text
+import Young.Core
+import Young.Laboratory
+import Young.Inspection
+import Young.Model
+import Young.Plots
+import Young.Raster
+
+public export
+screen_width : Number
+screen_width = 360
+
+public export
+screen_height : Number
+screen_height = 940
+
+public export
+content_height : Model → Number
+content_height model = case model.inspection of
+  Nothing ⇒ screen_height
+  Just _ ⇒ 1296
+
+public export
+rsk_insertion_area : Rectangle
+rsk_insertion_area = Fill 24 136 146 106 panel_color
+
+public export
+rsk_recording_area : Rectangle
+rsk_recording_area = Fill 192 136 146 106 panel_color
+
+public export
+jeu_board_area : Rectangle
+jeu_board_area = Fill 24 405 190 88 panel_color
+
+public export
+reference_plot_area : Rectangle
+reference_plot_area = Fill 24 567 144 120 panel_color
+
+public export
+jeu_plot_area : Rectangle
+jeu_plot_area = Fill 192 567 144 120 panel_color
+
+divide_span : Number → Number → Number
+divide_span numerator denominator =
+  cast (div (the Integer (cast numerator)) (cast (max 1 denominator)))
+
+cell_size : Rectangle → Partition → Number
+cell_size area shape =
+  max 1 (min 25 (min (divide_span area.width (partition_row shape 1))
+                    (divide_span area.height (length shape.rows))))
+
+cell_rectangle : Rectangle → Number → Cell → Pixel → Rectangle
+cell_rectangle area size cell color =
+  Fill (area.left + minus cell.column 1 * size)
+       (area.top + minus cell.row 1 * size)
+       (max 1 (minus size 2)) (max 1 (minus size 2)) color
+
+numbered_tile : Rectangle → Number → Cell → Integer → Pixel → List Rectangle
+numbered_tile area size cell value color =
+  let tile = cell_rectangle area size cell color
+      value_text = show value
+      scale = if size >= 21 && text_width 2 value_text + 4 < size then 2 else 1
+      number_left = tile.left + divide_span (minus tile.width (text_width scale value_text)) 2
+      number_top = tile.top + divide_span (minus tile.height (5 * scale)) 2
+   in [tile] ++
+      (if size >= 9 && text_width scale value_text + 2 <= tile.width
+          then draw_text number_left number_top scale background value_text else [])
+
+public export
+draw_tableau : Rectangle → Tableau → List Cell → List Rectangle
+draw_tableau area tableau marked =
+  let shape = tableau_shape tableau
+      size = cell_size area shape
+   in clip_rectangles area $ if null shape.rows
+         then draw_text area.left (area.top + 8) 1 muted "Empty"
+         else concatMap (draw_cell size) (partition_cells shape)
+  where
+    draw_cell : Number → Cell → List Rectangle
+    draw_cell size cell =
+      case tableau_get tableau cell of
+        Nothing ⇒ []
+        Just value ⇒ numbered_tile area size cell value
+                        (if elem cell marked then accent else tile_color)
+
+draw_partition : Rectangle → Partition → List Rectangle
+draw_partition area partition =
+  clip_rectangles area $ map (\cell ⇒ cell_rectangle area (cell_size area partition) cell tile_color)
+      (partition_cells partition)
+
+draw_jeu : Rectangle → JeuState → List Rectangle
+draw_jeu area jeu =
+  let size = cell_size area jeu.filling.outer
+      excluded = concatMap (\cell ⇒ outline (cell_rectangle area size cell panel_color) 1 muted)
+                           (partition_cells jeu.filling.inner)
+      entries = concatMap (\(cell, value) ⇒ numbered_tile area size cell value tile_color)
+                          (jeu_cells jeu)
+      hole = case jeu.hole of
+               Nothing ⇒ []
+               Just cell ⇒ outline (cell_rectangle area size cell panel_color)
+                                   (if size > 9 then 2 else 1) hole_color
+   in clip_rectangles area (excluded ++ entries ++ hole)
+
+public export
+record Button where
+  constructor Control
+  area : Rectangle
+  title : Text
+  action : user_action
+  enabled : Bool
+
+public export
+buttons : Model → List Button
+buttons model =
+  let can_slide = case model.jeu.hole of
+                    Just _ ⇒ True
+                    Nothing ⇒ elem model.selected_corner (removable_cells model.jeu.filling.inner)
+      can_rectify = isJust model.jeu.hole || not (null model.jeu.filling.inner.rows)
+      can_reset = isJust model.jeu.hole ||
+                  not (model.jeu.filling.outer.rows ≟ model.original_skew.outer.rows &&
+                       model.jeu.filling.inner.rows ≟ model.original_skew.inner.rows &&
+                       model.jeu.filling.rows ≟ model.original_skew.rows)
+   in [ Control (Fill 24 309 70 28 panel_color) "Start" rsk_first (model.rsk.step > 0)
+  , Control (Fill 105 309 70 28 panel_color) "Prev" rsk_previous (model.rsk.step > 0)
+  , Control (Fill 186 309 70 28 panel_color) "Next" rsk_next (model.rsk.step < length model.biletters)
+  , Control (Fill 267 309 70 28 panel_color) "End" rsk_last (model.rsk.step < length model.biletters)
+  , Control (Fill 24 503 70 28 panel_color) "Reset" jeu_reset can_reset
+  , Control (Fill 105 503 70 28 panel_color) "Step" jeu_next can_slide
+  , Control (Fill 186 503 70 28 panel_color) "Slide" jeu_finish_slide can_slide
+  , Control (Fill 267 503 70 28 panel_color) "Rectify" jeu_rectify can_rectify
+  ] ++ case model.inspection of
+    Nothing ⇒ []
+    Just view ⇒
+      [Control (Fill 24 1250 146 28 panel_color) "Previous result page" result_previous (model.inspection_page > 0),
+       Control (Fill 192 1250 146 28 panel_color) "Next result page" result_next
+         (S model.inspection_page < inspection_page_count view)]
+
+draw_button : Button → List Rectangle
+draw_button button =
+  let color = if button.enabled then foreground else muted
+   in outline button.area 1 (if button.enabled then tile_color else muted) ++
+      draw_text (button.area.left + divide_span (minus button.area.width (text_width 1 button.title)) 2)
+                (button.area.top + 11) 1 color button.title
+
+public export
+action_at : Model → Number → Number → Maybe user_action
+action_at model horizontal vertical =
+  map action (find (\button ⇒ button.enabled && hit_rectangle button.area horizontal vertical)
+                   (buttons model))
+
+word_tiles : Model → List Rectangle
+word_tiles model =
+  let count = length model.biletters
+      size = min 24 (divide_span 310 (max 1 count))
+   in concatMap (draw_letter size) (zip [0 .. count] model.biletters)
+  where
+    draw_letter : Number → (Number, (Integer, Integer)) → List Rectangle
+    draw_letter size (index, (top, bottom)) =
+      let color = if S index ≟ model.rsk.step then foreground
+                  else if index < model.rsk.step then accent else muted
+          value_text = if text_width 1 (show bottom) < size then show bottom else "?"
+       in clip_rectangles (Fill (24 + index * size) 96 size 12 panel_color) $
+          draw_text (24 + index * size) 98 1 color value_text
+
+partition_text : Partition → Text
+partition_text partition = "(" ++ concat (intersperse "," (map show partition.rows)) ++ ")"
+
+tableau_text : Tableau → Text
+tableau_text tableau = concat (intersperse "; " (map row_text tableau.rows))
+  where
+    row_text : List Integer → Text
+    row_text entries = unwords (map show entries)
+
+draw_result_diagram : Number → Number → result_diagram → List Rectangle
+draw_result_diagram page position diagram =
+  let left = 24 + position * 168
+      area = Fill left 1135 146 106 panel_color
+      label = case diagram of
+        tableau_diagram _ ⇒ "Tableau "
+        partition_diagram _ ⇒ "Partition "
+        skew_diagram _ ⇒ "Skew tableau "
+      picture = case diagram of
+        tableau_diagram tableau ⇒ draw_tableau area tableau []
+        partition_diagram partition ⇒ draw_partition area partition
+        skew_diagram filling ⇒ draw_jeu area (MkJeuState filling Nothing)
+   in draw_text left 1120 1 muted (label ++ show (page * 2 + S position)) ++ picture
+
+draw_inspection : Model → List Rectangle
+draw_inspection model = case model.inspection of
+  Nothing ⇒ []
+  Just view ⇒
+    let page = inspection_page_at model.inspection_page view
+     in [Fill 12 940 336 344 panel_color] ++
+        draw_text 24 955 1 muted "Last operation result" ++
+        draw_text 24 973 2 foreground view.title ++
+        draw_text 24 1000 1 accent ("Page " ++ show (S model.inspection_page) ++
+          "/" ++ show (inspection_page_count view)) ++
+        concatMap (\(index, line) ⇒ draw_text 24 (1020 + index * 9) 1 foreground line)
+          (zip (pixel_indices (length page.text_rows)) page.text_rows) ++
+        concatMap (\(index, diagram) ⇒ draw_result_diagram model.inspection_page index diagram)
+          (zip (pixel_indices (length page.diagrams)) page.diagrams)
+
+public export
+scene : Model → List Rectangle
+scene model =
+  [ Fill 12 58 336 290 panel_color
+  , Fill 12 360 336 182 panel_color
+  , Fill 12 738 336 185 panel_color
+  ] ++
+  draw_text 18 16 2 foreground "Young Tableaux" ++
+  draw_text 18 37 1 muted "Insert. Slide. See each change." ++
+  draw_text 24 73 2 foreground "Row RSK" ++
+  draw_text 217 76 1 accent (input_label model.input ++ " " ++ show model.rsk.step ++ "/" ++ show (length model.biletters)) ++
+  word_tiles model ++
+  draw_text 24 121 1 muted "P - insertion" ++
+  draw_text 192 121 1 muted "Q - recording" ++
+  draw_tableau rsk_insertion_area model.rsk.insertion model.rsk.path ++
+  draw_tableau rsk_recording_area model.rsk.recording [] ++
+  draw_sequence (Fill 24 251 308 40 panel_color) (map snd model.biletters) model.rsk.step ++
+  draw_text 24 374 2 foreground "Jeu de taquin" ++
+  draw_text 222 406 1 muted "Hole = outline" ++
+  draw_text 222 423 1 muted "Tie: take below" ++
+  draw_text 222 447 1 muted ("Outer " ++ partition_text model.jeu.filling.outer) ++
+  draw_text 222 463 1 muted ("Inner " ++ partition_text model.jeu.filling.inner) ++
+  draw_text 222 480 1 muted ("Corner " ++ show model.selected_corner.row ++ "," ++
+                            show model.selected_corner.column) ++
+  draw_jeu jeu_board_area model.jeu ++
+  (case model.jeu.hole of
+    Just _ ⇒ []
+    Nothing ⇒ if elem model.selected_corner (removable_cells model.jeu.filling.inner)
+      then outline (cell_rectangle jeu_board_area (cell_size jeu_board_area model.jeu.filling.outer)
+                    model.selected_corner panel_color) 1 accent
+      else []) ++
+  concatMap draw_button (filter (\button ⇒ button.area.top < screen_height) (buttons model)) ++
+  draw_text 24 550 1 muted "Fixed input partition" ++
+  draw_text 192 550 1 muted "Current jeu outer shape" ++
+  draw_wegert reference_plot_area model.reference_partition ++
+  draw_wegert jeu_plot_area model.jeu.filling.outer ++
+  draw_text 24 699 1 accent (partition_text model.reference_partition) ++
+  draw_text 192 699 1 accent (partition_text model.jeu.filling.outer) ++
+  draw_text 24 716 1 muted "A plot changes when its own shape changes." ++
+  draw_text 24 753 1 muted "Selected partition" ++
+  draw_text 192 753 1 muted "Selected tableau" ++
+  draw_partition (Fill 24 776 146 120 panel_color) model.reference_partition ++
+  draw_tableau (Fill 192 776 146 120 panel_color) model.selected_tableau [] ++
+  draw_inspection model ++
+  concatMap draw_button (filter (\button ⇒ button.area.top >= screen_height) (buttons model))
+
+-- Exporting the abstract family hides the Raster representation. A consumer
+-- can inspect pixels but cannot give arbitrary old pixels a new source index.
+export
+Frame : Model → Type
+Frame source = Raster
+
+export
+paint : (source : Model) → Frame source
+paint source = rasterize screen_width (content_height source) (scene source)
+
+export
+frame_pixels : Frame source → Raster
+frame_pixels picture = picture
+
+export
+frame_image : Frame source → Text
+frame_image picture = portable_pixmap picture
+
+export
+crop_frame : Rectangle → Frame source → Raster
+crop_frame area picture = region area.left area.top area.width area.height picture

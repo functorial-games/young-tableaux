@@ -1,0 +1,114 @@
+module Young.TextInput
+
+import Data.List
+import Data.Text
+import Young.Core
+import Young.Model
+
+split_at_character : Char → List Char → List (List Char)
+split_at_character separator [] = [[]]
+split_at_character separator (character :: rest) =
+  let following = split_at_character separator rest
+   in if character ≟ separator then [] :: following
+      else case following of
+        [] ⇒ [[character]]
+        first :: tail ⇒ (character :: first) :: tail
+
+split_fields : Char → Text → List Text
+split_fields separator text = map pack (split_at_character separator (unpack text))
+
+read_integer : Text → Either Text Integer
+read_integer text =
+  case parseInteger text of
+    Just value ⇒ Right value
+    Nothing ⇒ Left ("Expected an integer, received: " ++ text)
+
+unbracket : Text → Either Text Text
+unbracket text =
+  case unpack (trim text) of
+    [] ⇒ Right ""
+    '[' :: rest ⇒ case reverse rest of
+      ']' :: middle ⇒ Right (pack (reverse middle))
+      _ ⇒ Left "An opening bracket needs its closing bracket."
+    rest ⇒ if elem '[' rest || elem ']' rest
+      then Left "Brackets must surround the complete list."
+      else Right (pack rest)
+
+public export
+read_word : Text → Either Text (List Integer)
+read_word text = do
+  body ← unbracket text
+  if trim body ≟ "" then Right [] else traverse read_integer (split_fields ',' body)
+
+read_nonnegative : Integer → Either Text Number
+read_nonnegative value =
+  if value >= 0 then Right (cast value) else Left "A size or multiplicity cannot be negative."
+
+public export
+read_partition : Text → Either Text Partition
+read_partition text = read_word text >>= traverse read_nonnegative >>= make_partition
+
+public export
+read_rows : Text → Either Text (List (List Integer))
+read_rows text =
+  if trim text ≟ "" || trim text ≟ "[]"
+    then Right []
+    else traverse read_word (split_fields ';' text)
+
+read_matrix : Text → Either Text (List (List Number))
+read_matrix text = read_rows text >>= traverse (traverse read_nonnegative)
+
+public export
+read_action : Text → Either Text user_action
+read_action command =
+  case words command of
+    ["next"] ⇒ Right rsk_next
+    ["prev"] ⇒ Right rsk_previous
+    ["start"] ⇒ Right rsk_first
+    ["end"] ⇒ Right rsk_last
+    ["step"] ⇒ Right jeu_next
+    ["slide"] ⇒ Right jeu_finish_slide
+    ["rectify"] ⇒ Right jeu_rectify
+    ["reset"] ⇒ Right jeu_reset
+    ["word", text] ⇒ map (load_rsk . word_input) (read_word text)
+    ["permutation", text] ⇒ map (load_rsk . permutation_input) (read_word text)
+    ["biword", upper_text, lower_text] ⇒ do
+      upper ← read_word upper_text
+      lower ← read_word lower_text
+      if length upper ≟ length lower
+        then Right (load_rsk (biword_input (zip upper lower)))
+        else Left "The two rows of a biword need equal lengths."
+    ["matrix", text] ⇒ map (load_rsk . matrix_input) (read_matrix text)
+    ["partition", text] ⇒ map change_partition (read_partition text)
+    ["tableau", text] ⇒ read_rows text >>= make_tableau >>= Right . change_tableau
+    ["skew", outer_text, inner_text, rows_text] ⇒ do
+      outer ← read_partition outer_text
+      inner ← read_partition inner_text
+      rows ← read_rows rows_text
+      skew ← make_skew outer inner rows
+      Right (load_jeu skew)
+    ["corner", row_text, column_text] ⇒ do
+      row ← read_integer row_text >>= read_nonnegative
+      column ← read_integer column_text >>= read_nonnegative
+      Right (select_corner (MkCell row column))
+    _ ⇒ Left ("Unknown action or argument count: " ++ command)
+
+rejected : Either Text value → Bool
+rejected (Left _) = True
+rejected _ = False
+
+public export
+text_checks : List (Text, Bool)
+text_checks =
+  [ ("word parser preserves repeated values", read_word "3,1,1,2" ≟ Right [3,1,1,2])
+  , ("word parser accepts brackets and spaces", read_word "[3, 1,2]" ≟ Right [3,1,2])
+  , ("empty word is explicit", read_word "[]" ≟ Right [])
+  , ("empty interior field is rejected", rejected (read_word "1,,2"))
+  , ("trailing comma is rejected", rejected (read_word "1,2,"))
+  , ("partial integer is rejected", rejected (read_word "1,2bad"))
+  , ("unclosed brackets are rejected", rejected (read_word "[1,2"))
+  , ("ragged rows survive parsing", read_rows "1,2,3;4,5;6" ≟ Right [[1,2,3],[4,5],[6]])
+  , ("negative matrix multiplicity is rejected", rejected (read_action "matrix 1,-1"))
+  , ("mismatched biword rows are rejected", rejected (read_action "biword 1,2 1"))
+  , ("unknown command is rejected", rejected (read_action "animate"))
+  ]

@@ -1,0 +1,697 @@
+module Young.Core
+
+import Data.List
+import Data.Maybe
+import Data.Text
+
+-- One-based mathematical cells. These public records are inspectable values;
+-- checked operations establish their required properties at each boundary.
+public export
+record Cell where
+  constructor MkCell
+  row : Number
+  column : Number
+
+public export
+Eq Cell where
+  left ≟ right = left.row ≟ right.row && left.column ≟ right.column
+
+public export
+record Partition where
+  constructor MkPartition
+  rows : List Number
+
+public export
+record Tableau where
+  constructor MkTableau
+  rows : List (List Integer)
+
+public export
+record InsertionResult where
+  constructor MkInsertionResult
+  tableau : Tableau
+  new_cell : Cell
+  path : List Cell
+  inserted : Integer
+
+public export
+record ReverseResult where
+  constructor MkReverseResult
+  tableau : Tableau
+  value : Integer
+
+public export
+record RSKResult where
+  constructor MkRSKResult
+  insertion : Tableau
+  recording : Tableau
+  path : List Cell
+  inserted : Integer
+  step : Number
+
+public export
+record SkewTableau where
+  constructor MkSkewTableau
+  outer : Partition
+  inner : Partition
+  rows : List (List Integer)
+
+-- A completed filling passes make_skew. During a slide, the explicit hole
+-- owns one ignored slot in filling.rows; jeu_get never exposes that slot.
+public export
+record JeuState where
+  constructor MkJeuState
+  filling : SkewTableau
+  hole : Maybe Cell
+
+at_index : Number → List entry_type → Maybe entry_type
+at_index _ [] = Nothing
+at_index Z (value :: rest) = Just value
+at_index (S index) (_ :: rest) = at_index index rest
+
+replace_index : Number → entry_type → List entry_type → List entry_type
+replace_index _ _ [] = []
+replace_index Z value (_ :: rest) = value :: rest
+replace_index (S index) value (first :: rest) =
+  first :: replace_index index value rest
+
+remove_index : Number → List entry_type → List entry_type
+remove_index _ [] = []
+remove_index Z (_ :: rest) = rest
+remove_index (S index) (first :: rest) = first :: remove_index index rest
+
+numbered : Number → List entry_type → List (Number, entry_type)
+numbered _ [] = []
+numbered index (value :: rest) = (index, value) :: numbered (S index) rest
+
+one_through : Number → List Number
+one_through Z = []
+one_through (S count) = one_through count ++ [S count]
+
+nonincreasing : Ord entry_type ⇒ List entry_type → Bool
+nonincreasing [] = True
+nonincreasing [_] = True
+nonincreasing (first :: second :: rest) =
+  first >= second && nonincreasing (second :: rest)
+
+weakly_increasing : Ord entry_type ⇒ List entry_type → Bool
+weakly_increasing [] = True
+weakly_increasing [_] = True
+weakly_increasing (first :: second :: rest) =
+  first <= second && weakly_increasing (second :: rest)
+
+strictly_increasing : Ord entry_type ⇒ List entry_type → Bool
+strictly_increasing [] = True
+strictly_increasing [_] = True
+strictly_increasing (first :: second :: rest) =
+  first < second && strictly_increasing (second :: rest)
+
+public export
+valid_partition : Partition → Bool
+valid_partition partition =
+  all (> 0) partition.rows && nonincreasing partition.rows
+
+public export
+make_partition : List Number → Either Text Partition
+make_partition rows =
+  if valid_partition (MkPartition rows)
+     then Right (MkPartition rows)
+     else Left "A partition needs positive, nonincreasing row lengths."
+
+public export
+partition_size : Partition → Number
+partition_size partition = sum partition.rows
+
+public export
+partition_row : Partition → Number → Number
+partition_row partition Z = 0
+partition_row partition (S row) = fromMaybe 0 (at_index row partition.rows)
+
+public export
+contains_cell : Partition → Cell → Bool
+contains_cell partition cell =
+  cell.row > 0 && cell.column > 0 &&
+  cell.column <= partition_row partition cell.row
+
+public export
+partition_cells : Partition → List Cell
+partition_cells partition = concatMap cells_in_row (numbered 1 partition.rows)
+  where
+    cells_in_row : (Number, Number) → List Cell
+    cells_in_row (row, width) = map (MkCell row) (one_through width)
+
+public export
+conjugate : Partition → Partition
+conjugate partition = MkPartition $
+  map (\column ⇒ length (filter (>= column) partition.rows))
+      (one_through (partition_row partition 1))
+
+public export
+removable_cells : Partition → List Cell
+removable_cells partition =
+  map (\(row, width) ⇒ MkCell row width) $
+  filter (\(row, width) ⇒ width > partition_row partition (S row))
+         (numbered 1 partition.rows)
+
+public export
+addable_cells : Partition → List Cell
+addable_cells partition =
+  map (\(row, width) ⇒ MkCell row (S width))
+      (filter (\(row, width) ⇒ row ≟ 1 || partition_row partition (minus row 1) > width)
+              (numbered 1 partition.rows)) ++
+  [MkCell (S (length partition.rows)) 1]
+
+public export
+add_cell : Partition → Cell → Either Text Partition
+add_cell partition cell = do
+  checked ← make_partition partition.rows
+  if not (elem cell (addable_cells checked))
+     then Left "The selected cell is not an addable partition corner."
+     else if cell.row ≟ S (length checked.rows)
+             then make_partition (checked.rows ++ [1])
+             else make_partition $
+                  replace_index (minus cell.row 1) cell.column checked.rows
+
+public export
+remove_cell : Partition → Cell → Either Text Partition
+remove_cell partition cell = do
+  checked ← make_partition partition.rows
+  if not (elem cell (removable_cells checked))
+     then Left "The selected cell is not a removable partition corner."
+     else make_partition $
+          filter (> 0) (replace_index (minus cell.row 1)
+                                     (minus cell.column 1) checked.rows)
+
+public export
+hook_length : Partition → Cell → Maybe Number
+hook_length partition cell =
+  if not (contains_cell partition cell) then Nothing else
+  Just (S (minus (partition_row partition cell.row) cell.column +
+           length (filter (\row ⇒ row >= cell.column)
+                          (drop cell.row partition.rows))))
+
+public export
+hook_product : Partition → Integer
+hook_product partition = product $
+  map (\cell ⇒ cast (fromMaybe 0 (hook_length partition cell)))
+      (partition_cells partition)
+
+factorial : Number → Integer
+factorial Z = 1
+factorial (S count) = cast (S count) * factorial count
+
+public export
+standard_count : Partition → Integer
+standard_count partition =
+  if valid_partition partition then
+    div (factorial (partition_size partition)) (hook_product partition)
+  else 0
+
+public export
+tableau_shape : Tableau → Partition
+tableau_shape tableau = MkPartition (map length tableau.rows)
+
+public export
+make_tableau : List (List Integer) → Either Text Tableau
+make_tableau rows = do
+  shape ← make_partition (map length rows)
+  Right (MkTableau rows)
+
+public export
+tableau_get : Tableau → Cell → Maybe Integer
+tableau_get tableau (MkCell Z _) = Nothing
+tableau_get tableau (MkCell _ Z) = Nothing
+tableau_get tableau (MkCell (S row) (S column)) = do
+  values ← at_index row tableau.rows
+  at_index column values
+
+set_entry : Tableau → Cell → Integer → Tableau
+set_entry tableau cell value =
+  let row = fromMaybe [] (at_index (minus cell.row 1) tableau.rows) in
+  MkTableau (replace_index (minus cell.row 1)
+              (replace_index (minus cell.column 1) value row) tableau.rows)
+
+public export
+tableau_cells : Tableau → List (Cell, Integer)
+tableau_cells tableau = mapMaybe read_cell (partition_cells (tableau_shape tableau))
+  where
+    read_cell : Cell → Maybe (Cell, Integer)
+    read_cell cell = map (\value ⇒ (cell, value)) (tableau_get tableau cell)
+
+columns_strict : Tableau → Bool
+columns_strict tableau = all ordered (tableau_cells tableau)
+  where
+    ordered : (Cell, Integer) → Bool
+    ordered (cell, value) =
+      case tableau_get tableau (MkCell (S cell.row) cell.column) of
+        Nothing ⇒ True
+        Just below ⇒ value < below
+
+public export
+semistandard : Tableau → Bool
+semistandard tableau =
+  valid_partition (tableau_shape tableau) &&
+  all (all (> 0)) tableau.rows &&
+  all weakly_increasing tableau.rows && columns_strict tableau
+
+public export
+standard : Tableau → Bool
+standard tableau =
+  semistandard tableau &&
+  sort (concat tableau.rows) ≟ map cast (one_through (partition_size (tableau_shape tableau)))
+
+public export
+transpose_tableau : Tableau → Either Text Tableau
+transpose_tableau tableau = do
+  checked ← make_tableau tableau.rows
+  make_tableau $
+    map (\column ⇒ mapMaybe (at_index (minus column 1)) checked.rows)
+        (one_through (partition_row (tableau_shape checked) 1))
+
+public export
+standardize : Tableau → Either Text Tableau
+standardize tableau =
+  if not (semistandard tableau)
+     then Left "Standardization requires a positive semistandard tableau."
+     else let ranked = sortBy compare_entries (tableau_cells tableau)
+              result = foldl assign tableau (numbered 1 ranked) in
+          if standard result then Right result
+          else Left "Standardization did not produce a standard tableau."
+  where
+    compare_entries : (Cell, Integer) → (Cell, Integer) → Ordering
+    compare_entries (left_cell, left) (right_cell, right) =
+      case compare left right of
+        EQ ⇒ case compare left_cell.column right_cell.column of
+               EQ ⇒ compare left_cell.row right_cell.row
+               other ⇒ other
+        other ⇒ other
+    assign : Tableau → (Number, (Cell, Integer)) → Tableau
+    assign result (rank, (cell, _)) = set_entry result cell (cast rank)
+
+-- Bump the first strictly greater entry. Equal letters remain in the row.
+insert_row : Integer → List Integer → (List Integer, Maybe Integer, Number)
+insert_row value [] = ([value], Nothing, 1)
+insert_row value (first :: rest) =
+  if first > value then (value :: rest, Just first, 1)
+  else let (changed, bumped, column) = insert_row value rest in
+       (first :: changed, bumped, S column)
+
+insert_rows : Number → Integer → List (List Integer) →
+              (List (List Integer), Cell, List Cell)
+insert_rows row value [] = ([[value]], MkCell row 1, [MkCell row 1])
+insert_rows row value (first :: rest) =
+  let (changed, bumped, column) = insert_row value first
+      cell = MkCell row column in
+  case bumped of
+    Nothing ⇒ (changed :: rest, cell, [cell])
+    Just next ⇒ let (lower, corner, path) = insert_rows (S row) next rest in
+                (changed :: lower, corner, cell :: path)
+
+public export
+insert : Tableau → Integer → Either Text InsertionResult
+insert tableau value =
+  if value <= 0 || not (semistandard tableau)
+     then Left "Row insertion requires a positive letter and a semistandard tableau."
+     else let (rows, corner, path) = insert_rows 1 value tableau.rows
+              result = MkTableau rows in
+          if semistandard result
+             then Right (MkInsertionResult result corner path value)
+             else Left "Row insertion failed its semistandard result check."
+
+delete_corner : Tableau → Cell → Either Text Tableau
+delete_corner tableau corner = do
+  smaller ← remove_cell (tableau_shape tableau) corner
+  let old_row = fromMaybe [] (at_index (minus corner.row 1) tableau.rows)
+      new_rows = replace_index (minus corner.row 1)
+                    (take (minus corner.column 1) old_row) tableau.rows
+  make_tableau (take (length smaller.rows) new_rows)
+
+reverse_row : Integer → List Integer → Either Text (List Integer, Integer)
+reverse_row value row =
+  let eligible = filter (\(_, entry) ⇒ entry < value) (numbered 0 row) in
+  case reverse eligible of
+    [] ⇒ Left "Reverse insertion found no strictly smaller entry."
+    (index, bumped) :: _ ⇒ Right (replace_index index value row, bumped)
+
+reverse_upper_rows : Integer → List (List Integer) →
+                     Either Text (List (List Integer), Integer)
+reverse_upper_rows value [] = Right ([], value)
+reverse_upper_rows value (row :: rest) = do
+  (changed, bumped) ← reverse_row value row
+  (upper, outgoing) ← reverse_upper_rows bumped rest
+  Right (changed :: upper, outgoing)
+
+reverse_insert_result : Tableau → Cell → Either Text ReverseResult
+reverse_insert_result tableau corner =
+  if not (semistandard tableau) then Left "Reverse insertion requires a semistandard tableau."
+  else do
+    smaller ← delete_corner tableau corner
+    removed ← maybe (Left "No entry at the selected corner.") Right (tableau_get tableau corner)
+    let upper_count = minus corner.row 1
+    (upper, outgoing) ← reverse_upper_rows removed (reverse (take upper_count smaller.rows))
+    let result = MkTableau (reverse upper ++ drop upper_count smaller.rows)
+    if semistandard result
+       then Right (MkReverseResult result outgoing)
+       else Left "Reverse insertion failed its semistandard result check."
+
+public export
+reverse_insert : Tableau → Cell → Either Text (Tableau, Integer)
+reverse_insert tableau corner = do
+  result ← reverse_insert_result tableau corner
+  Right (result.tableau, result.value)
+
+append_corner : Tableau → Cell → Integer → Either Text Tableau
+append_corner tableau corner value = do
+  shape ← add_cell (tableau_shape tableau) corner
+  if corner.row ≟ S (length tableau.rows)
+     then make_tableau (tableau.rows ++ [[value]])
+     else let row = fromMaybe [] (at_index (minus corner.row 1) tableau.rows) in
+          make_tableau (replace_index (minus corner.row 1) (row ++ [value]) tableau.rows)
+
+rsk_letters : RSKResult → List (Integer, Integer) → Either Text RSKResult
+rsk_letters result [] = Right result
+rsk_letters result ((label, value) :: rest) = do
+  inserted ← insert result.insertion value
+  recording ← append_corner result.recording inserted.new_cell label
+  let next = MkRSKResult inserted.tableau recording inserted.path value (S result.step)
+  if (tableau_shape inserted.tableau).rows ≟ (tableau_shape recording).rows
+     then rsk_letters next rest
+     else Left "RSK insertion and recording shapes disagree."
+
+empty_rsk : RSKResult
+empty_rsk = MkRSKResult (MkTableau []) (MkTableau []) [] 0 0
+
+public export
+rsk_word : List Integer → Either Text RSKResult
+rsk_word values = rsk_letters empty_rsk (map (\(index, value) ⇒ (cast index, value)) (numbered 1 values))
+
+public export
+rsk_permutation : List Integer → Either Text RSKResult
+rsk_permutation values =
+  if sort values ≟ map cast (one_through (length values))
+     then rsk_word values
+     else Left "A permutation must contain each integer from 1 through its length exactly once."
+
+public export
+rsk_biword : List (Integer, Integer) → Either Text RSKResult
+rsk_biword letters =
+  if all (\(top, bottom) ⇒ top > 0 && bottom > 0) letters && weakly_increasing letters
+     then do
+       result ← rsk_letters empty_rsk letters
+       if semistandard result.insertion && semistandard result.recording
+          then Right result else Left "Biword RSK failed its semistandard result check."
+     else Left "A biword needs positive letters in lexicographic order."
+
+matrix_letters : Number → List (List Number) → List (Integer, Integer)
+matrix_letters _ [] = []
+matrix_letters row (entries :: rest) =
+  concatMap (\(column, count) ⇒ replicate count (cast row, cast column)) (numbered 1 entries) ++
+  matrix_letters (S row) rest
+
+public export
+matrix_biword : List (List Number) → Either Text (List (Integer, Integer))
+matrix_biword [] = Right []
+matrix_biword (first :: rest) =
+  if all (\row ⇒ length row ≟ length first) rest
+     then Right (matrix_letters 1 (first :: rest))
+     else Left "An RSK matrix must have equal row lengths."
+
+public export
+rsk_matrix : List (List Number) → Either Text RSKResult
+rsk_matrix matrix = matrix_biword matrix >>= rsk_biword
+
+find_value : Tableau → Integer → Maybe Cell
+find_value tableau value = map fst (find (\(_, entry) ⇒ entry ≟ value) (tableau_cells tableau))
+
+inverse_steps : Number → Tableau → Tableau → List Integer → Either Text (List Integer)
+inverse_steps Z insertion recording values =
+  if null insertion.rows && null recording.rows then Right values
+  else Left "Inverse RSK did not empty both tableaux."
+inverse_steps (S count) insertion recording values = do
+  corner ← maybe (Left "A recording label is missing.") Right (find_value recording (cast (S count)))
+  next ← reverse_insert_result insertion corner
+  smaller_recording ← delete_corner recording corner
+  inverse_steps count next.tableau smaller_recording (next.value :: values)
+
+public export
+inverse_permutation_rsk : Tableau → Tableau → Either Text (List Integer)
+inverse_permutation_rsk insertion recording =
+  if not (standard insertion && standard recording) ||
+     not ((tableau_shape insertion).rows ≟ (tableau_shape recording).rows)
+     then Left "Inverse permutation RSK needs standard tableaux of the same shape."
+     else inverse_steps (partition_size (tableau_shape insertion)) insertion recording []
+
+public export
+contains_partition : Partition → Partition → Bool
+contains_partition outer inner =
+  length inner.rows <= length outer.rows &&
+  all (\(row, width) ⇒ width <= partition_row outer row) (numbered 1 inner.rows)
+
+public export
+skew_cells : SkewTableau → List Cell
+skew_cells filling =
+  filter (not . contains_cell filling.inner) (partition_cells filling.outer)
+
+public export
+skew_get : SkewTableau → Cell → Maybe Integer
+skew_get filling cell =
+  if not (contains_cell filling.outer cell) || contains_cell filling.inner cell
+     then Nothing
+     else do
+       row ← at_index (minus cell.row 1) filling.rows
+       at_index (minus cell.column (S (partition_row filling.inner cell.row))) row
+
+skew_set : SkewTableau → Cell → Integer → SkewTableau
+skew_set filling cell value =
+  let row_index = minus cell.row 1
+      column_index = minus cell.column (S (partition_row filling.inner cell.row))
+      row = fromMaybe [] (at_index row_index filling.rows) in
+  MkSkewTableau filling.outer filling.inner
+    (replace_index row_index (replace_index column_index value row) filling.rows)
+
+skew_shape_valid : SkewTableau → Bool
+skew_shape_valid filling =
+  valid_partition filling.outer && valid_partition filling.inner &&
+  contains_partition filling.outer filling.inner &&
+  length filling.rows ≟ length filling.outer.rows &&
+  all (\(row, entries) ⇒ length entries ≟
+       minus (partition_row filling.outer row) (partition_row filling.inner row))
+      (numbered 1 filling.rows)
+
+public export
+skew_semistandard : SkewTableau → Bool
+skew_semistandard filling =
+  skew_shape_valid filling && all (all (> 0)) filling.rows &&
+  all weakly_increasing filling.rows && all ordered (skew_cells filling)
+  where
+    ordered : Cell → Bool
+    ordered cell =
+      case (skew_get filling cell, skew_get filling (MkCell (S cell.row) cell.column)) of
+        (Just value, Just below) ⇒ value < below
+        _ ⇒ True
+
+public export
+skew_standard : SkewTableau → Bool
+skew_standard filling =
+  skew_semistandard filling &&
+  sort (concat filling.rows) ≟ map cast (one_through (length (skew_cells filling)))
+
+public export
+make_skew : Partition → Partition → List (List Integer) → Either Text SkewTableau
+make_skew outer inner rows =
+  let filling = MkSkewTableau outer inner rows in
+  if skew_semistandard filling
+     then Right filling
+     else Left "A skew filling needs contained partitions, exactly its visible cells, positive weak rows, and strict columns."
+
+public export
+make_jeu : SkewTableau → Either Text JeuState
+make_jeu filling = do
+  checked ← make_skew filling.outer filling.inner filling.rows
+  Right (MkJeuState checked Nothing)
+
+public export
+jeu_get : JeuState → Cell → Maybe Integer
+jeu_get state cell =
+  if state.hole ≟ Just cell then Nothing else skew_get state.filling cell
+
+public export
+jeu_cells : JeuState → List (Cell, Integer)
+jeu_cells state = mapMaybe present (skew_cells state.filling)
+  where
+    present : Cell → Maybe (Cell, Integer)
+    present cell = map (\value ⇒ (cell, value)) (jeu_get state cell)
+
+-- A single hole can hide one immediate neighbor. Compare surviving entries
+-- across that hole as well, so a forged in-flight state is not silently used.
+jeu_ordered : JeuState → Bool
+jeu_ordered state = all ordered (jeu_cells state)
+  where
+    right_of : Cell → Maybe Integer
+    right_of cell =
+      let next = MkCell cell.row (S cell.column) in
+      if state.hole ≟ Just next
+         then jeu_get state (MkCell cell.row (S (S cell.column)))
+         else jeu_get state next
+    below : Cell → Maybe Integer
+    below cell =
+      let next = MkCell (S cell.row) cell.column in
+      if state.hole ≟ Just next
+         then jeu_get state (MkCell (S (S cell.row)) cell.column)
+         else jeu_get state next
+    ordered : (Cell, Integer) → Bool
+    ordered (cell, value) = value > 0 &&
+      maybe True (value <=) (right_of cell) &&
+      maybe True (value <) (below cell)
+
+public export
+valid_jeu : JeuState → Bool
+valid_jeu state = case state.hole of
+  Nothing ⇒ skew_semistandard state.filling
+  Just hole ⇒ skew_shape_valid state.filling &&
+    contains_cell state.filling.outer hole &&
+    not (contains_cell state.filling.inner hole) && jeu_ordered state
+
+reshape_skew : Partition → Partition → (Cell → Maybe Integer) → SkewTableau
+reshape_skew outer inner read = MkSkewTableau outer inner $
+  map make_row (numbered 1 outer.rows)
+  where
+    make_row : (Number, Number) → List Integer
+    make_row (row, width) =
+      map (\column ⇒ fromMaybe 0 (read (MkCell row column)))
+          (drop (partition_row inner row) (one_through width))
+
+public export
+jeu_begin : JeuState → Cell → Either Text JeuState
+jeu_begin state cell = case state.hole of
+  Just _ ⇒ Left "Finish the current slide before starting another."
+  Nothing ⇒ do
+    checked ← make_jeu state.filling
+    inner ← remove_cell checked.filling.inner cell
+    let filling = reshape_skew checked.filling.outer inner (skew_get checked.filling)
+        next = MkJeuState filling (Just cell)
+    if valid_jeu next then Right next
+       else Left "The selected inner corner could not begin a valid slide."
+
+finish_at_corner : JeuState → Cell → Either Text JeuState
+finish_at_corner state hole = do
+  outer ← remove_cell state.filling.outer hole
+  let smaller = reshape_skew outer state.filling.inner (jeu_get state)
+  make_jeu smaller
+
+move_into_hole : JeuState → Cell → Cell → Integer → Either Text JeuState
+move_into_hole state hole source value =
+  let filled = skew_set state.filling hole value
+      moved = skew_set filled source 0
+      next = MkJeuState moved (Just source) in
+  if valid_jeu next then Right next
+     else Left "The slide move failed its in-flight shape or order check."
+
+public export
+jeu_step : JeuState → Either Text JeuState
+jeu_step state =
+  if not (valid_jeu state) then Left "The current jeu de taquin state is malformed."
+  else case state.hole of
+    Nothing ⇒ Left "Select an inner corner and begin a slide first."
+    Just hole ⇒
+      let right = MkCell hole.row (S hole.column)
+          below = MkCell (S hole.row) hole.column in
+      case (jeu_get state right, jeu_get state below) of
+        (Nothing, Nothing) ⇒ finish_at_corner state hole
+        (Just value, Nothing) ⇒ move_into_hole state hole right value
+        (Nothing, Just value) ⇒ move_into_hole state hole below value
+        (Just right_value, Just below_value) ⇒
+          -- Equal neighbors choose below: rows are weak, columns are strict.
+          if right_value < below_value
+             then move_into_hole state hole right right_value
+             else move_into_hole state hole below below_value
+
+finish_steps : Number → JeuState → Either Text JeuState
+finish_steps Z state =
+  case state.hole of
+    Nothing ⇒ Right state
+    Just _ ⇒ Left "The slide exceeded its finite path bound."
+finish_steps (S remaining) state =
+  case state.hole of
+    Nothing ⇒ Right state
+    Just _ ⇒ do
+      next ← jeu_step state
+      finish_steps remaining next
+
+public export
+jeu_finish : JeuState → Either Text JeuState
+jeu_finish state =
+  if valid_jeu state then finish_steps (S (partition_size state.filling.outer)) state
+  else Left "The current jeu de taquin state is malformed."
+
+public export
+jeu_slide : JeuState → Cell → Either Text JeuState
+jeu_slide state cell = jeu_begin state cell >>= jeu_finish
+
+rectify_steps : Number → JeuState → Either Text JeuState
+rectify_steps Z state =
+  if null state.filling.inner.rows then Right state
+     else Left "Rectification exceeded its inner-shape bound."
+rectify_steps (S remaining) state =
+  case reverse (removable_cells state.filling.inner) of
+    [] ⇒ Right state
+    corner :: _ ⇒ do
+      next ← jeu_slide state corner
+      rectify_steps remaining next
+
+public export
+rectify : JeuState → Either Text JeuState
+rectify state = do
+  finished ← jeu_finish state
+  rectify_steps (partition_size finished.filling.inner) finished
+
+finish_with_corner : Number → JeuState → Either Text (JeuState, Cell)
+finish_with_corner Z state = Left "The deletion slide exceeded its finite path bound."
+finish_with_corner (S remaining) state =
+  case state.hole of
+    Nothing ⇒ Left "A deletion slide needs an active hole."
+    Just hole ⇒ do
+      next ← jeu_step state
+      case next.hole of
+        Nothing ⇒ Right (next, hole)
+        Just _ ⇒ finish_with_corner remaining next
+
+remove_smallest : Tableau → Either Text (Tableau, Cell)
+remove_smallest tableau =
+  if not (standard tableau) || null tableau.rows
+     then Left "Deleting the smallest entry requires a nonempty standard tableau."
+     else do
+       let empty_inner = MkPartition []
+           filling = MkSkewTableau (tableau_shape tableau) empty_inner tableau.rows
+           hole = MkCell 1 1
+           start = MkJeuState (skew_set filling hole 0) (Just hole)
+       (finished, corner) ← finish_with_corner (S (partition_size (tableau_shape tableau))) start
+       let smaller = MkTableau (map (map (\value ⇒ value - 1)) finished.filling.rows)
+       if standard smaller then Right (smaller, corner)
+          else Left "Deleting the smallest entry failed its standard result check."
+
+public export
+promotion : Tableau → Either Text Tableau
+promotion tableau =
+  if not (standard tableau) then Left "Promotion requires a standard tableau."
+  else if null tableau.rows then Right tableau
+  else do
+    (smaller, corner) ← remove_smallest tableau
+    result ← append_corner smaller corner (cast (partition_size (tableau_shape tableau)))
+    if standard result then Right result
+       else Left "Promotion failed its standard result check."
+
+evacuation_steps : Number → Tableau → Tableau → Either Text Tableau
+evacuation_steps Z remaining result =
+  if null remaining.rows && standard result then Right result
+     else Left "Evacuation failed its standard result check."
+evacuation_steps (S count) remaining result = do
+  (smaller, corner) ← remove_smallest remaining
+  evacuation_steps count smaller (set_entry result corner (cast (S count)))
+
+public export
+evacuation : Tableau → Either Text Tableau
+evacuation tableau =
+  if not (standard tableau) then Left "Evacuation requires a standard tableau."
+  else let empty = MkTableau (map (map (const 0)) tableau.rows) in
+       evacuation_steps (partition_size (tableau_shape tableau)) tableau empty

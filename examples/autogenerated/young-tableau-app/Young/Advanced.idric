@@ -1,0 +1,925 @@
+module Young.Advanced
+
+import Data.Bits
+import Data.List
+import Data.Maybe
+import Data.Text
+import Young.Core
+
+-- The ordinary finite mathematical laboratory. Checked entry points share the
+-- native application's degree and output bounds; rational arithmetic itself
+-- uses exact Integer values instead of a machine-sized numerator.
+
+public export
+record Rational where
+  constructor MkRational
+  numerator : Integer
+  denominator : Integer
+
+public export
+data SymmetricBasis = Schur | PowerSum | Monomial | Complete | Elementary
+
+public export
+Eq SymmetricBasis where
+  Schur ≟ Schur = True
+  PowerSum ≟ PowerSum = True
+  Monomial ≟ Monomial = True
+  Complete ≟ Complete = True
+  Elementary ≟ Elementary = True
+  _ ≟ _ = False
+
+public export
+record SymmetricTerm where
+  constructor MkSymmetricTerm
+  index : Partition
+  coefficient : Rational
+
+public export
+record SymmetricFunction where
+  constructor MkSymmetricFunction
+  basis : SymmetricBasis
+  terms : List SymmetricTerm
+
+-- SplitMix64 has an explicitly fixed 64-bit state. Width belongs to this
+-- generator's definition; it does not define mathematical Number or Integer.
+public export
+GeneratorWord : Type
+GeneratorWord = Bits64
+
+public export
+record RNGState where
+  constructor MkRNGState
+  state : GeneratorWord
+
+advanced_at : Number → List item → Maybe item
+advanced_at _ [] = Nothing
+advanced_at Z (value :: _) = Just value
+advanced_at (S index) (_ :: rest) = advanced_at index rest
+
+advanced_replace : Number → item → List item → List item
+advanced_replace _ _ [] = []
+advanced_replace Z value (_ :: rest) = value :: rest
+advanced_replace (S index) value (first :: rest) =
+  first :: advanced_replace index value rest
+
+advanced_indices : Number → List Number
+advanced_indices Z = []
+advanced_indices (S count) = 0 :: map S (advanced_indices count)
+
+advanced_letters : Number → List Number
+advanced_letters count = map S (advanced_indices count)
+
+same_shape : Partition → Partition → Bool
+same_shape first second = first.rows ≟ second.rows
+
+contains_rows : List Number → List Number → Bool
+contains_rows _ [] = True
+contains_rows [] (_ :: _) = False
+contains_rows (outside :: outer) (inside :: inner) =
+  inside <= outside && contains_rows outer inner
+
+shape_contains : Partition → Partition → Bool
+shape_contains outer inner = contains_rows outer.rows inner.rows
+
+check_shape : Partition → Either Text Partition
+check_shape shape = make_partition shape.rows
+
+shape_row : Partition → Number → Number
+shape_row shape row = fromMaybe 0 (advanced_at row shape.rows)
+
+partition_parts : Number → Number → Number → List (List Number)
+partition_parts _ Z _ = [[]]
+partition_parts Z (S remaining) _ = []
+partition_parts (S fuel) remaining maximum =
+  concatMap choose (reverse (advanced_letters (min remaining maximum)))
+  where
+    choose : Number → List (List Number)
+    choose part = map (part ::) (partition_parts fuel (minus remaining part) part)
+
+partitions_of_degree : Number → List Partition
+partitions_of_degree degree = map MkPartition (partition_parts degree degree degree)
+
+export
+enumerate_partitions : Number → Either Text (List Partition)
+enumerate_partitions degree =
+  if degree > 8 then Left "Partition enumeration is bounded to degree 8"
+  else Right (partitions_of_degree degree)
+
+-- Littlewood–Richardson fillings are visited in their lattice-word order:
+-- top row first and right to left within a row. The board contains only the
+-- visible skew entries; missing inner boxes never acquire fabricated labels.
+skew_cells_by_row : Partition → Partition → List (List Cell)
+skew_cells_by_row outer inner = map cells (advanced_indices (length outer.rows))
+  where
+    cells : Number → List Cell
+    cells row = map (MkCell (S row))
+      (drop (shape_row inner row) (advanced_letters (shape_row outer row)))
+
+assigned_value : Cell → List (Cell, Integer) → Maybe Integer
+assigned_value _ [] = Nothing
+assigned_value cell ((place, value) :: rest) =
+  if cell ≟ place then Just value else assigned_value cell rest
+
+lattice_counts : List Number → Bool
+lattice_counts [] = True
+lattice_counts [_] = True
+lattice_counts (first :: second :: rest) =
+  first >= second && lattice_counts (second :: rest)
+
+lr_fillings : List Cell → List Number → List Number → List (Cell, Integer) →
+              List (List (Cell, Integer))
+lr_fillings [] target used entries = [entries]
+lr_fillings (cell :: cells) target used entries =
+  concatMap choose (advanced_indices (length target))
+  where
+    choose : Number → List (List (Cell, Integer))
+    choose letter =
+      let value : Integer = cast (S letter)
+          consumed = fromMaybe 0 (advanced_at letter used)
+          required = fromMaybe 0 (advanced_at letter target)
+          next_counts = advanced_replace letter (S consumed) used
+          right = assigned_value (MkCell cell.row (S cell.column)) entries
+          above = assigned_value (MkCell (minus cell.row 1) cell.column) entries
+          row_valid = maybe True (value <=) right
+          column_valid = maybe True (< value) above in
+      if consumed >= required || not row_valid || not column_valid ||
+         not (lattice_counts next_counts)
+      then []
+      else lr_fillings cells target next_counts ((cell, value) :: entries)
+
+prepare_lr : Partition → Partition → Partition →
+             Either Text (List (List (Cell, Integer)))
+prepare_lr inner content outer = do
+  _ ← check_shape inner
+  _ ← check_shape content
+  _ ← check_shape outer
+  if not (shape_contains outer inner) ||
+     not (partition_size outer ≟ partition_size inner + partition_size content)
+     then Right []
+     else if partition_size content > 8
+     then Left "Littlewood–Richardson fillings are bounded to 8 visible cells"
+     else Right (lr_fillings (concatMap reverse (skew_cells_by_row outer inner))
+              content.rows (map (const 0) content.rows) [])
+
+export
+littlewood_richardson_coefficient : Partition → Partition → Partition →
+                                   Either Text Integer
+littlewood_richardson_coefficient inner content outer = do
+  fillings ← prepare_lr inner content outer
+  Right (cast (length fillings))
+
+export
+littlewood_richardson_tableaux : Partition → Partition → Partition →
+                               Either Text (List SkewTableau)
+littlewood_richardson_tableaux inner content outer = do
+  fillings ← prepare_lr inner content outer
+  if length fillings > 32
+     then Left "Littlewood–Richardson enumeration exceeds 32 tableaux"
+     else Right (map board fillings)
+  where
+    board : List (Cell, Integer) → SkewTableau
+    board entries = MkSkewTableau outer inner
+      (map (map (\cell ⇒ fromMaybe 0 (assigned_value cell entries)))
+           (skew_cells_by_row outer inner))
+
+-- Murnaghan–Nakayama removes connected skew strips without a 2-by-2 square.
+adjacent_cells : Cell → Cell → Bool
+adjacent_cells first second =
+  (first.row ≟ second.row &&
+   (S first.column ≟ second.column || S second.column ≟ first.column)) ||
+  (first.column ≟ second.column &&
+   (S first.row ≟ second.row || S second.row ≟ first.row))
+
+grow_component : Number → List Cell → List Cell → List Cell
+grow_component Z cells reached = reached
+grow_component (S fuel) cells reached =
+  grow_component fuel cells
+    (filter (\cell ⇒ elem cell reached || any (adjacent_cells cell) reached) cells)
+
+strip_height : Partition → Partition → Maybe Number
+strip_height outer inner =
+  if not (shape_contains outer inner) then Nothing else
+  case concat (skew_cells_by_row outer inner) of
+    [] ⇒ Nothing
+    cells@(first :: rest) ⇒
+      if any (square_at cells) cells ||
+         not (length (grow_component (length cells) cells [first]) ≟ length cells)
+      then Nothing
+      else Just (length (nub (map (\cell ⇒ cell.row) cells)))
+  where
+    square_at : List Cell → Cell → Bool
+    square_at cells cell =
+      elem (MkCell (S cell.row) cell.column) cells &&
+      elem (MkCell cell.row (S cell.column)) cells &&
+      elem (MkCell (S cell.row) (S cell.column)) cells
+
+character_steps : List Number → Partition → Integer
+character_steps [] shape = if partition_size shape ≟ 0 then 1 else 0
+character_steps (strip :: cycles) shape =
+  if strip > partition_size shape then 0 else
+  sum (map contribution (partitions_of_degree (minus (partition_size shape) strip)))
+  where
+    contribution : Partition → Integer
+    contribution smaller = case strip_height shape smaller of
+      Nothing ⇒ 0
+      Just height ⇒
+        let sign : Integer = if mod height 2 ≟ 1 then 1 else -1 in
+        sign * character_steps cycles smaller
+
+export
+character_cycle_type : Partition → Partition → Either Text Integer
+character_cycle_type shape cycles = do
+  _ ← check_shape shape
+  _ ← check_shape cycles
+  if not (partition_size shape ≟ partition_size cycles)
+     then Left "Character shape and cycle type must have equal size"
+     else if partition_size shape > 8
+     then Left "Character calculation is bounded to degree 8"
+     else Right (character_steps cycles.rows shape)
+
+check_permutation : List Integer → Either Text (List Integer)
+check_permutation values =
+  if length values > 64 then Left "A permutation has at most 64 letters"
+  else if sort values ≟ map cast (advanced_letters (length values))
+  then Right values
+  else Left "A permutation must contain every letter from 1 through its size once"
+
+walk_cycle : Number → List Integer → Integer → List Integer → List Integer
+walk_cycle Z permutation current visited = visited
+walk_cycle (S fuel) permutation current visited =
+  if elem current visited then visited else
+  case advanced_at (cast (current - 1)) permutation of
+    Nothing ⇒ visited
+    Just next ⇒ walk_cycle fuel permutation next (current :: visited)
+
+collect_cycles : List Integer → List Integer → List Integer → List Number
+collect_cycles [] permutation visited = []
+collect_cycles (start :: rest) permutation visited =
+  if elem start visited then collect_cycles rest permutation visited else
+  let members = walk_cycle (length permutation) permutation start [] in
+  length members :: collect_cycles rest permutation (members ++ visited)
+
+export
+permutation_cycle_type : List Integer → Either Text Partition
+permutation_cycle_type permutation = do
+  checked ← check_permutation permutation
+  Right (MkPartition (reverse (sort (collect_cycles checked checked []))))
+
+export
+character_value : Partition → List Integer → Either Text Integer
+character_value shape permutation = do
+  cycles ← permutation_cycle_type permutation
+  character_cycle_type shape cycles
+
+-- Young graph neighbors and saturated paths retain both endpoint shapes.
+export
+branch_up : Partition → Either Text (List Partition)
+branch_up shape = do
+  checked ← check_shape shape
+  traverse (add_cell checked) (addable_cells checked)
+
+export
+branch_down : Partition → Either Text (List Partition)
+branch_down shape = do
+  checked ← check_shape shape
+  traverse (remove_cell checked) (removable_cells checked)
+
+path_steps : Number → Number → Partition → Partition →
+             Either Text (List (List Partition), Number)
+path_steps Z budget start finish =
+  if same_shape start finish then Right ([[start]], minus budget 1)
+  else Right ([], budget)
+path_steps (S fuel) budget start finish = do
+  successors ← branch_up start
+  gather (filter (shape_contains finish) successors) budget
+  where
+    gather : List Partition → Number → Either Text (List (List Partition), Number)
+    gather [] remaining = Right ([], remaining)
+    gather (_ :: _) Z = Right ([], 0)
+    gather (next :: rest) (S remaining) = do
+      (paths, after) ← path_steps fuel (S remaining) next finish
+      (others, final) ← gather rest after
+      Right (map (start ::) paths ++ others, final)
+
+export
+young_graph_paths : Partition → Partition → Either Text (List (List Partition))
+young_graph_paths start finish = do
+  _ ← check_shape start
+  _ ← check_shape finish
+  if not (shape_contains finish start)
+     then Left "The Young graph endpoint must contain its start"
+     else if minus (partition_size finish) (partition_size start) > 16
+     then Left "A Young graph path has at most 16 edges"
+     else do
+       (paths, remaining) ← path_steps
+         (minus (partition_size finish) (partition_size start)) 129 start finish
+       if length paths > 128 then Left "Young graph enumeration exceeds 128 paths"
+          else Right paths
+
+-- Subsequences keep their original relative order. A reduced word acts on
+-- adjacent positions, with one-based generators applied left to right.
+longest_sequence : List (List Integer) → List Integer
+longest_sequence = foldl longer []
+  where
+    longer : List Integer → List Integer → List Integer
+    longer best candidate = if length candidate > length best then candidate else best
+
+ending_sequences : (Integer → Integer → Bool) → List Integer →
+                   List (List Integer) → List (List Integer)
+ending_sequences relation [] prior = prior
+ending_sequences relation (value :: rest) prior =
+  let eligible = filter (\sequence ⇒ maybe False (\last ⇒ relation last value)
+                            (advanced_at (minus (length sequence) 1) sequence)) prior
+      ending = longest_sequence eligible ++ [value] in
+  ending_sequences relation rest (prior ++ [ending])
+
+export
+permutation_lis : List Integer → Either Text (List Integer)
+permutation_lis permutation = do
+  checked ← check_permutation permutation
+  Right (longest_sequence (ending_sequences (<) checked []))
+
+export
+permutation_lds : List Integer → Either Text (List Integer)
+permutation_lds permutation = do
+  checked ← check_permutation permutation
+  Right (longest_sequence (ending_sequences (>) checked []))
+
+bubble_pass : Number → List Integer → (List Integer, List Number)
+bubble_pass position [] = ([], [])
+bubble_pass position [value] = ([value], [])
+bubble_pass position (first :: second :: rest) =
+  if first > second then
+    let (sorted, moves) = bubble_pass (S position) (first :: rest) in
+    (second :: sorted, position :: moves)
+  else
+    let (sorted, moves) = bubble_pass (S position) (second :: rest) in
+    (first :: sorted, moves)
+
+bubble_steps : Number → List Integer → List Number
+bubble_steps Z values = []
+bubble_steps (S fuel) values =
+  let (next, moves) = bubble_pass 1 values in
+  moves ++ bubble_steps fuel next
+
+export
+coxeter_reduced_word : List Integer → Either Text (List Number)
+coxeter_reduced_word permutation = do
+  checked ← check_permutation permutation
+  let moves = reverse (bubble_steps (length checked) checked)
+  if length moves > 256 then Left "A reduced word has at most 256 generators"
+     else Right moves
+
+export
+bruhat_leq : List Integer → List Integer → Either Text Bool
+bruhat_leq first second = do
+  _ ← check_permutation first
+  _ ← check_permutation second
+  if not (length first ≟ length second) then Left "Bruhat comparison needs equal sizes"
+     else Right (all prefix_valid (advanced_letters (length first)))
+  where
+    prefix_valid : Number → Bool
+    prefix_valid prefix = all threshold_valid (advanced_letters (length first))
+      where
+        threshold_valid : Number → Bool
+        threshold_valid threshold =
+          length (filter (>= cast threshold) (take prefix first)) <=
+          length (filter (>= cast threshold) (take prefix second))
+
+generator_range : Integer
+generator_range = 18446744073709551616
+
+export
+make_rng : Integer → Either Text RNGState
+make_rng seed =
+  if seed < 0 || seed >= generator_range
+  then Left "A SplitMix64 seed must lie from 0 through 2^64 minus 1"
+  else Right (MkRNGState (cast seed))
+
+export
+rng_next : RNGState → (Integer, RNGState)
+rng_next stream =
+  let -- The published SplitMix64 Weyl increment and two mixing multipliers.
+      next : GeneratorWord = stream.state + 0x9e3779b97f4a7c15
+      mixed_once : GeneratorWord = (next `xor` (next `shiftR` 30)) * 0xbf58476d1ce4e5b9
+      mixed_twice : GeneratorWord = (mixed_once `xor` (mixed_once `shiftR` 27)) * 0x94d049bb133111eb
+      value : GeneratorWord = mixed_twice `xor` (mixed_twice `shiftR` 31) in
+  (cast value, MkRNGState next)
+
+draw_steps : Number → Integer → Integer → RNGState →
+             Either Text (Integer, RNGState)
+draw_steps Z bound threshold stream = Left "SplitMix64 rejection budget exhausted"
+draw_steps (S attempts) bound threshold stream =
+  let (value, next) = rng_next stream in
+  if value < threshold then draw_steps attempts bound threshold next
+  else Right (mod value bound, next)
+
+export
+draw_below : Integer → RNGState → Either Text (Integer, RNGState)
+draw_below bound stream =
+  if bound <= 0 || bound > generator_range
+  then Left "A random draw needs a positive bound no larger than 2^64"
+  else draw_steps 128 bound (mod generator_range bound) stream
+
+swap_positions : Number → Number → List item → List item
+swap_positions first second values =
+  case (advanced_at first values, advanced_at second values) of
+    (Just left, Just right) ⇒
+      advanced_replace second left (advanced_replace first right values)
+    _ ⇒ values
+
+shuffle_steps : List Number → List Integer → RNGState →
+                Either Text (List Integer, RNGState)
+shuffle_steps [] values stream = Right (values, stream)
+shuffle_steps (Z :: rest) values stream = shuffle_steps rest values stream
+shuffle_steps (index :: rest) values stream = do
+  (selected, next) ← draw_below (cast (S index)) stream
+  shuffle_steps rest (swap_positions index (cast selected) values) next
+
+export
+random_permutation : Number → RNGState → Either Text (List Integer, RNGState)
+random_permutation count stream =
+  if count > 64 then Left "A random permutation has at most 64 letters"
+  else shuffle_steps (reverse (advanced_indices count))
+         (map cast (advanced_letters count)) stream
+
+choose_weight : Integer → List (Cell, Partition, Integer) →
+                Maybe (Cell, Partition)
+choose_weight draw [] = Nothing
+choose_weight draw ((cell, shape, weight) :: rest) =
+  if draw < weight then Just (cell, shape)
+  else choose_weight (draw - weight) rest
+
+set_board_cell : Cell → Integer → List (List Integer) → List (List Integer)
+set_board_cell cell value rows =
+  let row = fromMaybe [] (advanced_at (minus cell.row 1) rows) in
+  advanced_replace (minus cell.row 1)
+    (advanced_replace (minus cell.column 1) value row) rows
+
+random_tableau_steps : Number → Partition → List (List Integer) → RNGState →
+                       Either Text (Tableau, RNGState)
+random_tableau_steps Z shape rows stream = do
+  tableau ← make_tableau rows
+  Right (tableau, stream)
+random_tableau_steps (S label) shape rows stream = do
+  weights ← traverse weighted_corner (removable_cells shape)
+  let total_weight = sum (map (\(_, _, weight) ⇒ weight) weights)
+  (draw, next) ← draw_below total_weight stream
+  case choose_weight draw weights of
+    Nothing ⇒ Left "A random tableau corner has no positive weight"
+    Just (cell, smaller) ⇒ random_tableau_steps label smaller
+      (set_board_cell cell (cast (S label)) rows) next
+  where
+    weighted_corner : Cell → Either Text (Cell, Partition, Integer)
+    weighted_corner cell = do
+      smaller ← remove_cell shape cell
+      Right (cell, smaller, standard_count smaller)
+
+export
+random_standard_tableau : Partition → RNGState → Either Text (Tableau, RNGState)
+random_standard_tableau shape stream = do
+  checked ← check_shape shape
+  random_tableau_steps (partition_size checked) checked
+    (map (\size ⇒ replicate size 0) checked.rows) stream
+
+export
+sample_plancherel : Number → RNGState → Either Text (Partition, RNGState)
+sample_plancherel count stream = do
+  (permutation, next) ← random_permutation count stream
+  result ← rsk_permutation permutation
+  Right (tableau_shape result.insertion, next)
+
+-- Exact finite symmetric functions. Every basis element is expanded into power
+-- sums, then exact elimination supplies the requested destination basis.
+-- In particular no decimal arithmetic enters a coefficient or specialization.
+integer_power : Integer → Number → Integer
+integer_power value Z = 1
+integer_power value (S exponent) = value * integer_power value exponent
+
+small_factorial : Number → Integer
+small_factorial Z = 1
+small_factorial (S value) = cast (S value) * small_factorial value
+
+gcd_steps : Number → Integer → Integer → Integer
+gcd_steps Z first second = first
+gcd_steps (S fuel) first second =
+  if second ≟ 0 then first else gcd_steps fuel second (mod first second)
+
+normalized_rational : Integer → Integer → Rational
+normalized_rational numerator denominator =
+  if numerator ≟ 0 then MkRational 0 1 else
+  let positive_denominator = abs denominator
+      -- Each nonzero Euclidean remainder strictly decreases the second
+      -- argument. This budget exceeds that argument and cannot cut it short.
+      common = gcd_steps (S (cast positive_denominator))
+                 (abs numerator) positive_denominator
+      sign : Integer = if denominator < 0 then -1 else 1 in
+  MkRational (div (sign * numerator) common) (div positive_denominator common)
+
+export
+make_rational : Integer → Integer → Either Text Rational
+make_rational numerator denominator =
+  if denominator ≟ 0 then Left "A rational denominator cannot be zero"
+  else Right (normalized_rational numerator denominator)
+
+public export
+Eq Rational where
+  first ≟ second =
+    first.numerator * second.denominator ≟ second.numerator * first.denominator
+
+export
+rational_text : Rational → Text
+rational_text value =
+  let signed_numerator = (if value.numerator < 0 then "−" else "") ++ show (abs value.numerator) in
+  if value.denominator ≟ 1 then signed_numerator
+  else signed_numerator ++ "÷" ++ show value.denominator
+
+rational_zero : Rational
+rational_zero = MkRational 0 1
+
+rational_one : Rational
+rational_one = MkRational 1 1
+
+rational_add : Rational → Rational → Rational
+rational_add first second = normalized_rational
+  (first.numerator * second.denominator + second.numerator * first.denominator)
+  (first.denominator * second.denominator)
+
+rational_negate : Rational → Rational
+rational_negate value = MkRational (-value.numerator) value.denominator
+
+rational_subtract : Rational → Rational → Rational
+rational_subtract first second = rational_add first (rational_negate second)
+
+rational_multiply : Rational → Rational → Rational
+rational_multiply first second = normalized_rational
+  (first.numerator * second.numerator) (first.denominator * second.denominator)
+
+coefficient_at : Partition → List SymmetricTerm → Rational
+coefficient_at index terms = foldl rational_add rational_zero
+  (map (\term ⇒ term.coefficient) (filter (\term ⇒ same_shape index term.index) terms))
+
+insert_term : SymmetricTerm → List SymmetricTerm → List SymmetricTerm
+insert_term term [] = [term]
+insert_term term (first :: rest) =
+  if same_shape term.index first.index
+  then MkSymmetricTerm first.index (rational_add first.coefficient term.coefficient) :: rest
+  else first :: insert_term term rest
+
+compact_terms : List SymmetricTerm → List SymmetricTerm
+compact_terms terms = filter (\term ⇒ not (term.coefficient.numerator ≟ 0))
+  (foldl (\sum, term ⇒ insert_term term sum) [] terms)
+
+export
+make_symmetric_function : SymmetricBasis → List SymmetricTerm →
+                          Either Text SymmetricFunction
+make_symmetric_function basis terms = do
+  if length terms > 32 then Left "A symmetric function has at most 32 terms"
+     else do
+       checked ← traverse check_term terms
+       Right (MkSymmetricFunction basis (compact_terms checked))
+  where
+    check_term : SymmetricTerm → Either Text SymmetricTerm
+    check_term term = do
+      _ ← check_shape term.index
+      if partition_size term.index > 8
+         then Left "Symmetric functions are bounded to degree 8"
+         else do
+           coefficient ← make_rational term.coefficient.numerator term.coefficient.denominator
+           Right (MkSymmetricTerm term.index coefficient)
+
+checked_terms : SymmetricBasis → List SymmetricTerm → Either Text SymmetricFunction
+checked_terms basis terms = make_symmetric_function basis (compact_terms terms)
+
+export
+symmetric_coefficient : SymmetricFunction → Partition → Rational
+symmetric_coefficient function index = coefficient_at index function.terms
+
+export
+symmetric_singleton : SymmetricBasis → Partition → Either Text SymmetricFunction
+symmetric_singleton basis index = make_symmetric_function basis [MkSymmetricTerm index rational_one]
+
+scale_terms : Rational → List SymmetricTerm → List SymmetricTerm
+scale_terms coefficient = map (\term ⇒ MkSymmetricTerm term.index
+  (rational_multiply coefficient term.coefficient))
+
+power_multiply : List SymmetricTerm → List SymmetricTerm →
+                 Either Text (List SymmetricTerm)
+power_multiply first second = do
+  result ← checked_terms PowerSum (concatMap multiply_first first)
+  Right result.terms
+  where
+    multiply_first : SymmetricTerm → List SymmetricTerm
+    multiply_first left = map multiply_pair second
+      where
+        multiply_pair : SymmetricTerm → SymmetricTerm
+        multiply_pair right = MkSymmetricTerm
+          (MkPartition (reverse (sort (left.index.rows ++ right.index.rows))))
+          (rational_multiply left.coefficient right.coefficient)
+
+multiplicity_factor : List Number → Integer
+multiplicity_factor values = product
+  (map (\part ⇒ small_factorial (length (filter (≟ part) values))) (nub values))
+
+centralizer_size : Partition → Integer
+centralizer_size shape =
+  product (map cast shape.rows) * multiplicity_factor shape.rows
+
+schur_in_power : Partition → List SymmetricTerm
+schur_in_power shape = compact_terms (map expansion (partitions_of_degree (partition_size shape)))
+  where
+    expansion : Partition → SymmetricTerm
+    expansion cycles = MkSymmetricTerm cycles
+      (normalized_rational (character_steps cycles.rows shape) (centralizer_size cycles))
+
+complete_factor : Bool → Number → List SymmetricTerm
+complete_factor elementary degree = map expansion (partitions_of_degree degree)
+  where
+    expansion : Partition → SymmetricTerm
+    expansion index =
+      let sign : Integer =
+            if elementary && mod (minus degree (length index.rows)) 2 ≟ 1 then -1 else 1 in
+      MkSymmetricTerm index (normalized_rational sign (centralizer_size index))
+
+complete_steps : Bool → List Number → List SymmetricTerm →
+                 Either Text (List SymmetricTerm)
+complete_steps elementary [] expansion = Right expansion
+complete_steps elementary (degree :: rest) expansion = do
+  next ← power_multiply expansion (complete_factor elementary degree)
+  complete_steps elementary rest next
+
+-- Möbius inversion on set partitions gives the monomial basis directly:
+-- sum over distinct variable assignments = sum over set partitions of the
+-- occurrence positions, with block weight (-1)^(size-1) (size-1)!.
+-- Equal parts are still distinct occurrences before division by their
+-- multiplicity factorial. For example m[2,1] = p[2,1] - p[3].
+place_in_blocks : Number → List (List Number) → List (List (List Number))
+place_in_blocks value [] = []
+place_in_blocks value (block :: rest) =
+  ((value :: block) :: rest) :: map (block ::) (place_in_blocks value rest)
+
+set_partitions : List Number → List (List (List Number))
+set_partitions [] = [[]]
+set_partitions (value :: rest) = concatMap place (set_partitions rest)
+  where
+    place : List (List Number) → List (List (List Number))
+    place blocks = ([value] :: blocks) :: place_in_blocks value blocks
+
+block_weight : List Number → Integer
+block_weight block =
+  let degree = minus (length block) 1
+      sign : Integer = if mod degree 2 ≟ 0 then 1 else -1 in
+  sign * small_factorial degree
+
+monomial_in_power : Partition → List SymmetricTerm
+monomial_in_power index = compact_terms
+  (map expansion (set_partitions index.rows))
+  where
+    expansion : List (List Number) → SymmetricTerm
+    expansion blocks = MkSymmetricTerm
+      (MkPartition (reverse (sort (map sum blocks))))
+      (normalized_rational (product (map block_weight blocks))
+                           (multiplicity_factor index.rows))
+
+basis_element_power : SymmetricBasis → Partition → Either Text (List SymmetricTerm)
+basis_element_power PowerSum index = Right [MkSymmetricTerm index rational_one]
+basis_element_power Schur index = Right (schur_in_power index)
+basis_element_power Monomial index = Right (monomial_in_power index)
+basis_element_power Complete index =
+  complete_steps False index.rows [MkSymmetricTerm (MkPartition []) rational_one]
+basis_element_power Elementary index =
+  complete_steps True index.rows [MkSymmetricTerm (MkPartition []) rational_one]
+
+export
+to_power_sum : SymmetricFunction → Either Text SymmetricFunction
+to_power_sum function = do
+  checked ← make_symmetric_function function.basis function.terms
+  expansions ← traverse expand checked.terms
+  checked_terms PowerSum (concat expansions)
+  where
+    expand : SymmetricTerm → Either Text (List SymmetricTerm)
+    expand term = do
+      expansion ← basis_element_power function.basis term.index
+      Right (scale_terms term.coefficient expansion)
+
+record Equation where
+  constructor MkEquation
+  coefficients : List Rational
+  value : Rational
+
+select_pivot : List Equation → Maybe (Equation, List Equation)
+select_pivot [] = Nothing
+select_pivot (equation :: rest) =
+  case equation.coefficients of
+    [] ⇒ Nothing
+    first :: others ⇒
+      if not (first.numerator ≟ 0) then Just (equation, rest) else
+      case select_pivot rest of
+        Nothing ⇒ Nothing
+        Just (pivot, unused) ⇒ Just (pivot, equation :: unused)
+
+dot_rationals : List Rational → List Rational → Rational
+dot_rationals first second = foldl rational_add rational_zero
+  (zipWith rational_multiply first second)
+
+solve_equations : Number → List Equation → Either Text (List Rational)
+solve_equations Z [] = Right []
+solve_equations Z (_ :: _) = Left "Exact basis system has extra equations"
+solve_equations (S remaining) equations =
+  case select_pivot equations of
+    Nothing ⇒ Left "Exact basis system has no nonzero pivot"
+    Just (pivot, others) ⇒ case pivot.coefficients of
+      [] ⇒ Left "Exact basis system has an empty pivot row"
+      leading :: tail ⇒
+        let reciprocal = normalized_rational leading.denominator leading.numerator
+            normalized_tail = map (rational_multiply reciprocal) tail
+            normalized_value = rational_multiply reciprocal pivot.value in do
+        smaller ← traverse (eliminate normalized_tail normalized_value) others
+        later_values ← solve_equations remaining smaller
+        Right (rational_subtract normalized_value (dot_rationals normalized_tail later_values)
+               :: later_values)
+  where
+    eliminate : List Rational → Rational → Equation → Either Text Equation
+    eliminate pivot_tail pivot_value equation = case equation.coefficients of
+      [] ⇒ Left "Exact basis system has an empty equation"
+      leading :: tail ⇒ Right (MkEquation
+        (zipWith rational_subtract tail (map (rational_multiply leading) pivot_tail))
+        (rational_subtract equation.value (rational_multiply leading pivot_value)))
+
+degree_in_basis : SymmetricBasis → List SymmetricTerm → Number →
+                  Either Text (List SymmetricTerm)
+degree_in_basis destination power degree =
+  if not (any (\term ⇒ partition_size term.index ≟ degree) power)
+  then Right [] else do
+    let indices = partitions_of_degree degree
+    columns ← traverse (basis_element_power destination) indices
+    let equations = map (\index ⇒ MkEquation
+          (map (coefficient_at index) columns) (coefficient_at index power)) indices
+    values ← solve_equations (length indices) equations
+    Right (zipWith MkSymmetricTerm indices values)
+
+export
+change_basis : SymmetricFunction → SymmetricBasis → Either Text SymmetricFunction
+change_basis function destination = do
+  checked ← make_symmetric_function function.basis function.terms
+  if checked.basis ≟ destination then Right checked
+     else do
+       power ← to_power_sum checked
+       if destination ≟ PowerSum then Right power
+          else do
+            degrees ← traverse (degree_in_basis destination power.terms) (advanced_indices 9)
+            checked_terms destination (concat degrees)
+
+export
+schur_product : Partition → Partition → Either Text SymmetricFunction
+schur_product first second = do
+  _ ← check_shape first
+  _ ← check_shape second
+  indices ← enumerate_partitions (partition_size first + partition_size second)
+  terms ← traverse contribution indices
+  checked_terms Schur terms
+  where
+    contribution : Partition → Either Text SymmetricTerm
+    contribution index = do
+      coefficient ← littlewood_richardson_coefficient first second index
+      Right (MkSymmetricTerm index (MkRational coefficient 1))
+
+export
+specialize : SymmetricFunction → List Integer → Either Text Rational
+specialize function alphabet = do
+  if length alphabet > 64 then Left "A specialization alphabet has at most 64 letters"
+     else do
+       power ← to_power_sum function
+       Right (foldl rational_add rational_zero (map evaluate power.terms))
+  where
+    evaluate : SymmetricTerm → Rational
+    evaluate term =
+      let value = product (map (\exponent ⇒ sum (map (\letter ⇒ integer_power letter exponent) alphabet))
+                               term.index.rows) in
+      rational_multiply term.coefficient (MkRational value 1)
+
+plethysm_factors : List Number → List SymmetricTerm → List SymmetricTerm →
+                   Either Text (List SymmetricTerm)
+plethysm_factors [] inner accumulated = Right accumulated
+plethysm_factors (scale :: rest) inner accumulated = do
+  scaled ← checked_terms PowerSum (map scale_index inner)
+  next ← power_multiply accumulated scaled.terms
+  plethysm_factors rest inner next
+  where
+    scale_index : SymmetricTerm → SymmetricTerm
+    scale_index term = MkSymmetricTerm
+      (MkPartition (map (* scale) term.index.rows)) term.coefficient
+
+export
+plethysm : SymmetricFunction → SymmetricFunction → Either Text SymmetricFunction
+plethysm outer inner = do
+  first ← to_power_sum outer
+  second ← to_power_sum inner
+  terms ← traverse (substitute second.terms) first.terms
+  power ← checked_terms PowerSum (concat terms)
+  change_basis power Schur
+  where
+    substitute : List SymmetricTerm → SymmetricTerm → Either Text (List SymmetricTerm)
+    substitute inner term = plethysm_factors term.index.rows inner
+      [MkSymmetricTerm (MkPartition []) term.coefficient]
+
+basis_symbol : SymmetricBasis → Text
+basis_symbol Schur = "s"
+basis_symbol PowerSum = "p"
+basis_symbol Monomial = "m"
+basis_symbol Complete = "h"
+basis_symbol Elementary = "e"
+
+export
+symmetric_text : SymmetricFunction → Either Text Text
+symmetric_text function = do
+  checked ← make_symmetric_function function.basis function.terms
+  if null checked.terms then Right "0" else
+    Right (render_terms True checked.terms)
+  where
+    render : SymmetricTerm → Text
+    render term = rational_text (MkRational (abs term.coefficient.numerator) term.coefficient.denominator) ++
+      " × " ++ basis_symbol function.basis ++
+      "[" ++ concat (intersperse "," (map show term.index.rows)) ++ "]"
+
+    render_terms : Bool → List SymmetricTerm → Text
+    render_terms initial [] = ""
+    render_terms initial (term :: rest) =
+      let sign = if term.coefficient.numerator < 0
+                    then if initial then "−" else " − "
+                    else if initial then "" else " + " in
+      sign ++ render term ++ render_terms False rest
+
+-- Existing numeric-keyboard grammar: basis; coefficient; partition; ... .
+-- Splitting retains empty fields so trailing separators cannot disappear.
+split_characters : Char → List Char → List (List Char)
+split_characters separator [] = [[]]
+split_characters separator (character :: rest) =
+  case split_characters separator rest of
+    [] ⇒ [[character]]
+    first :: others ⇒ if character ≟ separator then [] :: first :: others
+                      else (character :: first) :: others
+
+split_fields : Char → Text → List Text
+split_fields separator input = map (trim . pack) (split_characters separator (unpack input))
+
+digits_value : List Char → Maybe Integer
+digits_value [] = Nothing
+digits_value characters =
+  if all (\character ⇒ character >= '0' && character <= '9') characters
+  then Just (foldl (\value, character ⇒ 10 * value + cast (ord character - ord '0')) 0 characters)
+  else Nothing
+
+read_signed_integer : Text → Either Text Integer
+read_signed_integer text =
+  let characters = unpack (trim text)
+      parsed = case characters of
+        '-' :: digits ⇒ map negate (digits_value digits)
+        '−' :: digits ⇒ map negate (digits_value digits)
+        '+' :: digits ⇒ digits_value digits
+        digits ⇒ digits_value digits in
+  maybe (Left "Expected an exact integer") Right parsed
+
+read_partition : Text → Either Text Partition
+read_partition text =
+  if trim text ≟ "[]" then Right (MkPartition []) else do
+    values ← traverse read_signed_integer (split_fields ',' text)
+    if any (<= 0) values then Left "Partition parts must be positive"
+       else make_partition (map cast values)
+
+read_rational : Text → Either Text Rational
+read_rational text = case split_fields ',' text of
+  [numerator] ⇒ do
+    value ← read_signed_integer numerator
+    make_rational value 1
+  [numerator, denominator] ⇒ do
+    first ← read_signed_integer numerator
+    second ← read_signed_integer denominator
+    if second <= 0 then Left "An entered denominator must be positive"
+       else make_rational first second
+  _ ⇒ Left "A coefficient is an integer or numerator,denominator"
+
+read_terms : List Text → Either Text (List SymmetricTerm)
+read_terms [] = Right []
+read_terms [coefficient] = Left "A symmetric coefficient needs its partition"
+read_terms (coefficient :: partition :: rest) = do
+  value ← read_rational coefficient
+  index ← read_partition partition
+  terms ← read_terms rest
+  Right (MkSymmetricTerm index value :: terms)
+
+export
+symmetric_parse : Text → Either Text SymmetricFunction
+symmetric_parse input = case split_fields ';' input of
+  [] ⇒ Left "A symmetric function needs its basis code"
+  code :: fields ⇒ do
+    number ← read_signed_integer code
+    basis ← case number of
+      0 ⇒ Right Schur
+      1 ⇒ Right PowerSum
+      2 ⇒ Right Monomial
+      3 ⇒ Right Complete
+      4 ⇒ Right Elementary
+      _ ⇒ Left "Basis code must lie from 0 through 4"
+    terms ← read_terms fields
+    make_symmetric_function basis terms

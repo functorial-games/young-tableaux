@@ -1,0 +1,296 @@
+module Young.Model
+
+import Data.List
+import Data.Text
+import Young.Core
+import Young.Advanced
+import Young.Laboratory
+import Young.Inspection
+
+public export
+choice rsk_input one_of
+  permutation_input (List Integer)
+  word_input (List Integer)
+  biword_input (List (Integer, Integer))
+  matrix_input (List (List Number))
+
+public export
+choice user_action one_of
+  rsk_next
+  rsk_previous
+  rsk_first
+  rsk_last
+  load_rsk rsk_input
+  jeu_next
+  jeu_finish_slide
+  jeu_rectify
+  jeu_reset
+  load_jeu SkewTableau
+  select_corner Cell
+  change_partition Partition
+  change_tableau Tableau
+  run_operation operation
+  seed_random Integer
+  roll_permutation Number
+  roll_standard_tableau Partition
+  roll_plancherel Number
+  result_previous
+  result_next
+
+public export
+record Model where
+  constructor State
+  revision : Number
+  reference_partition : Partition
+  selected_tableau : Tableau
+  input : rsk_input
+  biletters : List (Integer, Integer)
+  rsk : RSKResult
+  original_skew : SkewTableau
+  jeu : JeuState
+  selected_corner : Cell
+  inspection : Maybe LaboratoryView
+  inspection_page : Number
+  random_state : RNGState
+
+public export
+input_label : rsk_input → Text
+input_label (permutation_input _) = "Permutation"
+input_label (word_input _) = "Word"
+input_label (biword_input _) = "Biword"
+input_label (matrix_input _) = "Matrix"
+
+-- These are application admission bounds, not the definition of a partition
+-- or word. Exact mathematics in Young.Core is independent of display storage.
+check_input_size : Number → Either Text ()
+check_input_size count =
+  if count <= 64 then Right () else Left "The interactive input limit is 64 letters."
+
+check_display_shape : Partition → Either Text Partition
+check_display_shape candidate = do
+  checked ← make_partition candidate.rows
+  if length checked.rows <= 64 && all (<= 64) checked.rows && sum checked.rows <= 256
+    then Right checked
+    else Left "The interactive shape limit is 64 rows, 64 columns and 256 cells."
+
+same_skew : SkewTableau → SkewTableau → Bool
+same_skew left right = left.outer.rows ≟ right.outer.rows &&
+                       left.inner.rows ≟ right.inner.rows && left.rows ≟ right.rows
+
+same_input : rsk_input → rsk_input → Bool
+same_input (permutation_input left) (permutation_input right) = left ≟ right
+same_input (word_input left) (word_input right) = left ≟ right
+same_input (biword_input left) (biword_input right) = left ≟ right
+same_input (matrix_input left) (matrix_input right) = left ≟ right
+same_input _ _ = False
+
+same_inspection : Maybe LaboratoryView → Maybe LaboratoryView → Bool
+same_inspection Nothing Nothing = True
+same_inspection (Just left) (Just right) =
+  left.title ≟ right.title && left.lines ≟ right.lines &&
+  map (\tableau ⇒ tableau.rows) left.tableaux ≟ map (\tableau ⇒ tableau.rows) right.tableaux &&
+  map (\shape ⇒ shape.rows) left.partitions ≟ map (\shape ⇒ shape.rows) right.partitions &&
+  map (\skew ⇒ (skew.outer.rows, skew.inner.rows, skew.rows)) left.skews ≟
+    map (\skew ⇒ (skew.outer.rows, skew.inner.rows, skew.rows)) right.skews
+same_inspection _ _ = False
+
+public export
+same_model : Model → Model → Bool
+same_model left right =
+  left.revision ≟ right.revision &&
+  left.reference_partition.rows ≟ right.reference_partition.rows &&
+  left.selected_tableau.rows ≟ right.selected_tableau.rows &&
+  same_input left.input right.input && left.biletters ≟ right.biletters &&
+  left.rsk.insertion.rows ≟ right.rsk.insertion.rows &&
+  left.rsk.recording.rows ≟ right.rsk.recording.rows &&
+  left.rsk.path ≟ right.rsk.path && left.rsk.inserted ≟ right.rsk.inserted &&
+  left.rsk.step ≟ right.rsk.step && same_skew left.original_skew right.original_skew &&
+  same_skew left.jeu.filling right.jeu.filling && left.jeu.hole ≟ right.jeu.hole &&
+  left.selected_corner ≟ right.selected_corner &&
+  same_inspection left.inspection right.inspection &&
+  left.inspection_page ≟ right.inspection_page && left.random_state.state ≟ right.random_state.state
+
+ordered_word : List Integer → List (Integer, Integer)
+ordered_word letters = zip (map cast [1 .. length letters]) letters
+
+normalize_input : rsk_input → Either Text (List (Integer, Integer))
+normalize_input (permutation_input letters) = do
+  _ ← check_input_size (length letters)
+  _ ← rsk_permutation letters
+  Right (ordered_word letters)
+normalize_input (word_input letters) = do
+  _ ← check_input_size (length letters)
+  _ ← rsk_word letters
+  Right (ordered_word letters)
+normalize_input (biword_input pairs) = do
+  _ ← check_input_size (length pairs)
+  _ ← rsk_biword pairs
+  Right pairs
+normalize_input (matrix_input rows) = do
+  _ ← check_input_size (length rows)
+  _ ← check_input_size (foldl max 0 (map length rows))
+  _ ← check_input_size (sum (map sum rows))
+  matrix_biword rows
+
+public export
+initial_model : Either Text Model
+initial_model = do
+  reference ← make_partition [3, 2, 1]
+  inner ← make_partition [1]
+  skew ← make_skew reference inner [[1, 3], [2, 5], [4]]
+  jeu ← make_jeu skew
+  empty_rsk ← rsk_word []
+  tableau ← make_tableau [[1, 2, 4], [3, 5], [6]]
+  pairs ← normalize_input (permutation_input [3, 1, 4, 2])
+  generator ← make_rng 0
+  Right (State 0 reference tableau (permutation_input [3, 1, 4, 2])
+               pairs empty_rsk skew jeu (MkCell 1 1) Nothing 0 generator)
+
+set_rsk_step : Number → Model → Either Text Model
+set_rsk_step position model = do
+  result ← rsk_biword (take position model.biletters)
+  Right ({ rsk := result } model)
+
+begin_selected_slide : Model → Either Text JeuState
+begin_selected_slide model =
+  case model.jeu.hole of
+    Just _ ⇒ Right model.jeu
+    Nothing ⇒ jeu_begin model.jeu model.selected_corner
+
+-- Structural fuel is bounded by the number of available cells. A forward
+-- slide visits each cell at most once and then removes its exit corner.
+finish_slide : Number → JeuState → Either Text JeuState
+finish_slide Z state = Left "The slide did not finish within its cell bound."
+finish_slide (S remaining) state =
+  case state.hole of
+    Nothing ⇒ Right state
+    Just _ ⇒ do
+      next ← jeu_step state
+      finish_slide remaining next
+
+install_rsk : rsk_input → RSKResult → Model → Either Text Model
+install_rsk input result model = do
+  pairs ← normalize_input input
+  Right ({ input := input, biletters := pairs, rsk := result } model)
+
+-- Returned mathematical objects become the objects displayed by the existing
+-- panes. The inspection below is an additional view of that same real result.
+install_result : (request : operation) → OutputFor request → Model → Either Text Model
+install_result (display_partition _) result model = Right ({ reference_partition := result } model)
+install_result (conjugate_partition _) result model = Right ({ reference_partition := result } model)
+install_result (add_partition_cell _ _) result model = Right ({ reference_partition := result } model)
+install_result (remove_partition_cell _ _) result model = Right ({ reference_partition := result } model)
+install_result (display_tableau _) result model = Right ({ selected_tableau := result } model)
+install_result (standardize_tableau _) result model = Right ({ selected_tableau := result } model)
+install_result (insert_letter _ _) result model = Right ({ selected_tableau := result.tableau } model)
+install_result (reverse_insertion _ _) (tableau, _) model = Right ({ selected_tableau := tableau } model)
+install_result (transpose_filling _) result model = Right ({ selected_tableau := result } model)
+install_result (promote_tableau _) result model = Right ({ selected_tableau := result } model)
+install_result (evacuate_tableau _) result model = Right ({ selected_tableau := result } model)
+install_result (rsk_from_permutation letters) result model = install_rsk (permutation_input letters) result model
+install_result (rsk_from_word letters) result model = install_rsk (word_input letters) result model
+install_result (rsk_from_biword pairs) result model = install_rsk (biword_input pairs) result model
+install_result (rsk_from_matrix rows) result model = install_rsk (matrix_input rows) result model
+install_result (jeu_de_taquin_slide source cell) result model = do
+  next ← make_jeu result
+  Right ({ original_skew := source, jeu := next, selected_corner := cell } model)
+install_result (rectify_tableau source) result model = do
+  next ← make_jeu result
+  Right ({ original_skew := source, jeu := next } model)
+install_result (generate_random_permutation _ _) (letters, generator) model = do
+  result ← rsk_permutation letters
+  next ← install_rsk (permutation_input letters) result model
+  Right ({ random_state := generator } next)
+install_result (generate_random_standard_tableau _ _) (tableau, generator) model =
+  Right ({ selected_tableau := tableau, random_state := generator } model)
+install_result (sample_plancherel_partition _ _) (partition, generator) model =
+  Right ({ reference_partition := partition, random_state := generator } model)
+install_result _ _ model = Right model
+
+run_laboratory : operation → Model → Either Text Model
+run_laboratory request model = do
+  answer ← evaluate request
+  next ← install_result request answer model
+  Right ({ inspection := Just (project request answer), inspection_page := 0 } next)
+
+reduce : user_action → Model → Either Text Model
+reduce rsk_next model =
+  if model.rsk.step < length model.biletters
+    then set_rsk_step (S model.rsk.step) model
+    else Left "RSK is complete. Start or Prev moves away from the endpoint."
+reduce rsk_previous model =
+  if model.rsk.step > 0
+    then set_rsk_step (minus model.rsk.step 1) model
+    else Left "RSK is at the beginning. Next inserts the first letter."
+reduce rsk_first model = set_rsk_step 0 model
+reduce rsk_last model = set_rsk_step (length model.biletters) model
+reduce (load_rsk input) model = do
+  pairs ← normalize_input input
+  empty ← rsk_word []
+  Right ({ input := input, biletters := pairs, rsk := empty } model)
+reduce jeu_next model = do
+  begun ← begin_selected_slide model
+  next ← jeu_step begun
+  Right ({ jeu := next } model)
+reduce jeu_finish_slide model = do
+  begun ← begin_selected_slide model
+  next ← finish_slide (2 + sum begun.filling.outer.rows) begun
+  Right ({ jeu := next } model)
+reduce jeu_rectify model = do
+  next ← rectify model.jeu
+  Right ({ jeu := next } model)
+reduce jeu_reset model = do
+  reset ← make_jeu model.original_skew
+  Right ({ jeu := reset } model)
+reduce (load_jeu candidate) model = do
+  _ ← check_display_shape candidate.outer
+  checked ← make_jeu candidate
+  Right ({ original_skew := candidate, jeu := checked } model)
+reduce (select_corner candidate) model =
+  if candidate.row > 0 && candidate.column > 0
+    then Right ({ selected_corner := candidate } model)
+    else Left "A cell has a positive one-based row and column."
+reduce (change_partition candidate) model = do
+  checked ← check_display_shape candidate
+  Right ({ reference_partition := checked } model)
+reduce (change_tableau candidate) model = do
+  _ ← check_display_shape (tableau_shape candidate)
+  checked ← make_tableau candidate.rows
+  Right ({ selected_tableau := checked } model)
+reduce (run_operation request) model = run_laboratory request model
+reduce (seed_random seed) model = do
+  generator ← make_rng seed
+  Right ({ random_state := generator } model)
+reduce (roll_permutation size) model =
+  run_laboratory (generate_random_permutation size model.random_state) model
+reduce (roll_standard_tableau partition) model =
+  run_laboratory (generate_random_standard_tableau partition model.random_state) model
+reduce (roll_plancherel size) model =
+  run_laboratory (sample_plancherel_partition size model.random_state) model
+reduce result_previous model =
+  case model.inspection of
+    Nothing ⇒ Left "Run a laboratory operation before browsing its result."
+    Just view ⇒ if model.inspection_page > 0
+                  then Right ({ inspection_page := minus model.inspection_page 1 } model)
+                  else Left "The result is at its first page."
+reduce result_next model =
+  case model.inspection of
+    Nothing ⇒ Left "Run a laboratory operation before browsing its result."
+    Just view ⇒ if S model.inspection_page < inspection_page_count view
+                  then Right ({ inspection_page := S model.inspection_page } model)
+                  else Left "The result is at its last page."
+
+-- Only this operation assigns a new revision. Failed actions return no new
+-- state. There is no separately updated diagram or cached tableau projection.
+public export
+apply_action : user_action → Model → Either Text Model
+apply_action action model = do
+  changed ← reduce action model
+  Right ({ revision := S model.revision } changed)
+
+public export
+apply_actions : List user_action → Model → Either Text Model
+apply_actions [] model = Right model
+apply_actions (action :: remaining) model = do
+  next ← apply_action action model
+  apply_actions remaining next

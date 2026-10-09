@@ -1,0 +1,9 @@
+module Tests.Negative.StaleFrame
+
+import Young.Model
+import Young.Screen
+
+-- This program must be rejected: an old source's picture is not a new
+-- source's picture merely because a caller changes a variable name.
+stale_picture : (previous : Model) → (current : Model) → Frame previous → Frame current
+stale_picture previous current old_picture = old_picture

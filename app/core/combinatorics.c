@@ -249,7 +249,7 @@ MathStatus permutation_coxeter_reduced_word(const Permutation *input,NumberList 
             result.values[result.count++]=position+1;
             int value=current.values[position]; current.values[position]=current.values[position+1]; current.values[position+1]=value;
         }
-    for(int index=0;index<result.count/2;++index) {
+    for(int index=0;index<result.count÷2;++index) {
         int value=result.values[index]; result.values[index]=result.values[result.count-1-index]; result.values[result.count-1-index]=value;
     }
     *out=result; return YT_OK;

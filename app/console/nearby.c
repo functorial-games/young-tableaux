@@ -47,7 +47,7 @@ void nearby_shape(Console *c,Controls *u)
     int columns=(p.count?p.rows[0]:0)+1;
     int available=width-4*scale;
     int cell=side;
-    if(columns*cell>available) cell=available/columns;
+    if(columns*cell>available) cell=available÷columns;
     if(cell<1) cell=1;
 
     bool can_new_row=p.count<YT_DIM && partition_size(&p)<YT_CELLS && addable[p.count];
@@ -72,20 +72,20 @@ void nearby_shape(Console *c,Controls *u)
                 int x=margin+2*scale+(p.rows[row]-1)*cell;
                 if(x+button_side>u->width-margin) x=u->width-margin-button_side;
                 button(u,REMOVABLE_BASE+row,"−",
-                       (Rect){x,y+(side-button_side)/2,button_side,button_side},true);
+                       (Rect){x,y+(side-button_side)÷2,button_side,button_side},true);
             }
             if(addable[row] && partition_size(&p)<YT_CELLS) {
                 int x=margin+2*scale+p.rows[row]*cell;
                 if(x+button_side>u->width-margin) x=u->width-margin-button_side;
                 button(u,ADDABLE_BASE+row,"+",
-                       (Rect){x,y+(side-button_side)/2,button_side,button_side},true);
+                       (Rect){x,y+(side-button_side)÷2,button_side,button_side},true);
             }
         } else if(row==p.count && can_new_row) {
             int button_side=cell;
             if(button_side>side-4*scale) button_side=side-4*scale;
             if(button_side<1) button_side=1;
             button(u,ADDABLE_BASE+row,"+",
-                   (Rect){margin+2*scale,y+(side-button_side)/2,button_side,button_side},true);
+                   (Rect){margin+2*scale,y+(side-button_side)÷2,button_side,button_side},true);
         } else {
             controls_add_at(u,0,ROW_BLOCKS,"",(Rect){margin,y,width,side},NULL);
         }
@@ -100,11 +100,11 @@ void nearby_shape(Console *c,Controls *u)
         snprintf(stats,sizeof(stats),"|λ| = %d\nstandard tableaux = %" PRIu64,partition_size(&p),dimension);
     else
         snprintf(stats,sizeof(stats),"|λ| = %d\nstandard tableaux = %s",partition_size(&p),math_status(dimension_status));
-    int stats_x=margin+width/3, stats_width=width-stats_x+margin;
+    int stats_x=margin+width÷3, stats_width=width-stats_x+margin;
     int stats_height=controls_text_height(u,stats);
     controls_add_at(u,0,LABEL,stats,(Rect){stats_x,u->content,stats_width,stats_height},NULL);
 
-    int y=u->content, half=(width-gap)/2;
+    int y=u->content, half=(width-gap)÷2;
     bool can_rewind=c->diagram.addition_count>0;
     button(u,SHAPE_UNDO,"Undo",(Rect){margin,y,half,side},can_rewind);
     button(u,SHAPE_RESET,"Reset",(Rect){margin+half+gap,y,width-half-gap,side},can_rewind);
@@ -119,15 +119,15 @@ void nearby_plot_controls(Console *c,Controls *u)
     int scale=u->scale, margin=4*scale, gap=4*scale;
     int width=u->width-2*margin, y=u->content, height=24*scale;
     for(int index=0;index<3;++index) {
-        int left=margin+index*(width+gap)/3;
-        int right=margin+(index+1)*(width+gap)/3-gap;
+        int left=margin+index*(width+gap)÷3;
+        int right=margin+(index+1)*(width+gap)÷3-gap;
         bool enabled=index==1 || (index==0?c->wegert.half_height<6.0:c->wegert.half_height>0.015);
         button(u,zoom_ids[index],zoom_labels[index],(Rect){left,y,right-left,height},enabled);
     }
     y=u->content;
     for(int index=0;index<4;++index) {
-        int left=margin+index*(width+gap)/4;
-        int right=margin+(index+1)*(width+gap)/4-gap;
+        int left=margin+index*(width+gap)÷4;
+        int right=margin+(index+1)*(width+gap)÷4-gap;
         bool enabled=index==0?c->wegert.center_real>-8.0:
                      index==3?c->wegert.center_real<8.0:
                      index==1?c->wegert.center_imag<8.0:c->wegert.center_imag>-8.0;
@@ -222,7 +222,7 @@ bool nearby_event(Console *c,Controls *u,ControlEvent event)
     case PLOT_RIGHT: c->wegert.center_real=fmin(8.0,c->wegert.center_real+step); break;
     case PLOT_UP: c->wegert.center_imag=fmin(8.0,c->wegert.center_imag+step); break;
     case PLOT_DOWN: c->wegert.center_imag=fmax(-8.0,c->wegert.center_imag-step); break;
-    case PLOT_ZOOM_IN: c->wegert.half_height=fmax(0.015,c->wegert.half_height/1.5); break;
+    case PLOT_ZOOM_IN: c->wegert.half_height=fmax(0.015,c->wegert.half_height÷1.5); break;
     case PLOT_ZOOM_OUT: c->wegert.half_height=fmin(6.0,c->wegert.half_height*1.5); break;
     case PLOT_RESET:
         c->wegert.center_real=0.0; c->wegert.center_imag=0.0; c->wegert.half_height=1.5;

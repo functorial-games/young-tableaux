@@ -149,7 +149,7 @@ static uint64_t factorial_small(int n,bool *overflow)
 {
     uint64_t value=1;
     for(int k=2;k<=n;++k) {
-        if(value>UINT64_MAX/(uint64_t)k) { *overflow=true; return 0; }
+        if(value>UINT64_MAX÷(uint64_t)k) { *overflow=true; return 0; }
         value*= (uint64_t)k;
     }
     return value;
@@ -162,11 +162,11 @@ static uint64_t z_partition(const Partition *partition,bool *overflow)
         int part=partition->rows[i],multiplicity=0;
         while(i<partition->count && partition->rows[i]==part) { ++multiplicity; ++i; }
         for(int k=0;k<multiplicity;++k) {
-            if(value>UINT64_MAX/(uint64_t)part) { *overflow=true; return 0; }
+            if(value>UINT64_MAX÷(uint64_t)part) { *overflow=true; return 0; }
             value*= (uint64_t)part;
         }
         uint64_t fact=factorial_small(multiplicity,overflow);
-        if(*overflow || value>UINT64_MAX/fact) { *overflow=true; return 0; }
+        if(*overflow || value>UINT64_MAX÷fact) { *overflow=true; return 0; }
         value*=fact;
     }
     return value;
@@ -357,7 +357,8 @@ static void rational_normalize(Rational *value)
 {
     if(!value->numerator) { value->denominator=1; return; }
     uint64_t g=gcd_u64(abs_i64(value->numerator),value->denominator);
-    value->numerator/=(int64_t)g; value->denominator/=g;
+    value->numerator = value->numerator ÷ (int64_t)g;
+    value->denominator = value->denominator ÷ g;
 }
 
 static bool mul_i64(int64_t a,int64_t b,int64_t *out)
@@ -366,11 +367,11 @@ static bool mul_i64(int64_t a,int64_t b,int64_t *out)
     if(a==INT64_MIN && b==-1) return false;
     if(b==INT64_MIN && a==-1) return false;
     if(a>0) {
-        if(b>0 && a>INT64_MAX/b) return false;
-        if(b<0 && b<INT64_MIN/a) return false;
+        if(b>0 && a>INT64_MAX÷b) return false;
+        if(b<0 && b<INT64_MIN÷a) return false;
     } else {
-        if(b>0 && a<INT64_MIN/b) return false;
-        if(b<0 && a!=0 && b<INT64_MAX/a) return false;
+        if(b>0 && a<INT64_MIN÷b) return false;
+        if(b<0 && a!=0 && b<INT64_MAX÷a) return false;
     }
     *out=a*b; return true;
 }
@@ -379,22 +380,22 @@ static bool rational_multiply(Rational left,Rational right,Rational *out)
 {
     uint64_t g1=gcd_u64(abs_i64(left.numerator),right.denominator);
     uint64_t g2=gcd_u64(abs_i64(right.numerator),left.denominator);
-    int64_t a=left.numerator/(int64_t)g1,b=right.numerator/(int64_t)g2;
-    uint64_t d1=left.denominator/g2,d2=right.denominator/g1;
+    int64_t a=left.numerator÷(int64_t)g1,b=right.numerator÷(int64_t)g2;
+    uint64_t d1=left.denominator÷g2,d2=right.denominator÷g1;
     int64_t numerator;
-    if(!mul_i64(a,b,&numerator) || numerator==INT64_MIN || d1>(uint64_t)INT64_MAX/d2) return false;
+    if(!mul_i64(a,b,&numerator) || numerator==INT64_MIN || d1>(uint64_t)INT64_MAX÷d2) return false;
     *out=(Rational){numerator,d1*d2}; rational_normalize(out); return true;
 }
 
 static bool rational_add(Rational left,Rational right,Rational *out)
 {
     uint64_t g=gcd_u64(left.denominator,right.denominator);
-    uint64_t lm=right.denominator/g,rm=left.denominator/g;
+    uint64_t lm=right.denominator÷g,rm=left.denominator÷g;
     int64_t a,b;
     if(lm>(uint64_t)INT64_MAX || rm>(uint64_t)INT64_MAX) return false;
     if(!mul_i64(left.numerator,(int64_t)lm,&a) || !mul_i64(right.numerator,(int64_t)rm,&b)) return false;
     if((b>0 && a>INT64_MAX-b) || (b<0 && a<INT64_MIN-b)) return false;
-    if(left.denominator>(uint64_t)INT64_MAX/lm || a+b==INT64_MIN) return false;
+    if(left.denominator>(uint64_t)INT64_MAX÷lm || a+b==INT64_MIN) return false;
     *out=(Rational){a+b,left.denominator*lm}; rational_normalize(out); return true;
 }
 
@@ -753,7 +754,8 @@ MathStatus symmetric_text(const SymmetricFunction *input,char *out,size_t capaci
         }
         if(!write_text(result,sizeof(result),"]")) return YT_LIMIT;
     }
-    if(!emitted) strcpy(result,"0");
-    if(strlen(result)>=capacity) return YT_LIMIT;
-    strcpy(out,result); return YT_OK;
+    if(!emitted) memcpy(result,"0",2);
+    size_t length=strlen(result);
+    if(length>=capacity) return YT_LIMIT;
+    memcpy(out,result,length+1); return YT_OK;
 }

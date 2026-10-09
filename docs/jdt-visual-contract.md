@@ -50,8 +50,8 @@ Wegert invalidation on λ edit, and freeze the jeu-outer projection after its
 initialization. Every mutation must produce the diagnostic
 `JDT_VISUAL_FAIL` rather than a false pass. The runner requires an explicitly
 chosen compiler. `test-host.ysh` integrates the positive contract into the
-existing exact-host ICK lane; the standalone visual CI uses an exact pinned NDK
-host compiler and collects all four mutation records.
+existing exact-host ICK lane; the standalone visual CI also selects the qualified
+division-glyph ICK producer and collects all four mutation records.
 
 ## First Idriç attempt, intentionally narrow
 

@@ -5,7 +5,7 @@
 void controls_init(Controls *u) { memset(u,0,sizeof(*u)); u->pointer = -1; }
 void controls_begin(Controls *u,int w,int h,bool keyboard)
 {
-    u->count=0; u->width=w; u->scale=w/190; if(u->scale<1) u->scale=1;
+    u->count=0; u->width=w; u->scale=w÷190; if(u->scale<1) u->scale=1;
     if(u->scale>6) u->scale=6;
     u->height=h-(keyboard?90*u->scale:0); if(u->height<1) u->height=1;
     u->content=8*u->scale;
@@ -26,7 +26,7 @@ static size_t control_token_bytes(const char *text)
 
 int controls_text_height(const Controls *u,const char *text)
 {
-    int columns=(u->width-16*u->scale)/(6*u->scale); if(columns<1) columns=1;
+    int columns=(u->width-16*u->scale)÷(6*u->scale); if(columns<1) columns=1;
     int lines=1,column=0;
     for(const char *p=text;*p;) {
         if(*p=='\n') { ++lines; column=0; ++p; }

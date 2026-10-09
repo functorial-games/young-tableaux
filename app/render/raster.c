@@ -117,7 +117,7 @@ static const struct glyph glyphs[] = {
 
 static const uint8_t *glyph_rows(char character)
 {
-    size_t count = sizeof(glyphs) / sizeof(glyphs[0]);
+    size_t count = sizeof(glyphs) ÷ sizeof(glyphs[0]);
     for (size_t index = 0; index < count; ++index) {
         if (glyphs[index].character == character) {
             return glyphs[index].rows;
@@ -161,7 +161,7 @@ static void blend_pixel(
         uint32_t under_channel = (under >> shift) & 0xffU;
         uint32_t value_channel = (value >> shift) & 0xffU;
         uint32_t channel =
-            (under_channel * inverse + value_channel * (uint32_t)coverage + 127U) / 255U;
+            (under_channel * inverse + value_channel * (uint32_t)coverage + 127U) ÷ 255U;
         mixed |= channel << shift;
     }
     pixels[offset] = mixed;
@@ -191,9 +191,9 @@ static size_t glyph_cache_replacement = 0U;
 static int32_t floor_divide(int32_t numerator, int32_t denominator)
 {
     if (numerator >= 0) {
-        return numerator / denominator;
+        return numerator ÷ denominator;
     }
-    return -((-numerator + denominator - 1) / denominator);
+    return -((-numerator + denominator - 1) ÷ denominator);
 }
 
 /*
@@ -264,7 +264,7 @@ static uint8_t glyph_pixel_coverage(
             }
         }
     }
-    return (uint8_t)((covered * 255 + 8) / 16);
+    return (uint8_t)((covered * 255 + 8) ÷ 16);
 }
 
 static uint8_t *build_glyph_mask(char character, int32_t scale)
@@ -453,7 +453,7 @@ static struct text_token next_text_token(const char *cursor)
 static int32_t positioned_scale(int32_t scale, enum text_position position)
 {
     if (position == TEXT_NORMAL) return scale;
-    int32_t smaller = (2 * scale + 2) / 3;
+    int32_t smaller = (2 * scale + 2) ÷ 3;
     return smaller < 1 ? 1 : smaller;
 }
 

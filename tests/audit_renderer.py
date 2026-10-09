@@ -11,7 +11,7 @@ args=parser.parse_args();root=pathlib.Path(args.source).resolve()
 out=root/'build/render-audit';out.mkdir(parents=True,exist_ok=True)
 test=pathlib.Path(__file__).with_name('audit_render_bounds.c')
 sources=list(sorted((root/'app/core').glob('*.c')))+[root/x for x in ['app/ui/controls.c','app/console/console.c','app/console/nearby.c','app/render/raster.c','app/render/paint.c']]
-command=[args.compiler,'--target=x86_64-linux-gnu','--sysroot=/','-rtlib=libgcc','-unwindlib=libgcc','-std=c17','-O1','-g','-fsanitize=signed-integer-overflow','-fsanitize-trap=signed-integer-overflow']+[f'-I{root/x}' for x in ['app/core','app/ui','app/console','app/render']]+[str(test)]+list(map(str,sources))+['-lm','-o',str(out/'render-bounds')]
+command=[args.compiler,'-fno-link-libatomic','-std=c17','-O1','-g','-fsanitize=signed-integer-overflow','-fsanitize-undefined-trap-on-error']+[f'-I{root/x}' for x in ['app/core','app/ui','app/console','app/render']]+[str(test)]+list(map(str,sources))+['-lm','-o',str(out/'render-bounds')]
 subprocess.run(command,check=True);failed=False
 with (out/'receipt.tsv').open('w') as receipt:
     receipt.write('operation\tinput\tactual_exit\texpected_exit\tresult\n')

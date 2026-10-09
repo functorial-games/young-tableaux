@@ -158,7 +158,7 @@ static void character_checks(void)
                     int64_t left,right;
                     CHECK(symmetric_character_cycle_type(&partitions[size].values[first],&partitions[size].values[cycle],&left)==YT_OK);
                     CHECK(symmetric_character_cycle_type(&partitions[size].values[second],&partitions[size].values[cycle],&right)==YT_OK);
-                    sum+=(int64_t)(factorial(size)/centralizer(&partitions[size].values[cycle]))*left*right;
+                    sum+=(int64_t)(factorial(size)÷centralizer(&partitions[size].values[cycle]))*left*right;
                 }
                 CHECK(sum==(first==second?(int64_t)factorial(size):0));
             }
@@ -182,7 +182,7 @@ static void product_oracle(const SymmetricFunction *left,const SymmetricFunction
         uint64_t denominator=old.denominator*term.denominator;
         uint64_t a=(uint64_t)llabs(numerator),b=denominator;
         while(b) { uint64_t remainder=a%b; a=b; b=remainder; }
-        out->terms[selected].coefficient=(Rational){numerator/(int64_t)a,denominator/a};
+        out->terms[selected].coefficient=(Rational){numerator÷(int64_t)a,denominator÷a};
     }
 }
 static void algebra_checks(void)
@@ -246,6 +246,16 @@ static void algebra_checks(void)
     CHECK(littlewood_richardson_coefficient(&(Partition){.count=1,.rows={3}},&(Partition){.count=1,.rows={1}},&(Partition){.count=1,.rows={2}},&zero)==YT_OK && zero==0);
     CHECK(littlewood_richardson_coefficient(&(Partition){.count=1,.rows={1}},&(Partition){.count=1,.rows={1}},&(Partition){.count=1,.rows={3}},&zero)==YT_OK && zero==0);
     char tiny[2]="x"; CHECK(symmetric_text(&row,tiny,sizeof(tiny))==YT_LIMIT && !strcmp(tiny,"x"));
+    char exact[sizeof("1 × s[2]")+1]; memset(exact,'!',sizeof(exact));
+    CHECK(symmetric_text(&row,exact,sizeof("1 × s[2]"))==YT_OK);
+    CHECK(!memcmp(exact,"1 × s[2]",sizeof("1 × s[2]")) && exact[sizeof(exact)-1]=='!');
+    memset(exact,'!',sizeof(exact));
+    CHECK(symmetric_text(&row,exact,sizeof("1 × s[2]")-1)==YT_LIMIT);
+    for(size_t byte=0;byte<sizeof(exact);++byte) CHECK(exact[byte]=='!');
+    SymmetricFunction empty={.basis=BASIS_SCHUR};
+    char zero_text[3]={'!','!','!'};
+    CHECK(symmetric_text(&empty,zero_text,1)==YT_LIMIT && zero_text[0]=='!' && zero_text[1]=='!' && zero_text[2]=='!');
+    CHECK(symmetric_text(&empty,zero_text,2)==YT_OK && zero_text[0]=='0' && zero_text[1]=='\0' && zero_text[2]=='!');
 }
 static void graph_checks(void)
 {
@@ -351,7 +361,7 @@ static void dispatch_checks(void)
     }
     /* Invalid inputs still produce visible feedback in different sections. */
     const Operation errors[]={InverseRSK,LittlewoodRichardsonCoefficient,ChangeBasis,BruhatRelations};
-    for(unsigned index=0;index<sizeof(errors)/sizeof(*errors);++index) {
+    for(unsigned index=0;index<sizeof(errors)÷sizeof(*errors);++index) {
         console_init(console);
         strcpy(console->fields[SET_TABLEAU],"bad"); strcpy(console->fields[SET_MU],"bad"); strcpy(console->fields[SET_COEFFICIENTS],"bad"); strcpy(console->fields[SET_SECOND_PERMUTATION],"bad");
         console_run(console,errors[index]); console_layout(console,controls,576,1152);

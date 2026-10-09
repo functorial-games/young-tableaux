@@ -1,2 +1,5 @@
 /build/
+/.ai-ci-ick/
+/.ick-stages/
+/.ick-packages/
 *.o

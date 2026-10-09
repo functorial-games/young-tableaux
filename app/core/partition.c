@@ -62,7 +62,7 @@ MathStatus partition_hook_product(const Partition *p, uint64_t *out)
     uint64_t value = 1;
     for (int r = 1; r <= p->count; ++r) for (int c = 1; c <= p->rows[r-1]; ++c) {
         uint64_t h = (uint64_t)partition_hook(p,r,c);
-        if (value > UINT64_MAX / h) return YT_OVERFLOW;
+        if (value > UINT64_MAX ÷ h) return YT_OVERFLOW;
         value *= h;
     }
     *out = value; return YT_OK;
@@ -75,17 +75,17 @@ MathStatus partition_standard_count(const Partition *p, uint64_t *out)
     int n = partition_size(p);
     for (int k = 2; k <= n; ++k) {
         int v = k;
-        for (int d = 2; d <= v; ++d) while (v % d == 0) { ++exponents[d]; v /= d; }
+        for (int d = 2; d <= v; ++d) while (v % d == 0) { ++exponents[d]; v = v ÷ d; }
     }
     for (int r = 1; r <= p->count; ++r) for (int c = 1; c <= p->rows[r-1]; ++c) {
         int v = partition_hook(p,r,c);
-        for (int d = 2; d <= v; ++d) while (v % d == 0) { --exponents[d]; v /= d; }
+        for (int d = 2; d <= v; ++d) while (v % d == 0) { --exponents[d]; v = v ÷ d; }
     }
     uint64_t value = 1;
     for (int d = 2; d <= n; ++d) {
         if (exponents[d] < 0) return YT_MALFORMED;
         for (int k = 0; k < exponents[d]; ++k) {
-            if (value > UINT64_MAX / (unsigned)d) return YT_OVERFLOW;
+            if (value > UINT64_MAX ÷ (unsigned)d) return YT_OVERFLOW;
             value *= (unsigned)d;
         }
     }

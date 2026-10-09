@@ -1,0 +1,2 @@
+21c559caba0306f089bdee157518caa8404460de70283f155f62875cdfd12a13  build/ick-objects/armeabi-v7a/libyoungtableaux.so
+ad609c1947f562b1c5d61ea1b3bb42216584dac56ff719caab9a90907dcc9718  build/ick-objects/arm64-v8a/libyoungtableaux.so

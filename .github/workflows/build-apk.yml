@@ -14,9 +14,12 @@ permissions:
   actions: read
 
 jobs:
+  compilers:
+    uses: ./.github/workflows/ick-compilers.yml
+
   modified-lua-admission:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 90
     env:
       ASAN_OPTIONS: detect_leaks=0
     steps:
@@ -108,11 +111,13 @@ jobs:
           "$GITHUB_WORKSPACE/stock-source" "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc/xgcc"
           "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc" "$GITHUB_WORKSPACE/grease-runtime/grease"
           "$RUNNER_TEMP/young-lua-admission"
+      - name: Qualify current division-glyph host frontend
+        id: app-ick
+        uses: isomorphisms/ai-ci/ick-host@4ea071a96239f3a29ca6d98454feb59947d87cfe
       - name: Native host mathematics, ownership controls and sanitizers through ICK
         run: >
           grease-runtime/grease test-host.ysh "$GITHUB_WORKSPACE"
-          "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc/xgcc"
-          "$GITHUB_WORKSPACE/host-ick/compiler/build/gcc"
+          "${{ steps.app-ick.outputs.compiler }}"
           > "$RUNNER_TEMP/young-lua-admission/native-host.stdout"
           2> "$RUNNER_TEMP/young-lua-admission/native-host.stderr"
       - name: Preserve exact-head admission evidence
@@ -130,7 +135,7 @@ jobs:
           path: build/*.log
           if-no-files-found: error
   build:
-    needs: modified-lua-admission
+    needs: [modified-lua-admission, compilers]
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact source
@@ -139,6 +144,23 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           submodules: recursive
+
+      - name: Check out shared ICK source producer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: isomorphisms/ai-ci
+          ref: 4ea071a96239f3a29ca6d98454feb59947d87cfe
+          path: .ai-ci-ick
+      - name: Download qualified compiler stages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: ick-*
+          path: .ick-packages
+          merge-multiple: true
+      - name: Restore qualified compiler stages
+        run: |
+          make -f .ai-ci-ick/ick-android/Makefile restore-stage ABI=armeabi-v7a ICK_STAGE="$GITHUB_WORKSPACE/.ick-stages/armeabi-v7a" ICK_ARCHIVE="$GITHUB_WORKSPACE/.ick-packages/ick-armeabi-v7a.tar.gz"
+          make -f .ai-ci-ick/ick-android/Makefile restore-stage ABI=arm64-v8a ICK_STAGE="$GITHUB_WORKSPACE/.ick-stages/arm64-v8a" ICK_ARCHIVE="$GITHUB_WORKSPACE/.ick-packages/ick-arm64-v8a.tar.gz"
 
       - name: Exact-head prerequisite admission receipts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -194,67 +216,8 @@ jobs:
           rm -rf "$out"
           mkdir -p "$out/objects" "$out/staging/lib/armeabi-v7a"
 
-          flags=(
-            -std=c17 -O2 -fPIC -marm -march=armv7-a
-            -ffunction-sections -fdata-sections
-            -fstack-protector-strong -D_FORTIFY_SOURCE=2
-            -Wall -Wextra -Werror -Wpedantic -Wshadow
-          )
-          includes=(
-            "-I$project/app/core"
-            "-I$project/app/ui"
-            "-I$project/app/console"
-            "-I$project/app/render"
-            "-I$project/app/lua"
-            "-I$project/third_party/lua"
-            -isystem "$glue"
-          )
-
-          sources=(
-            core/parse
-            core/diagram
-            core/partition
-            core/tableau
-            core/rsk
-            core/jeu_de_taquin
-            core/algebra
-            core/combinatorics
-            ui/controls
-            console/console
-            console/nearby
-            render/raster
-            render/paint
-            lua/bridge
-            android/native_main
-          )
-          objects=()
-
-          for source in "${sources[@]}"; do
-            name="${source//\//_}"
-            object="$out/objects/$name.o"
-            "$compiler" "${flags[@]}" "${includes[@]}" \
-              -c "$project/app/$source.c" -o "$object"
-            objects+=("$object")
-          done
-
-          "$compiler" -std=c17 -O2 -fPIC -marm -march=armv7-a \
-            -DMAKE_LIB -w "-I$project/third_party/lua" \
-            -c "$project/third_party/lua/onelua.c" \
-            -o "$out/objects/lua.o"
-          objects+=("$out/objects/lua.o")
-
-          "$compiler" -std=c17 -O2 -fPIC -marm -march=armv7-a \
-            -isystem "$glue" \
-            -c "$glue/android_native_app_glue.c" \
-            -o "$out/objects/glue.o"
-          objects+=("$out/objects/glue.o")
-
-          "$compiler" -marm -march=armv7-a -shared \
-            -Wl,--no-undefined -Wl,--gc-sections \
-            -Wl,-z,relro,-z,now -Wl,-z,max-page-size=16384 \
-            -Wl,-u,ANativeActivity_onCreate \
-            "${objects[@]}" -landroid -llog -lm \
-            -o "$out/staging/lib/armeabi-v7a/libyoungtableaux.so"
+          make -f "$project/icky/Android.mk" native ABI=armeabi-v7a NDK="$ndk" \
+            BUILD="$out/objects" OUT="$out/staging/lib/armeabi-v7a/libyoungtableaux.so"
 
           "$clang_bin/llvm-strip" --strip-unneeded \
             "$out/staging/lib/armeabi-v7a/libyoungtableaux.so"
@@ -325,67 +288,8 @@ jobs:
           rm -rf "$out"
           mkdir -p "$out/objects" "$out/staging/lib/arm64-v8a"
 
-          flags=(
-            -std=c17 -O2 -fPIC
-            -ffunction-sections -fdata-sections
-            -fstack-protector-strong -D_FORTIFY_SOURCE=2
-            -Wall -Wextra -Werror -Wpedantic -Wshadow
-          )
-          includes=(
-            "-I$project/app/core"
-            "-I$project/app/ui"
-            "-I$project/app/console"
-            "-I$project/app/render"
-            "-I$project/app/lua"
-            "-I$project/third_party/lua"
-            -isystem "$glue"
-          )
-
-          sources=(
-            core/parse
-            core/diagram
-            core/partition
-            core/tableau
-            core/rsk
-            core/jeu_de_taquin
-            core/algebra
-            core/combinatorics
-            ui/controls
-            console/console
-            console/nearby
-            render/raster
-            render/paint
-            lua/bridge
-            android/native_main
-          )
-          objects=()
-
-          for source in "${sources[@]}"; do
-            name="${source//\//_}"
-            object="$out/objects/$name.o"
-            "$compiler" "${flags[@]}" "${includes[@]}" \
-              -c "$project/app/$source.c" -o "$object"
-            objects+=("$object")
-          done
-
-          "$compiler" -std=c17 -O2 -fPIC \
-            -DMAKE_LIB -w "-I$project/third_party/lua" \
-            -c "$project/third_party/lua/onelua.c" \
-            -o "$out/objects/lua.o"
-          objects+=("$out/objects/lua.o")
-
-          "$compiler" -std=c17 -O2 -fPIC \
-            -isystem "$glue" \
-            -c "$glue/android_native_app_glue.c" \
-            -o "$out/objects/glue.o"
-          objects+=("$out/objects/glue.o")
-
-          "$compiler" -shared \
-            -Wl,--no-undefined -Wl,--gc-sections \
-            -Wl,-z,relro,-z,now -Wl,-z,max-page-size=16384 \
-            -Wl,-u,ANativeActivity_onCreate \
-            "${objects[@]}" -landroid -llog -lm \
-            -o "$out/staging/lib/arm64-v8a/libyoungtableaux.so"
+          make -f "$project/icky/Android.mk" native ABI=arm64-v8a NDK="$ndk" \
+            BUILD="$out/objects" OUT="$out/staging/lib/arm64-v8a/libyoungtableaux.so"
 
           "$clang_bin/llvm-strip" --strip-unneeded \
             "$out/staging/lib/arm64-v8a/libyoungtableaux.so"

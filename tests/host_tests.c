@@ -42,7 +42,7 @@ static void partitions(void)
     CHECK(equal_partition(partition_conjugate(&(Partition){0}),(Partition){0}));
     CHECK(equal_partition(partition_conjugate(&(Partition){3,{3,2,1}}),partition("3,2,1")));
     const char *invalid[]={"1,2","0","-1","2,0","[3,2","3,2]","2,,1","1,","[1,]","hello","1x","[1]garbage","1;1","+","--2","1.5","1-1"};
-    for(unsigned i=0;i<sizeof(invalid)/sizeof(invalid[0]);++i) CHECK(partition_parse(invalid[i],&p)==YT_MALFORMED);
+    for(unsigned i=0;i<sizeof(invalid)÷sizeof(invalid[0]);++i) CHECK(partition_parse(invalid[i],&p)==YT_MALFORMED);
     CHECK(partition_parse("99999999999999999999999999",&p)==YT_OVERFLOW);
     CHECK(partition_parse("65",&p)==YT_LIMIT);
     CHECK(partition_parse("64,64,64,64,1",&p)==YT_LIMIT);
@@ -58,7 +58,7 @@ static void partitions(void)
     CHECK(partition_hook(&p,0,1)==0); CHECK(partition_hook(&p,1,4)==0);
     uint64_t value=0; CHECK(partition_hook_product(&p,&value)==YT_OK && value==45);
     struct { const char *shape; uint64_t count; } known[]={ {"[]",1},{"1",1},{"4",1},{"1,1,1,1",1},{"2,1",2},{"2,2",2},{"3,2",5},{"3,2,1",16},{"4,2,1",35},{"4,3,2,1",768},{"4,4,4",462},{"20,20",6564120420ULL},{"64",1} };
-    for(unsigned i=0;i<sizeof(known)/sizeof(known[0]);++i) { p=partition(known[i].shape); CHECK(partition_standard_count(&p,&value)==YT_OK); CHECK(value==known[i].count); }
+    for(unsigned i=0;i<sizeof(known)÷sizeof(known[0]);++i) { p=partition(known[i].shape); CHECK(partition_standard_count(&p,&value)==YT_OK); CHECK(value==known[i].count); }
     p=partition("64"); value=77; CHECK(partition_hook_product(&p,&value)==YT_OVERFLOW && value==77);
     p=partition("32,32"); CHECK(partition_standard_count(&p,&value)==YT_OK && value==55534064877048198ULL);
     p=partition("64,64"); value=88; CHECK(partition_standard_count(&p,&value)==YT_OVERFLOW && value==88);
@@ -141,14 +141,14 @@ static void rsk(void)
         {"2,4,1,3","1,3;2,4","1,2;3,4"},
         {"4,1,3,2","1,2;3;4","1,3;2;4"}
     };
-    for(unsigned i=0;i<sizeof(known)/sizeof(known[0]);++i) {
+    for(unsigned i=0;i<sizeof(known)÷sizeof(known[0]);++i) {
         Tableau p,q,want_p,want_q; CHECK(permutation_rsk(known[i].input,&p,&q)==YT_OK);
         CHECK(tableau_parse(known[i].p,&want_p)==YT_OK); CHECK(tableau_parse(known[i].q,&want_q)==YT_OK);
         CHECK(equal_tableau(&p,&want_p)); CHECK(equal_tableau(&q,&want_q));
         CHECK(tableau_validate(&p.shape,&p,false).standard); CHECK(tableau_validate(&p.shape,&q,false).standard);
     }
     Tableau p,q; const char *bad[]={"1,1","0,1","1,3","-1","2,1x","1,","1;2"};
-    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);++i) CHECK(permutation_rsk(bad[i],&p,&q)==YT_MALFORMED);
+    for(unsigned i=0;i<sizeof(bad)÷sizeof(bad[0]);++i) CHECK(permutation_rsk(bad[i],&p,&q)==YT_MALFORMED);
     int values[]={1,2,3,4,5,6}; bool more=true;
     while(more) {
         char text[64]; snprintf(text,sizeof(text),"%d,%d,%d,%d,%d,%d",values[0],values[1],values[2],values[3],values[4],values[5]);

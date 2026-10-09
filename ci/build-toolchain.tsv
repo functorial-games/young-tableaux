@@ -1,5 +1,8 @@
 build_id	target	toolchain	ick_revision	ick_status	ick_evidence
-modified-lua-interpreter-and-library	x86_64-linux-gnu	ick	515c0f29fe6e2e96e10495fbaf25da93532e7722	qualified	docs/modified-lua-admission.md
-native-host-regression-and-policy	x86_64-linux-gnu	ick	515c0f29fe6e2e96e10495fbaf25da93532e7722	qualified	docs/modified-lua-admission.md
-armv7-native-and-lua	armv7a-linux-androideabi26	ndk	515c0f29fe6e2e96e10495fbaf25da93532e7722	gap:young-tableaux-full-application-ick-qualification-not-run	docs/modified-lua-admission.md
-c67-native-and-lua	aarch64-linux-android26	ndk	515c0f29fe6e2e96e10495fbaf25da93532e7722	gap:young-tableaux-full-application-ick-qualification-not-run	docs/modified-lua-admission.md
+modified-lua-interpreter-and-library	x86_64-linux-gnu	ick	515c0f29fe6e2e96e10495fbaf25da93532e7722	qualified	docs/modified-lua-admission.md; unchanged independent exact-runtime qualification
+runtime-policy-verifiers	x86_64-linux-gnu	ick	515c0f29fe6e2e96e10495fbaf25da93532e7722	qualified	docs/modified-lua-admission.md; immutable existing verifier producer
+native-host-regressions-and-independent-audit	x86_64-linux-gnu	ick	c61e448251744a2f40ad743ebef1a027bdcd2f9d	qualified	icky/README.md; current native division-glyph frontend and installed runtime closure
+armv7-owned-application-c	armv7a-linux-androideabi26	ick	c61e448251744a2f40ad743ebef1a027bdcd2f9d	qualified	icky/README.md; all15 owned C units with Fortify2 and strict warnings
+c67-owned-application-c	aarch64-linux-android26	ick	c61e448251744a2f40ad743ebef1a027bdcd2f9d	qualified	icky/README.md; all15 owned C units with Fortify2 and strict warnings
+armv7-lua-glue-and-link	armv7a-linux-androideabi26	ndk	c61e448251744a2f40ad743ebef1a027bdcd2f9d	gap:runtime-substrate-upstream-glue-assembler-and-platform-link	Unchanged Lua runtime pin, NDK NativeActivity glue, assembly and platform link retain NDK r27c
+c67-lua-glue-and-link	aarch64-linux-android26	ndk	c61e448251744a2f40ad743ebef1a027bdcd2f9d	gap:runtime-substrate-upstream-glue-assembler-and-platform-link	Unchanged Lua runtime pin, NDK NativeActivity glue, assembly and platform link retain NDK r27c

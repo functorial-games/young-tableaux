@@ -8,6 +8,7 @@
 #include <inttypes.h>
 #include <ctype.h>
 #include <limits.h>
+#include <errno.h>
 const OperationInfo operation_info[OP_COUNT]={
 #define OP(symbol,section,label,input,output) [symbol]={label,input,output,section},
 #include "operations.def"
@@ -55,14 +56,35 @@ static void tableau_text(char *out,const char *label,const Tableau *t)
     if(!t->shape.count) append(out,"[]\n");
     for(int r=0;r<t->shape.count;++r) { for(int col=0;col<t->shape.rows[r];++col) append(out,"%d ",t->entries[r][col]); append(out,"\n"); }
 }
+/* Hook-specialization data comes only from the chosen outer partition.
+   Preserve shared complex-plane controls while replacing shape coefficients. */
+static void project_wegert_shape(WegertProjection *projection,const Partition *shape)
+{
+    double center_real=projection->center_real,center_imag=projection->center_imag;
+    double half_height=projection->half_height;
+    memset(projection,0,sizeof(*projection));
+    projection->center_real=center_real;projection->center_imag=center_imag;
+    projection->half_height=half_height>0.0?half_height:1.5;
+    projection->valid=true;
+    for(int row=0;row<shape->count;++row) {
+        projection->n_lambda+=row*shape->rows[row];
+        for(int col=0;col<shape->rows[row];++col) {
+            int hook=partition_hook(shape,row+1,col+1);
+            if(hook>0 && hook<=WEGERT_HOOK_MAX) {
+                ++projection->hook_counts[hook];
+                if(hook>projection->max_hook) projection->max_hook=hook;
+            }
+        }
+    }
+}
 static void refresh_partition(Console *c)
 {
     Partition p; MathStatus s=partition_parse(c->fields[SET_LAMBDA],&p);
     c->partition_ok=s==YT_OK; c->output[0][0]=0; c->output[2][0]=0;
-    double real=c->wegert.center_real, imag=c->wegert.center_imag;
+    double real=c->wegert.center_real,imag=c->wegert.center_imag;
     double half_height=c->wegert.half_height;
     memset(&c->wegert,0,sizeof(c->wegert));
-    c->wegert.center_real=real; c->wegert.center_imag=imag;
+    c->wegert.center_real=real;c->wegert.center_imag=imag;
     c->wegert.half_height=half_height>0.0?half_height:1.5;
     if(s!=YT_OK) { append(c->output[0],"%s\n",math_status(s)); append(c->output[2],"λ: %s\n",math_status(s)); return; }
     Partition conjugate=partition_conjugate(&p);
@@ -70,20 +92,14 @@ static void refresh_partition(Console *c)
     append(c->output[0],"Valid partition\nsize |λ| = %d\nconjugate = ",partition_size(&p)); partition_text(c->output[0],&conjugate);
     Cell cells[YT_CELLS+1]; int n=partition_cells(&p,cells); cells_text(c->output[0],"cells",cells,n);
     n=partition_removable(&p,cells);
+    cells_text(c->output[2],"removable corners",cells,n);
     n=partition_addable(&p,cells);
+    cells_text(c->output[2],"addable cells",cells,n);
     Tableau h={0}; h.shape=p;
-    c->wegert.valid=true;
-    for(int r=0;r<p.count;++r) {
-        c->wegert.n_lambda+=r*p.rows[r];
-        for(int col=0;col<p.rows[r];++col) {
-            int hook=partition_hook(&p,r+1,col+1);
-            h.entries[r][col]=hook;
-            if(hook>0 && hook<=WEGERT_HOOK_MAX) {
-                ++c->wegert.hook_counts[hook];
-                if(hook>c->wegert.max_hook) c->wegert.max_hook=hook;
-            }
-        }
-    }
+    project_wegert_shape(&c->wegert,&p);
+    for(int r=0;r<p.count;++r)
+        for(int col=0;col<p.rows[r];++col)
+            h.entries[r][col]=partition_hook(&p,r+1,col+1);
     tiles(&c->hooks,&p,&h);
     uint64_t value; s=partition_hook_product(&p,&value);
     if(s==YT_OK) append(c->output[2],"Hook product = %" PRIu64 "\n",value); else append(c->output[2],"Hook product: %s\n",math_status(s));
@@ -201,9 +217,21 @@ static void refresh_rsk(Console *c)
 }
 static MathStatus selected_cell(const char *text,Cell *cell)
 {
-    int row,column; char extra;
-    if(sscanf(text," %d , %d %c",&row,&column,&extra)!=2 || row<1 || column<1) return YT_MALFORMED;
-    *cell=(Cell){row,column}; return YT_OK;
+    if(!text || !cell) return YT_MALFORMED;
+    char *end;
+    errno=0;
+    long row=strtol(text,&end,10);
+    if(end==text || errno==ERANGE || row<1 || row>INT_MAX) return YT_MALFORMED;
+    const char *cursor=end;
+    parse_spaces(&cursor);
+    if(*cursor++!=',') return YT_MALFORMED;
+    errno=0;
+    long column=strtol(cursor,&end,10);
+    if(end==cursor || errno==ERANGE || column<1 || column>INT_MAX) return YT_MALFORMED;
+    cursor=end;
+    parse_spaces(&cursor);
+    if(*cursor) return YT_MALFORMED;
+    *cell=(Cell){(int)row,(int)column}; return YT_OK;
 }
 
 static MathStatus integer_field(const char *text,int *value)
@@ -220,6 +248,7 @@ static MathStatus integer_field(const char *text,int *value)
 static void project_jeu(Console *c)
 {
     c->output[4][0]=0; c->jeu_loaded=true; skew_tiles(&c->jeu_tiles,&c->jeu);
+    project_wegert_shape(&c->jeu_wegert,&c->jeu.filling.shape.outer);
     append(c->output[4],"Forward jeu de taquin\nouter λ = "); partition_text(c->output[4],&c->jeu.filling.shape.outer);
     append(c->output[4],"inner μ = "); partition_text(c->output[4],&c->jeu.filling.shape.inner);
     if(c->jeu.active) {
@@ -237,6 +266,7 @@ static void refresh_jeu(Console *c)
     memset(&c->jeu,0,sizeof(c->jeu)); memset(&c->jeu_tiles,0,sizeof(c->jeu_tiles));
     memset(&c->jeu_before_tiles,0,sizeof(c->jeu_before_tiles));
     c->jeu_loaded=false; c->jeu_ok=false; c->jeu_has_before=false; c->output[4][0]=0;
+    memset(&c->jeu_wegert,0,sizeof(c->jeu_wegert));
     MathStatus status=jeu_state_parse(c->fields[SET_LAMBDA],c->fields[SET_MU],c->fields[SET_SKEW_TABLEAU],&c->jeu);
     if(status!=YT_OK) {
         append(c->output[4],"skew tableau: %s\nUse λ as outer shape, μ as inner shape, and enter only the visible skew cells in each row.",math_status(status));
@@ -579,7 +609,7 @@ static void button_strip(Controls *u,const int *ids,const char *const *labels,in
     int scale=u->scale,margin=4*scale,gap=4*scale,width=u->width-2*margin;
     int y=u->content,height=24*scale;
     for(int i=0;i<count;++i) {
-        int left=margin+i*(width+gap)/count,right=margin+(i+1)*(width+gap)/count-gap;
+        int left=margin+i*(width+gap)÷count,right=margin+(i+1)*(width+gap)÷count-gap;
         controls_add_at(u,ids[i],BUTTON,labels[i],(Rect){left,y,right-left,height},NULL);
     }
 }
@@ -670,14 +700,25 @@ void console_layout(Console *c,Controls *u,int w,int h)
             button_strip(u,ids,labels,4); break;
         }
         case 4: {
-            controls_add(u,0,LABEL,"λ is the outer shape. μ is the inner shape. Enter only the visible skew cells in each row. Step moves one entry into the hole.",0,NULL);
+            controls_add(u,0,LABEL,"STEP moves the hole in the board. The nearby reference Wegert plot uses fixed input λ. Below, the jeu outer-shape Wegert plot updates when a slide removes an outer corner.",0,NULL);
             linked_tableau_wegert(c,u);
             field(c,u,SET_MU); field(c,u,SET_SKEW_TABLEAU); field(c,u,SET_CELL);
             if(c->jeu_has_before) diagram(u,"Before STEP — hole before the move",&c->jeu_before_tiles);
             if(c->jeu_loaded) diagram(u,c->jeu_has_before?"After STEP — hole after the move":"jeu de taquin board — choose a removable inner corner",&c->jeu_tiles);
             const int ids[]={JDT_RESET,JDT_STEP,JDT_SLIDE,JDT_RECTIFY}; const char *labels[]={"Reset","Step","Slide","Rectify"};
             button_strip(u,ids,labels,4);
-            if(c->partition_ok) controls_add(u,0,WEGERT,"",120*u->scale,&c->wegert);
+            if(c->jeu_loaded && c->jeu_wegert.valid) {
+                /* Match the reference camera so only the tableau's current
+                   outer shape, not pan/zoom, accounts for plot differences. */
+                c->jeu_wegert.center_real=c->wegert.center_real;
+                c->jeu_wegert.center_imag=c->wegert.center_imag;
+                c->jeu_wegert.half_height=c->wegert.half_height;
+                controls_add(u,0,LABEL,"Wegert: current jeu outer shape after each corner removal",0,NULL);
+                controls_add(u,0,WEGERT,"",120*u->scale,&c->jeu_wegert);
+            } else if(c->partition_ok) {
+                controls_add(u,0,LABEL,"Jeu input unavailable; reference Wegert for λ",0,NULL);
+                controls_add(u,0,WEGERT,"",120*u->scale,&c->wegert);
+            }
             break;
         }
         case 5:
@@ -713,7 +754,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
             controls_add(u,0,LABEL,"RSK input plot: x = insertion step, y = inserted value. Gold is the inserted prefix; white is the current insertion.",0,NULL);
             if(c->partition_ok && c->rsk_plot.count>0) {
                 int y=u->content,gap=4*u->scale,full=u->width-8*u->scale;
-                int left_width=(full-gap)/2,right_width=full-gap-left_width;
+                int left_width=(full-gap)÷2,right_width=full-gap-left_width;
                 int height=120*u->scale,left=4*u->scale;
                 controls_add_at(u,0,RSK_PLOT,"",(Rect){left,y,left_width,height},&c->rsk_plot);
                 controls_add_at(u,0,WEGERT,"",(Rect){left+left_width+gap,y,right_width,height},&c->wegert);
@@ -776,7 +817,7 @@ int console_key_hit(const Controls *u,int x,int y,int height)
 {
     int top=height-90*u->scale, cell_h=20*u->scale;
     if(x<0 || x>=u->width || y<top+5*u->scale || y>=top+85*u->scale) return -1;
-    return ((y-top-5*u->scale)/cell_h)*5 + x*5/u->width;
+    return ((y-top-5*u->scale)÷cell_h)*5 + x*5÷u->width;
 }
 void console_key(Console *c,Controls *u,int key)
 {

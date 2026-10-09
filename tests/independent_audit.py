@@ -2,7 +2,7 @@
 """Independent small-domain mathematical audit; Python is explicitly authorized.
 
 No reference function calls production. ctypes is confined to observations.
-Run: python3 tests/independent_audit.py --compiler /absolute/NDK/.../clang
+Run: python3 tests/independent_audit.py --compiler /absolute/qualified/ick
 Exit 1 means a counterexample (including known ones); no expected-failure masking.
 """
 import argparse
@@ -348,7 +348,7 @@ def bruhat_checks():
 def compile_library(compiler,out,mutant=None):
     sources=sorted((ROOT/'app/core').glob('*.c'))+[ROOT/x for x in ['app/ui/controls.c','app/console/console.c','app/console/nearby.c','app/render/raster.c','app/render/paint.c','tests/audit_bridge.c']]
     if mutant:sources=[mutant[1] if x==ROOT/mutant[0] else x for x in sources]
-    command=[compiler,'--target=x86_64-linux-gnu','--sysroot=/','-rtlib=libgcc','-unwindlib=libgcc','-std=c17','-O2','-shared','-fPIC']+[f'-I{ROOT/x}' for x in ['app/core','app/ui','app/console','app/render']]+list(map(str,sources))+['-lm','-o',str(out)]
+    command=[compiler,'-fno-link-libatomic','-std=c17','-O2','-shared','-fPIC']+[f'-I{ROOT/x}' for x in ['app/core','app/ui','app/console','app/render']]+list(map(str,sources))+['-lm','-o',str(out)]
     subprocess.run(command,check=True)
 
 OPS=re.findall(r'^OP\((\w+)',(ROOT/'app/console/operations.def').read_text(),re.M)

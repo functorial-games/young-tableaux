@@ -86,7 +86,7 @@ static void nearby_tests(void)
     CHECK(wegert_count==5 && tableau_mirror_count==3);
     CHECK(zoom->rect.y==plot_bottom+4*u->scale);
     controls_scroll(u,zoom->rect.y);
-    int x=zoom->rect.x+zoom->rect.w/2,y=zoom->rect.y-u->scroll+zoom->rect.h/2;
+    int x=zoom->rect.x+zoom->rect.w÷2,y=zoom->rect.y-u->scroll+zoom->rect.h÷2;
     controls_touch(u,TOUCH_DOWN,4,x,y);
     ControlEvent e=controls_touch(u,TOUCH_UP,4,x,y); CHECK(e.id==PLOT_ZOOM_IN);
     console_event(c,u,e); CHECK(c->wegert.half_height==1.0);
@@ -110,8 +110,8 @@ static void nearby_tests(void)
 
     choose_shape(c,"2,1");
     double complex points[]={0.2+0.3*I,-0.6+0.4*I,1.3+0.7*I,-5.0-2.0*I,8.0+8.0*I};
-    for(unsigned i=0;i<sizeof(points)/sizeof(points[0]);++i) {
-        double complex z=points[i], value=z/((1-z)*(1-z)*(1-z*z*z));
+    for(unsigned i=0;i<sizeof(points)÷sizeof(points[0]);++i) {
+        double complex z=points[i], value=z÷((1-z)*(1-z)*(1-z*z*z));
         double phase,log_modulus;
         CHECK(wegert_phase_log(&c->wegert,creal(z),cimag(z),&phase,&log_modulus));
         CHECK(fabs(remainder(phase-carg(value),6.28318530717958647692))<1e-10);
@@ -134,7 +134,7 @@ static void nearby_tests(void)
     for(int row=0;row<64;++row) CHECK(!maybe_nearby_control(u,ADDABLE_BASE+row));
 
     const int widths[]={320,576,720,1152};
-    for(unsigned index=0;index<sizeof(widths)/sizeof(widths[0]);++index) {
+    for(unsigned index=0;index<sizeof(widths)÷sizeof(widths[0]);++index) {
         console_layout(c,u,widths[index],1152);
         CHECK(u->count<UI_MAX);
         bool ids[OP_BASE+OP_COUNT]={false};

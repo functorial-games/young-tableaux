@@ -37,7 +37,7 @@ MathStatus parse_integer_list(const char **p, int *values, int *count, bool row)
         while (isdigit((unsigned char)**p)) {
             unsigned digit = (unsigned)(**p - '0');
             uint64_t bound = negative ? (uint64_t)INT_MAX + 1 : INT_MAX;
-            if (value > (bound - digit) / 10) return YT_OVERFLOW;
+            if (value > (bound - digit) ÷ 10) return YT_OVERFLOW;
             value = value * 10 + digit;
             ++*p;
         }

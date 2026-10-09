@@ -8,6 +8,7 @@
 #include <inttypes.h>
 #include <ctype.h>
 #include <limits.h>
+#include <errno.h>
 const OperationInfo operation_info[OP_COUNT]={
 #define OP(symbol,section,label,input,output) [symbol]={label,input,output,section},
 #include "operations.def"
@@ -70,7 +71,9 @@ static void refresh_partition(Console *c)
     append(c->output[0],"Valid partition\nsize |λ| = %d\nconjugate = ",partition_size(&p)); partition_text(c->output[0],&conjugate);
     Cell cells[YT_CELLS+1]; int n=partition_cells(&p,cells); cells_text(c->output[0],"cells",cells,n);
     n=partition_removable(&p,cells);
+    cells_text(c->output[2],"removable corners",cells,n);
     n=partition_addable(&p,cells);
+    cells_text(c->output[2],"addable cells",cells,n);
     Tableau h={0}; h.shape=p;
     c->wegert.valid=true;
     for(int r=0;r<p.count;++r) {
@@ -201,9 +204,21 @@ static void refresh_rsk(Console *c)
 }
 static MathStatus selected_cell(const char *text,Cell *cell)
 {
-    int row,column; char extra;
-    if(sscanf(text," %d , %d %c",&row,&column,&extra)!=2 || row<1 || column<1) return YT_MALFORMED;
-    *cell=(Cell){row,column}; return YT_OK;
+    if(!text || !cell) return YT_MALFORMED;
+    char *end;
+    errno=0;
+    long row=strtol(text,&end,10);
+    if(end==text || errno==ERANGE || row<1 || row>INT_MAX) return YT_MALFORMED;
+    const char *cursor=end;
+    parse_spaces(&cursor);
+    if(*cursor++!=',') return YT_MALFORMED;
+    errno=0;
+    long column=strtol(cursor,&end,10);
+    if(end==cursor || errno==ERANGE || column<1 || column>INT_MAX) return YT_MALFORMED;
+    cursor=end;
+    parse_spaces(&cursor);
+    if(*cursor) return YT_MALFORMED;
+    *cell=(Cell){(int)row,(int)column}; return YT_OK;
 }
 
 static MathStatus integer_field(const char *text,int *value)
@@ -579,7 +594,7 @@ static void button_strip(Controls *u,const int *ids,const char *const *labels,in
     int scale=u->scale,margin=4*scale,gap=4*scale,width=u->width-2*margin;
     int y=u->content,height=24*scale;
     for(int i=0;i<count;++i) {
-        int left=margin+i*(width+gap)/count,right=margin+(i+1)*(width+gap)/count-gap;
+        int left=margin+i*(width+gap)÷count,right=margin+(i+1)*(width+gap)÷count-gap;
         controls_add_at(u,ids[i],BUTTON,labels[i],(Rect){left,y,right-left,height},NULL);
     }
 }
@@ -713,7 +728,7 @@ void console_layout(Console *c,Controls *u,int w,int h)
             controls_add(u,0,LABEL,"RSK input plot: x = insertion step, y = inserted value. Gold is the inserted prefix; white is the current insertion.",0,NULL);
             if(c->partition_ok && c->rsk_plot.count>0) {
                 int y=u->content,gap=4*u->scale,full=u->width-8*u->scale;
-                int left_width=(full-gap)/2,right_width=full-gap-left_width;
+                int left_width=(full-gap)÷2,right_width=full-gap-left_width;
                 int height=120*u->scale,left=4*u->scale;
                 controls_add_at(u,0,RSK_PLOT,"",(Rect){left,y,left_width,height},&c->rsk_plot);
                 controls_add_at(u,0,WEGERT,"",(Rect){left+left_width+gap,y,right_width,height},&c->wegert);
@@ -776,7 +791,7 @@ int console_key_hit(const Controls *u,int x,int y,int height)
 {
     int top=height-90*u->scale, cell_h=20*u->scale;
     if(x<0 || x>=u->width || y<top+5*u->scale || y>=top+85*u->scale) return -1;
-    return ((y-top-5*u->scale)/cell_h)*5 + x*5/u->width;
+    return ((y-top-5*u->scale)÷cell_h)*5 + x*5÷u->width;
 }
 void console_key(Console *c,Controls *u,int key)
 {

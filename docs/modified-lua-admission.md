@@ -1,5 +1,9 @@
 # Existing Lua runtime admission — 2026-10-08
 
+This is the historical runtime-admission receipt. The subsequent division-glyph
+producer changes and mandatory independent-audit repairs are recorded in
+[`icky/README.md`](../icky/README.md); the exact Lua admission below is retained.
+
 The existing `app/assets/facts.lua` owns explanations, layout and candidate
 shape edits; native C still validates and installs shape transactions. This
 change refreshes that existing runtime. It does not extract additional

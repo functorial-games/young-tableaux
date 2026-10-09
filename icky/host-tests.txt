@@ -1,0 +1,7 @@
+PASS 9924 checks: mathematics, RSK, jeu de taquin, controls, scrolling, console
+PASS typed RSK inputs, output-preserving rejection, insertion ownership
+PASS every registry signature matches Idris, Edriç, and an executable C dispatch path
+PASS 106628 consolidation checks: exact examples, exhaustive laws, independent algebra/order oracles, distributions, rendered dispatch
+PASS 106628 consolidation checks: exact examples, exhaustive laws, independent algebra/order oracles, distributions, rendered dispatch
+PASS 9924 checks: mathematics, RSK, jeu de taquin, controls, scrolling, console
+[32mPASS host tests[0m

@@ -1,23 +1,22 @@
 # Grease: invoke with an absolute checkout path on the build host.
 set -eu -o pipefail
-if (len(ARGV) !== 3) {
-  echo 'usage: test-host.ysh PROJECT QUALIFIED_ICK_DRIVER ICK_LIBEXEC (absolute paths)'
+if (len(ARGV) !== 2) {
+  echo 'usage: test-host.ysh PROJECT QUALIFIED_ICK_DRIVER (absolute paths)'
   exit 2
 }
 var project = $1
 var compiler = $2
-var support = $3
 if (not project.startsWith('/')) {
   echo 'FAIL: project path must be absolute'
   exit 2
 }
 mkdir -p "$project/build"
 test -x "$compiler"
-test -x "$support/cc1"
-test -x "$support/collect2"
-# The prerequisite runtime admission verifies these exact ICK executable bytes.
-# GCC-13 supplies only the hosted CRT, headers and link libraries.
-var producer_flags = ["-B$support/", '-B/usr/lib/gcc/x86_64-linux-gnu/13/', '-isystem', '/usr/lib/gcc/x86_64-linux-gnu/13/include', '-fno-use-linker-plugin']
+var frontend = $("$compiler" -print-prog-name=cc1)
+test -x "$frontend"
+# The pinned native action installs and qualifies this compiler and hosted CRT.
+# Modified-Lua admission retains its separately qualified runtime producer.
+var producer_flags = ['-fno-link-libatomic']
 var core = []
 for unit in (['parse', 'diagram', 'partition', 'tableau', 'rsk', 'jeu_de_taquin', 'algebra', 'combinatorics']) {
   call core->append("$project/app/core/$unit.c")

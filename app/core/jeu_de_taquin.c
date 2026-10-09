@@ -56,6 +56,10 @@ MathStatus skew_tableau_parse(const char *outer_text,const char *inner_text,
 
 SkewValidation skew_tableau_validate(const SkewTableau *tableau)
 {
+    if(!tableau || partition_validate(&tableau->shape.outer)!=YT_OK
+       || partition_validate(&tableau->shape.inner)!=YT_OK
+       || !partition_contains_partition(&tableau->shape.outer,&tableau->shape.inner))
+        return (SkewValidation){false,false,false,false,false,false};
     SkewValidation validation={true,true,true,true,true,true};
     if(!partition_contains_partition(&tableau->shape.outer,&tableau->shape.inner))
         validation.shape=false;
